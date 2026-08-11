@@ -141,13 +141,13 @@ class ProjectMessengerController extends Controller
     }
 
     // A participant candidate must either be formally tied to the project or
-    // be a Seller (manual Seller-add is its own valid path regardless of
-    // linkage) — enforced here so a direct API call can't add an unrelated
-    // company user the picker never even shows.
+    // be THIS project's own linked Seller (project.seller_id) — an unrelated
+    // company Seller is never eligible, even via a direct API call bypassing
+    // the picker (eligibleParticipants() shows the exact same scope).
     private function notProjectEligible(Project $project, int $userId): bool
     {
         $target = User::find($userId);
-        if ($target?->role_type === 'seller') return false;
+        if ($target?->role_type === 'seller') return $project->seller_id !== $userId;
         return !$this->projectMemberIds($project)->contains($userId);
     }
 
@@ -285,8 +285,9 @@ class ProjectMessengerController extends Controller
     // tier only (the sole remaining consumer is the Manage Participants
     // picker; there is no more "start a new chat with X" concept to feed).
     // Only users formally tied to the project (PM, team members, task/
-    // production assignees) plus every company Seller are listed — everyone
-    // else in the company never appears here.
+    // production assignees) plus this project's own linked Seller
+    // (project.seller_id), if any, are listed — an unrelated company Seller
+    // never appears; chat access follows actual project assignment.
     public function eligibleParticipants(int $projectId): JsonResponse
     {
         $project = $this->project($projectId);
@@ -301,7 +302,10 @@ class ProjectMessengerController extends Controller
         $users = User::where('company_id', $project->company_id)
             ->where('is_active', true)
             ->where('id', '!=', $user->id)
-            ->where(fn ($q) => $q->whereIn('id', $memberIds)->orWhere('role_type', 'seller'))
+            ->where(function ($q) use ($memberIds, $project) {
+                $q->whereIn('id', $memberIds);
+                if ($project->seller_id) $q->orWhere('id', $project->seller_id);
+            })
             ->orderBy('name')
             ->get(['id', 'name', 'role_type'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'role_type' => $u->role_type, 'is_seller' => $u->role_type === 'seller']);

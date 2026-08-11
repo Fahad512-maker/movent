@@ -84,9 +84,11 @@ class ProjectMessengerController extends Controller
     }
 
     // GET /admin/projects/{projectId}/messenger/eligible-participants —
-    // active users actually tied to this project (PM, team members, task/
-    // production assignees), plus every Seller in the company (Admin can
-    // manually add any Seller to project chat regardless of linkage).
+    // active users actually tied to this project only: PM, team members,
+    // task/production assignees, plus this project's own linked Seller
+    // (project.seller_id) if one is assigned. An unrelated company Seller
+    // never appears — chat access follows actual project assignment, not
+    // "any Seller can be manually pulled in".
     public function eligibleParticipants(int $projectId): JsonResponse
     {
         $project = $this->project($projectId);
@@ -94,7 +96,10 @@ class ProjectMessengerController extends Controller
 
         $users = User::where('company_id', $project->company_id)
             ->where('is_active', true)
-            ->where(fn ($q) => $q->whereIn('id', $memberIds)->orWhere('role_type', 'seller'))
+            ->where(function ($q) use ($memberIds, $project) {
+                $q->whereIn('id', $memberIds);
+                if ($project->seller_id) $q->orWhere('id', $project->seller_id);
+            })
             ->orderBy('name')
             ->get(['id', 'name', 'role_type'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'role_type' => $u->role_type, 'is_seller' => $u->role_type === 'seller']);
