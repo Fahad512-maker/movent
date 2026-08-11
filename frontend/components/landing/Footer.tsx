@@ -48,7 +48,7 @@
 //             <h4 style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 14, margin: '0 0 16px' }}>Contact</h4>
 //             <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.7, margin: 0 }}>
 //               support@crm.com<br />
-//               +92 300 0000000<br />
+//               +1 (555) 000-0000<br />
 //               Karachi, Pakistan
 //             </p>
 //           </div>
@@ -260,7 +260,7 @@ export default function LandingFooter() {
             >
               support@pulsecrm.com
               <br />
-              +92 300 1234567
+              +1 (555) 123-4567
               <br />
               Karachi, Pakistan
             </div>

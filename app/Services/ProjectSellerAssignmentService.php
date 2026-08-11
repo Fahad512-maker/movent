@@ -73,6 +73,11 @@ class ProjectSellerAssignmentService
 
         $project->update($updates);
 
+        // Assigning/switching a project's seller now also drops them straight
+        // into project chat — no more waiting on a PM/Admin to separately
+        // remember "Manage Participants". See ProjectChatService::addSeller().
+        ProjectChatService::addSeller($project, $seller->id);
+
         ProjectSellerAssignment::create([
             'company_id'           => $project->company_id,
             'project_id'           => $project->id,

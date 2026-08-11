@@ -398,6 +398,16 @@ class ProjectController extends Controller
             ]);
         }
 
+        // A Seller handing themselves off a project (seller_id === creator)
+        // is dropped straight into its chat — same reasoning as
+        // ProjectSellerAssignmentService::assign(). Without this they'd hold
+        // canViewProjectChat/canSendProjectChatMessage but still 403 on their
+        // own project until a PM/Admin separately opened "Manage
+        // Participants" — see ProjectChatService::addSeller().
+        if ($isHandoff) {
+            ProjectChatService::addSeller($project, $user->id);
+        }
+
         $this->logActivity($project->company_id, 'created', 'Project', $project->id, $validated);
 
         if ($project->lead_id) {

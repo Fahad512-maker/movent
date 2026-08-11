@@ -138,7 +138,7 @@ export default function CreateCompanyPage() {
                 <input
                   value={form.phone}
                   onChange={set('phone')}
-                  placeholder="+92 300 0000000"
+                  placeholder="+1 (555) 000-0000"
                   style={inputStyle}
                 />
               </div>

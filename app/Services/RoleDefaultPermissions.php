@@ -159,14 +159,19 @@ class RoleDefaultPermissions
                 // Seller To Project Chat" checkboxes show checked; grants nothing.
                 'canManageProjectChatParticipants', 'canAddSellerToProjectChat',
                 // canEditProjects/canCompleteProjects/canCloseProjects/
-                // canReopenProjects/canManageProjectInvoices ARE functional for a
-                // Seller — visibleProjects()/ProjectController scope includes
+                // canReopenProjects ARE functional for a Seller —
+                // visibleProjects()/ProjectController scope includes
                 // seller_id match, so these apply to a Seller's own linked/
                 // handed-off project. canCreateProjects is NOT included here —
                 // store() hard-blocks role_type='seller' from the unrestricted
                 // create path; canCreateProjectHandoff above is the real
-                // Seller-tier equivalent.
-                'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects', 'canManageProjectInvoices',
+                // Seller-tier equivalent. canManageProjectInvoices is
+                // deliberately EXCLUDED — billing/invoice data on a project
+                // is Company Admin/PM only, never Seller or any other team
+                // role (2026-08-11 policy: "Manage Projects" bundle checkbox
+                // no longer shows fully checked for Seller as a result, and
+                // that's intentional — correctness over cosmetic completeness).
+                'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
                 // canCreateProjects: cosmetic-only completion of the "Manage
                 // Projects" bundle — store() excludes role_type='seller' from
                 // this path regardless (see above), so it grants nothing beyond

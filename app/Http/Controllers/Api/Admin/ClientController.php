@@ -9,11 +9,13 @@ use App\Models\ClientPortalPermission;
 use App\Models\Company;
 use App\Models\CompanyUserAssignment;
 use App\Models\User;
+use App\Mail\ClientPortalWelcomeMail;
 use App\Support\CompanyName;
 use App\Support\CrossAccountEmail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class ClientController extends Controller
@@ -533,6 +535,18 @@ class ClientController extends Controller
             if ($error) {
                 return ApiResponse::error($error, 422);
             }
+
+            // Portal login details only ever go out when Portal Access is
+            // actually enabled at creation — a client created without it
+            // gets no email at all. Non-blocking: a mail failure must never
+            // fail the client creation itself (same pattern as PublicController::register()'s WelcomeMail).
+            try {
+                Mail::to($data['portal_email'])->send(new ClientPortalWelcomeMail(
+                    $client, $client->company ?? Company::find($companyId), $data['portal_email'], $data['portal_password']
+                ));
+            } catch (\Throwable) {
+                // Don't fail client creation if mail fails
+            }
         }
 
         $client->load(['user:id,email,is_active', 'company:id,name']);
@@ -627,6 +641,17 @@ class ClientController extends Controller
             return ApiResponse::error($error, 422);
         }
         $this->seedPermissions($client->id);
+
+        // Same login-details email as store()'s enable_portal path — a
+        // client whose portal is enabled later (not at creation) still needs
+        // their credentials. Non-blocking: never fails this action.
+        try {
+            Mail::to($request->portal_email)->send(new ClientPortalWelcomeMail(
+                $client, $client->company ?? Company::find($client->company_id), $request->portal_email, $request->portal_password
+            ));
+        } catch (\Throwable) {
+            // Don't fail portal enablement if mail fails
+        }
 
         return ApiResponse::success([
             'client_id'    => $client->id,

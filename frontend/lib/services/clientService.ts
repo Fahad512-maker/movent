@@ -68,27 +68,14 @@ export const clientService = {
     const base = process.env.NEXT_PUBLIC_API_URL || '';
     return `${base}/client/documents/${id}/download`;
   },
-  chatThreads: async () => {
-    const res = await clientApi.get('/client/chat/threads');
+  // One single Sales Chat conversation (Seller <-> Client <-> Company
+  // Admin) — no thread picker, matching Api\Client\ChatController.
+  chatMessages: async () => {
+    const res = await clientApi.get('/client/chat/messages');
     return res.data.data;
   },
-  chatEligibleContacts: async (): Promise<Array<{ type: 'admin' | 'user'; id: number; name: string; role: string }>> => {
-    const res = await clientApi.get('/client/chat/eligible-contacts');
-    return res.data.data;
-  },
-  chatStart: async (recipient: { type: 'admin' } | { type: 'user'; id: number }): Promise<{ thread_id: number }> => {
-    const res = await clientApi.post('/client/chat/start', {
-      recipient_type: recipient.type,
-      recipient_user_id: recipient.type === 'user' ? recipient.id : undefined,
-    });
-    return res.data.data;
-  },
-  chatMessages: async (threadId: number) => {
-    const res = await clientApi.get(`/client/chat/threads/${threadId}/messages`);
-    return res.data.data;
-  },
-  chatReply: async (threadId: number, data: FormData) => {
-    const res = await clientApi.post(`/client/chat/threads/${threadId}/reply`, data, {
+  chatReply: async (data: FormData) => {
+    const res = await clientApi.post('/client/chat/reply', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data;

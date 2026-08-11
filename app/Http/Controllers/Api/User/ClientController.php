@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Mail\ClientPortalWelcomeMail;
 use App\Models\Client;
 use App\Models\ClientPortalPermission;
+use App\Models\Company;
 use App\Models\UserCompanyPermission;
 use App\Services\ClientPortalService;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class ClientController extends Controller
 {
@@ -282,6 +285,16 @@ class ClientController extends Controller
             return ApiResponse::error($error, 422);
         }
         ClientPortalService::seedPermissions($client->id);
+
+        // Same login-details email as Api\Admin\ClientController::enablePortal()
+        // — non-blocking, never fails this action.
+        try {
+            Mail::to($request->portal_email)->send(new ClientPortalWelcomeMail(
+                $client, $client->company ?? Company::find($client->company_id), $request->portal_email, $request->portal_password
+            ));
+        } catch (\Throwable) {
+            // Don't fail portal enablement if mail fails
+        }
 
         return ApiResponse::success($client->fresh(), 'Portal access enabled');
     }

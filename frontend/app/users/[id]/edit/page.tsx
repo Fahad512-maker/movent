@@ -203,7 +203,7 @@ function EditUserPageContent() {
                 </div>
                 <div>
                   <label style={lbl}>Phone</label>
-                  <input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 300 0000000" />
+                  <input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 (555) 000-0000" />
                 </div>
                 <div>
                   <label style={lbl}>Role</label>

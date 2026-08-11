@@ -41,6 +41,19 @@ class SalesChatController extends Controller
             ->exists();
     }
 
+    // Sales Chat is Seller <-> Client (<-> Company Admin, unrestricted on its
+    // own guard) only — never any other internal role. canUseSalesChat alone
+    // isn't a strong enough gate: it's a real, grantable permission key, so a
+    // Company Admin could otherwise hand it to e.g. a Lead Manager, who
+    // already holds canViewAllCompanyLeads by default and would then reach
+    // ANY company client's thread, not just their own. Hard role_type check,
+    // same defense-in-depth pattern as isPM()/isInternalStaff() elsewhere in
+    // this codebase (Api\User\ProjectMessengerController/ProjectCommentController).
+    private function isSeller(): bool
+    {
+        return $this->user()->role_type === 'seller';
+    }
+
     // Same scope Api\User\LeadController::visibleLeads() uses.
     private function lead(int $leadId): Lead
     {
@@ -89,7 +102,7 @@ class SalesChatController extends Controller
 
     public function leadMessages(int $leadId): JsonResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -101,7 +114,7 @@ class SalesChatController extends Controller
 
     public function sendLeadMessage(Request $request, int $leadId): JsonResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -114,7 +127,7 @@ class SalesChatController extends Controller
 
     public function downloadLeadAttachment(int $leadId, int $messageId): StreamedResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             abort(403, 'Permission denied');
         }
 
@@ -126,7 +139,7 @@ class SalesChatController extends Controller
 
     public function clientMessages(int $clientId): JsonResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -138,7 +151,7 @@ class SalesChatController extends Controller
 
     public function sendClientMessage(Request $request, int $clientId): JsonResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -151,7 +164,7 @@ class SalesChatController extends Controller
 
     public function downloadClientAttachment(int $clientId, int $messageId): StreamedResponse
     {
-        if (!$this->can('canUseSalesChat')) {
+        if (!$this->isSeller() || !$this->can('canUseSalesChat')) {
             abort(403, 'Permission denied');
         }
 

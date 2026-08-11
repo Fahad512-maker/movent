@@ -6,6 +6,7 @@ import api from '@/lib/axios';
 import { getAuthType, getAuthUser } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { User } from '@/types';
+import { MODULE_CATALOG } from '@/lib/moduleConfig';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Plan {
@@ -178,6 +179,12 @@ export default function DashboardPage() {
 
   const has = (mod: string) => modules.includes(mod);
   const hasFinance = has('invoices') || has('payments');
+
+  // `modules` is the raw, granular company_modules key list (e.g.
+  // 'invoice_reminders', 'team_resources') — not what the Admin actually
+  // "purchased". Count against MODULE_CATALOG's 7 top-level purchasable
+  // modules instead, matching what /admin/upgrade-modules shows as bought.
+  const purchasedModules = MODULE_CATALOG.filter(m => m.internalKeys.some(k => modules.includes(k)));
 
   const clientStats      = s?.clients   ?? { total: 0, portal: 0, active: 0 };
   const invoiceStats     = s?.invoices  ?? { total: 0, unpaid: 0, overdue: 0, paid: 0, total_billed: 0, total_unpaid: 0 };
@@ -413,6 +420,9 @@ export default function DashboardPage() {
               <span style={{ fontSize: 11, padding: '5px 13px', borderRadius: 20, fontWeight: 600, background: subB.bg, color: subB.color }}>
                 {subB.label}
               </span>
+              <Link href="/admin/upgrade-modules" style={{ fontSize: 12, padding: '5px 13px', borderRadius: 20, fontWeight: 600, background: '#f1f5f9', color: '#475569', textDecoration: 'none' }}>
+                {purchasedModules.length}/{MODULE_CATALOG.length} modules purchased
+              </Link>
               <span style={{ fontSize: 12, color: pl.users_limit !== null && pl.users_used >= pl.users_limit ? '#dc2626' : '#94a3b8', fontWeight: 500 }}>
                 {pl.users_used ?? 1}/{pl.users_limit ?? '∞'} users
               </span>

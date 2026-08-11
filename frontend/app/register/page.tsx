@@ -330,7 +330,7 @@
 //               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
 //                 <div>
 //                   <label style={labelStyle}>Phone (Optional)</label>
-//                   <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" />
+//                   <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" />
 //                 </div>
 //                 <div>
 //                   <label style={labelStyle}>Timezone</label>

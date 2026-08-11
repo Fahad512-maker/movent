@@ -104,7 +104,7 @@ export default function EditClientPage() {
               </div>
               <div>
                 <label style={lbl}>Phone</label>
-                <input style={inp} value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} placeholder="+92 300 0000000" />
+                <input style={inp} value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} placeholder="+1 (555) 000-0000" />
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>

@@ -315,7 +315,12 @@ export default function ClientDetailPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 20, background: '#f1f5f9', borderRadius: 10, padding: 4, width: 'fit-content' }}>
-        {(['info', 'portal', 'permissions', 'chat', 'messages'] as const).map(t => (
+        {/* 'messages' (Client Messages) is deliberately not a clickable tab
+            here — not needed as a general-purpose tab on this page. Still
+            reachable via the deep link from the Project Chat page's "Chat
+            with Client" button (?tab=messages), which sets `tab` state
+            directly — the content block below still renders for that case. */}
+        {(['info', 'portal', 'permissions', 'chat'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '7px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
             fontSize: 13, fontWeight: tab === t ? 600 : 400,
@@ -323,7 +328,7 @@ export default function ClientDetailPage() {
             color: tab === t ? '#1e293b' : '#64748b',
             boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.08)' : 'none',
             textTransform: 'capitalize',
-          }}>{t === 'permissions' ? `Permissions (${enabledCount}/${MODULES.length})` : t === 'portal' ? 'Portal Login' : t === 'chat' ? 'Sales Chat' : t === 'messages' ? 'Client Messages' : 'Details'}</button>
+          }}>{t === 'permissions' ? `Permissions (${enabledCount}/${MODULES.length})` : t === 'portal' ? 'Portal Login' : t === 'chat' ? 'Sales Chat' : 'Details'}</button>
         ))}
       </div>
 

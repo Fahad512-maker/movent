@@ -231,7 +231,9 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat',
       'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
       'canManageProjectChatParticipants', 'canAddSellerToProjectChat',
-      'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects', 'canManageProjectInvoices',
+      // canManageProjectInvoices deliberately excluded — billing/invoice data
+      // is Company Admin/PM only, never Seller or any other team role.
+      'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
       'canCreateProjects',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
       'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',

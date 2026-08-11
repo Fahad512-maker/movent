@@ -151,7 +151,7 @@ export default function CreateClientPage() {
                 </div>
                 <div>
                   <label style={lbl}>Phone</label>
-                  <input value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="+92-300-0000000" style={inp} />
+                  <input value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="+1 (555) 000-0000" style={inp} />
                 </div>
               </div>
 

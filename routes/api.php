@@ -961,11 +961,10 @@ Route::prefix('client')->group(function () {
         Route::get('documents/{id}/download',    [\App\Http\Controllers\Api\Client\DocumentController::class, 'download']);
         Route::get('attachments/{id}/download',  [\App\Http\Controllers\Api\Client\AttachmentController::class, 'download']);
 
-        Route::get('chat/eligible-contacts',                [\App\Http\Controllers\Api\Client\ChatController::class, 'eligibleContacts']);
-        Route::post('chat/start',                           [\App\Http\Controllers\Api\Client\ChatController::class, 'startChat']);
-        Route::get('chat/threads',                          [\App\Http\Controllers\Api\Client\ChatController::class, 'threads']);
-        Route::get('chat/threads/{id}/messages',            [\App\Http\Controllers\Api\Client\ChatController::class, 'messages']);
-        Route::post('chat/threads/{id}/reply',              [\App\Http\Controllers\Api\Client\ChatController::class, 'reply']);
+        // One single Sales Chat conversation per client (Seller <-> Client <->
+        // Company Admin) — see Api\Client\ChatController's class comment.
+        Route::get('chat/messages',                         [\App\Http\Controllers\Api\Client\ChatController::class, 'messages']);
+        Route::post('chat/reply',                           [\App\Http\Controllers\Api\Client\ChatController::class, 'reply']);
 
         Route::get('support',           [\App\Http\Controllers\Api\Client\SupportController::class, 'index']);
         Route::post('support',          [\App\Http\Controllers\Api\Client\SupportController::class, 'store']);

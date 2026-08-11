@@ -95,6 +95,39 @@ class ProjectChatService
         }
     }
 
+    // Call right after a project's seller_id is set (handoff creation in
+    // Api\User\ProjectController::store(), or ProjectSellerAssignmentService::
+    // assign()) — NOT a violation of syncFormalTeamParticipants()'s "Seller
+    // can be added only by Company Admin or Project Manager" rule: assigning
+    // seller_id IS that authorized act (Admin's own "Assign Seller" action,
+    // or a Seller's own sanctioned self-handoff), it just never also dropped
+    // them into chat_participants. Idempotent; creates the thread if needed
+    // (a fresh handoff/assignment has no thread yet) and only notifies on a
+    // genuinely new add (wasRecentlyCreated), same convention as
+    // syncFormalTeamParticipants().
+    public static function addSeller(Project $project, int $sellerId): void
+    {
+        $thread = static::threadFor($project);
+
+        $participant = ChatParticipant::firstOrCreate(
+            ['thread_id' => $thread->id, 'user_id' => $sellerId],
+            ['role' => 'member', 'joined_at' => now()]
+        );
+
+        if (!$participant->wasRecentlyCreated) {
+            return;
+        }
+
+        Notification::create([
+            'user_id'    => $sellerId,
+            'company_id' => $project->company_id,
+            'type'       => 'project_chat_added',
+            'title'      => "Added to project chat — {$project->name}",
+            'body'       => "You were added to project chat for '{$project->name}'.",
+            'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => "/projects/{$project->id}/chat"],
+        ]);
+    }
+
     // Call after a user stops being formally tied to a project (e.g.
     // removed from its team) — if they're no longer eligible via ANY path
     // (team, task/production assignment, or project_manager_id) they lose
