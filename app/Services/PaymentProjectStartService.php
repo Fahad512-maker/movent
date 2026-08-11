@@ -6,7 +6,9 @@ use App\Mail\ProjectStartRequiresFullPaymentMail;
 use App\Models\Company;
 use App\Models\CompanyDealSettings;
 use App\Models\Invoice;
+use App\Models\Notification;
 use App\Models\Project;
+use App\Models\UserCompanyPermission;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -106,7 +108,80 @@ class PaymentProjectStartService
         // Both get created when someone activates it and fills in the details —
         // see Api\*\ProjectController::activate().
 
+        self::notifyDraftAwaitingActivation($project, $invoice);
+
         return $project;
+    }
+
+    /**
+     * Tell the people who need to act that the client has paid and a draft
+     * project is now sitting there waiting to be activated.
+     *
+     * Distinct from InvoicePaymentService::notifyStakeholders(), which announces
+     * the PAYMENT and links to the invoice: this announces the PROJECT and links
+     * to it, so the recipient lands where the Activate button actually is.
+     * Recipients are therefore whoever can act on it —
+     *
+     *   • the Seller who raised the invoice (invoice.created_by), so the person
+     *     who closed the deal knows their client paid;
+     *   • every sub-user holding canActivateProjects, i.e. exactly the people
+     *     who can both SEE the draft (see visibleProjects()) and activate it;
+     *   • every Company Admin, who is always structurally allowed to activate.
+     *
+     * Each write is individually guarded — one bad recipient must not cost the
+     * others their notification, nor break the project creation that called this.
+     */
+    private static function notifyDraftAwaitingActivation(Project $project, Invoice $invoice): void
+    {
+        $activatorIds = UserCompanyPermission::where('company_id', $invoice->company_id)
+            ->where('module_key', 'project_management')
+            ->where('permission_key', 'canActivateProjects')
+            ->pluck('user_id');
+
+        $recipients = collect([$invoice->created_by])
+            ->merge($activatorIds)
+            ->filter()
+            ->unique();
+
+        $who     = $invoice->client?->name ?? $invoice->customer_name ?? 'The client';
+        $paidAll = $invoice->status === 'paid';
+        $title   = $paidAll ? 'Client paid in full — project ready to activate'
+                            : 'Client made a payment — project ready to activate';
+        $body    = "{$who} paid invoice {$invoice->invoice_number}. Draft project \"{$project->name}\" was created and is waiting to be activated.";
+
+        foreach ($recipients as $uid) {
+            try {
+                Notification::create([
+                    'user_id'    => $uid,
+                    'company_id' => $invoice->company_id,
+                    'type'       => 'project_draft_awaiting_activation',
+                    'title'      => $title,
+                    'body'       => $body,
+                    'data'       => [
+                        'project_id' => $project->id,
+                        'invoice_id' => $invoice->id,
+                        'link'       => "/projects/{$project->id}",
+                    ],
+                ]);
+            } catch (\Throwable) {
+            }
+        }
+
+        // Company Admin isn't a `users` row, so a plain Notification::create()
+        // can't reach them — same reason notifyStakeholders() routes through
+        // NotificationService for admins.
+        try {
+            NotificationService::notifyCompanyAdmins($invoice->company_id, null, [
+                'module'      => 'project_management',
+                'type'        => 'project_draft_awaiting_activation',
+                'title'       => $title,
+                'message'     => $body,
+                'entity_type' => 'Project',
+                'entity_id'   => $project->id,
+                'url'         => "/admin/projects/{$project->id}",
+            ]);
+        } catch (\Throwable) {
+        }
     }
 
     /**
