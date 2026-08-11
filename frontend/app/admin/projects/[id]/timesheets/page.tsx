@@ -6,7 +6,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, Timesheet, Task } from '@/lib/services/adminProjectService';
-import { userService } from '@/lib/services/userService';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import { inp, lbl, card, Badge, TIMESHEET_SC, fmtDate } from '@/components/admin/projects/shared';
 
@@ -37,12 +36,11 @@ export default function ProjectTimesheetsPage() {
   useEffect(() => {
     load();
     adminProjectService.tasks.list(projectId).then(setTasks).catch(() => {});
-    // Scoped to THIS project's own company — not every company the admin
-    // owns (userService.list() returns users across all of them).
+    // Only this project's own team members can be logged against — not
+    // every user in the company (same fix already applied to the Projects
+    // listing's PM dropdown and the all-Tasks page's Assigned To dropdown).
     adminProjectService.getOne(projectId).then(p => {
-      userService.list().then(d => setUsers(d.users.filter(u =>
-        (u.company_assignments ?? []).some(a => a.company_id === p.company_id && a.status === 'active')
-      ))).catch(() => {});
+      setUsers((p.team_members ?? []).filter(tm => tm.user).map(tm => ({ id: tm.user_id, name: tm.user!.name })));
     }).catch(() => {});
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 

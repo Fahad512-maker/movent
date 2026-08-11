@@ -62,14 +62,17 @@ export default function ProjectTasksPage() {
     load();
     adminProjectService.getOne(projectId).then(p => {
       setProjectClosed(p.status === 'closed');
-      // Production tasks can only be assigned to an existing, active user of
-      // THIS project's own company — a Company Admin can own several
-      // companies, and userService.list() returns users across all of them,
-      // so it must be filtered down here. A Seller can never be a task
-      // assignee, full stop.
+      // Only this project's own team members are assignable — not every
+      // active user of the company (same fix already applied to the
+      // Projects listing's PM dropdown, the all-Tasks page, and
+      // Timesheets). Still sourced from userService.list() (not
+      // project.team_members directly) since the "no Project Management
+      // access" warning below needs each user's full company_assignments,
+      // which team_members' nested user object doesn't carry. A Seller can
+      // never be a task assignee, full stop (also never a team member).
+      const teamMemberIds = new Set((p.team_members ?? []).map(tm => tm.user_id));
       userService.list().then(d => setUsers(d.users.filter(u =>
-        u.is_active && u.role_type !== 'seller'
-        && (u.company_assignments ?? []).some(a => a.company_id === p.company_id)
+        u.is_active && u.role_type !== 'seller' && teamMemberIds.has(u.id)
       ))).catch(() => {});
     }).catch(() => {});
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps

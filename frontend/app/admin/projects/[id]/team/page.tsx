@@ -47,6 +47,13 @@ export default function ProjectTeamPage() {
   const role: TeamRole = 'team_member';
   const [saving, setSaving]   = useState(false);
   const [projectClosed, setProjectClosed] = useState(false);
+  // The project's linked Seller (project.seller_id) — deliberately NOT part
+  // of `members`/TEAM_ELIGIBLE_ROLES below. A Seller is never a real
+  // project_team_members row (see Api\User\ProjectMessengerController/
+  // ProjectCommentController's Seller-isolation rules, which assume this);
+  // it's assigned/switched via its own control on the project detail page.
+  // Shown here read-only just so it's visible from the Team tab too.
+  const [seller, setSeller] = useState<{ id: number; name: string; email?: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -55,6 +62,7 @@ export default function ProjectTeamPage() {
       setMembers(p.team_members ?? []);
       setProjectClosed(p.status === 'closed');
       setProjectCompanyId(p.company_id);
+      setSeller(p.seller ?? null);
     } catch { toast.error('Failed to load team'); }
     finally { setLoading(false); }
   };
@@ -103,6 +111,17 @@ export default function ProjectTeamPage() {
       </div>
 
       <ProjectTabs projectId={projectId} active="team" />
+
+      <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <label style={lbl}>Seller</label>
+          <div style={{ fontSize: 13, color: seller ? '#1e293b' : '#94a3b8' }}>{seller?.name ?? 'Unassigned'}</div>
+        </div>
+        <Link href={`/admin/projects/${id}`} style={{
+          padding: '7px 14px', fontSize: 12, fontWeight: 600, borderRadius: 7,
+          border: '1px solid #bfdbfe', background: '#fff', color: '#2563eb', textDecoration: 'none',
+        }}>{seller ? 'Switch on Project Overview →' : 'Assign on Project Overview →'}</Link>
+      </div>
 
       {!projectClosed && (
       <form onSubmit={addMember} style={card}>
