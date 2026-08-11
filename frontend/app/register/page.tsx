@@ -837,9 +837,10 @@ const COMPANY_OPTIONS: CompanyOption[] = [
   { label: 'Unlimited', value: null, price_pkr: 2500, price_usd: 10 },
 ];
 
+// USA first — primary target market.
 const TIMEZONES: string[] = [
-  'Asia/Karachi', 'Asia/Kolkata', 'Asia/Dubai', 'Europe/London',
-  'America/New_York', 'America/Los_Angeles', 'Asia/Singapore',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Europe/London', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Singapore',
 ];
 
 type PwStrength = { label: string; color: string; pct: number };
@@ -1046,7 +1047,7 @@ function RegisterContent() {
     setShowConfirm(true);
   };
   const [phone, setPhone] = useState<string>('');
-  const [timezone, setTimezone] = useState<string>('Asia/Karachi');
+  const [timezone, setTimezone] = useState<string>('America/New_York');
 
   useEffect(() => {
     setLoadingPackages(true);
