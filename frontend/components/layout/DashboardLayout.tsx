@@ -1,7 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken } from '@/lib/auth';
+import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken, logout } from '@/lib/auth';
 import { Admin } from '@/types';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
@@ -34,15 +34,21 @@ export default function DashboardLayout({
     // routes/api.php's 'subscription.active' middleware) — every API call
     // this layout's own pages make already 402s, but without this check the
     // page shell itself still renders (just empty), which reads as "it let
-    // me in anyway." Bounce them straight back to /payment instead. Checked
-    // from the cached cookie first (no flash of the real page while an
-    // async refresh is in flight), then again once the fresh /me response
-    // comes back below in case the cached copy was stale.
+    // me in anyway." Send them back to /login instead of straight to
+    // /payment — landing on /payment directly with this stale/plain session
+    // (not the fresh payment-scoped token issued by useAuth's resumePayment())
+    // doesn't reliably let them actually pay; going through /login's
+    // "Complete Payment" button re-verifies credentials and issues that
+    // proper token first. Clears the stale session so /login doesn't loop
+    // back here. Checked from the cached cookie first (no flash of the real
+    // page while an async refresh is in flight), then again once the fresh
+    // /me response comes back below in case the cached copy was stale.
     const isPaymentRoute = window.location.pathname.startsWith('/payment');
     if (type === 'admin' && !isPaymentRoute) {
       const cachedAdmin = getAuthUser() as Admin | null;
       if (cachedAdmin?.subscription_status === 'pending_payment') {
-        router.replace('/payment');
+        logout();
+        router.replace('/login');
         return;
       }
     }
@@ -62,7 +68,8 @@ export default function DashboardLayout({
             setAuthData(token, fresh, type as 'admin' | 'user');
             window.dispatchEvent(new Event('auth_refreshed'));
             if (type === 'admin' && fresh.subscription_status === 'pending_payment' && !isPaymentRoute) {
-              router.replace('/payment');
+              logout();
+              router.replace('/login');
             }
           }
         }).catch(() => {});

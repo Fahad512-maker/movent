@@ -93,14 +93,19 @@ export const ROLE_LABELS: Record<string, string> = {
 // 'client' and 'staff' are excluded since they aren't meaningful choices for
 // a staff member the Company Admin is creating. The 5 legacy invoice_*/
 // payment_manager values are intentionally not offered here anymore.
+// 'company_admin' and 'team_member' are deliberately NOT offered either
+// (2026-08-11): Company Admin is never really a `users` row (it's its own
+// `company_admins` table/guard — picking this here wouldn't grant real
+// Admin privileges anyway, every unrestricted-Admin check is against the
+// admin guard, not this role_type), and 'team_member' was removed from the
+// picker per explicit request — still a valid role_type for existing rows,
+// backend validation (UserController::VALID_ROLES) is untouched.
 export const USER_ROLE_TYPE_OPTIONS: RoleOption[] = [
-  { value: 'company_admin',   label: ROLE_LABELS.company_admin },
   { value: 'project_manager', label: ROLE_LABELS.project_manager },
   { value: 'production',      label: ROLE_LABELS.production },
   { value: 'developer',       label: ROLE_LABELS.developer },
   { value: 'designer',        label: ROLE_LABELS.designer },
   { value: 'qa',              label: ROLE_LABELS.qa },
-  { value: 'team_member',     label: ROLE_LABELS.team_member },
   { value: 'seller',          label: ROLE_LABELS.seller },
   { value: 'lead_manager',    label: ROLE_LABELS.lead_manager },
   { value: 'invoice_user',    label: ROLE_LABELS.invoice_user },
