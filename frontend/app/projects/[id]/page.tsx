@@ -130,6 +130,7 @@ export default function UserProjectDetailPage() {
   const canCloseProjects      = can('project_management', 'canCloseProjects');
   const canReopenProjects     = can('project_management', 'canReopenProjects');
   const canForceCloseProjects = can('project_management', 'canForceCloseProjects');
+  const canActivateProjects   = can('project_management', 'canActivateProjects');
 
   // Task status-workflow permission set — passed to getAllowedNextTaskStatuses()
   // below to filter each status <select>'s options; the backend
@@ -630,6 +631,7 @@ export default function UserProjectDetailPage() {
               canClose={canCloseProjects}
               canReopen={canReopenProjects}
               canForceClose={canForceCloseProjects}
+              canActivate={canActivateProjects}
               onUpdated={updated => setProject(updated)}
             />
             {canEditProjects && project.status !== 'closed' && (

@@ -81,6 +81,15 @@ export const SIMPLE_PROJECT_PERMISSIONS: SimpleProjectPermission[] = [
     maps: ['canAssignProjectSeller'],
   },
   {
+    // Draft projects are the name-only stubs auto-created when a client's
+    // payment starts one (see App\Services\PaymentProjectStartService).
+    // Granting this both reveals them in the projects list and allows
+    // activating them. Company Admin always has it implicitly; NOT part of
+    // Project Manager's default bundle (see roleUtils.ts).
+    key: 'pm_adv_activate_project', label: 'Activate Draft Project', advanced: true,
+    maps: ['canActivateProjects'],
+  },
+  {
     key: 'pm_adv_delete_project_files', label: 'Delete Project Attachments', advanced: true,
     maps: ['canDeleteProjectAttachments'],
   },

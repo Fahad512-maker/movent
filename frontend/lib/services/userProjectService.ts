@@ -83,6 +83,13 @@ export const userProjectService = {
     return res.data.data;
   },
 
+  // Activate a payment-started draft project (status draft → active).
+  // Requires canActivateProjects — the same key that makes drafts visible.
+  activate: async (id: number): Promise<Project> => {
+    const res = await api.post(`/user/projects/${id}/activate`);
+    return res.data.data;
+  },
+
   complete: async (id: number): Promise<Project> => {
     const res = await api.post(`/user/projects/${id}/complete`);
     return res.data.data;

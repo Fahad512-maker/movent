@@ -8,6 +8,9 @@ export const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 
 export const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '24px 28px', marginBottom: 20 };
 
 export const STATUS_SC: Record<string, { bg: string; color: string }> = {
+  // Auto-created by a client's invoice payment, name-only until activated —
+  // deliberately grey so it never reads as live work in a list.
+  draft:     { bg: '#f8fafc', color: '#64748b' },
   planning:  { bg: '#eff6ff', color: '#2563eb' },
   active:    { bg: '#ecfdf5', color: '#059669' },
   on_hold:   { bg: '#fffbeb', color: '#d97706' },

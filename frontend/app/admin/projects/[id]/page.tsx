@@ -346,7 +346,7 @@ export default function ProjectOverviewPage() {
           projectId={Number(id)}
           status={project.status}
           service={adminProjectService}
-          canComplete canClose canReopen canForceClose
+          canComplete canClose canReopen canForceClose canActivate
           onUpdated={updated => setProject(updated)}
         />
         {project.status !== 'closed' && (

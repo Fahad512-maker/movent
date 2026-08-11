@@ -1,6 +1,9 @@
 import api from '@/lib/axios';
 
-export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
+// 'draft' is only ever reached by auto-creation from a client's invoice payment
+// (App\Services\PaymentProjectStartService) and only ever left via the activate
+// endpoint — it is deliberately absent from the create/update status whitelists.
+export type ProjectStatus = 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
   | 'todo' | 'in_progress' | 'blocked' | 'ready_for_qa' | 'in_qa'
@@ -464,6 +467,12 @@ export const adminProjectService = {
 
   completionStatus: async (id: number): Promise<CompletionStatus> => {
     const res = await api.get(`/admin/projects/${id}/completion-status`);
+    return res.data.data;
+  },
+
+  // Activate a payment-started draft project (status draft → active).
+  activate: async (id: number): Promise<Project> => {
+    const res = await api.post(`/admin/projects/${id}/activate`);
     return res.data.data;
   },
 

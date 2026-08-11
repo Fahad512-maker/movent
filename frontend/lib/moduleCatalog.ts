@@ -196,6 +196,7 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'canReopenProjects',          label: 'Reopen Project',           group: 'Projects' },
       { key: 'canForceCloseProjects',      label: 'Force Close Project',      group: 'Projects' },
       { key: 'canAssignProjectSeller',     label: 'Assign/Switch Project Seller', group: 'Projects' },
+      { key: 'canActivateProjects',        label: 'Activate Draft Project',   group: 'Projects' },
 
       { key: 'canViewTasks',               label: 'View Tasks',   group: 'Tasks' },
       { key: 'canCreateTasks',             label: 'Create Tasks', group: 'Tasks' },

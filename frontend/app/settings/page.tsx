@@ -20,17 +20,12 @@ interface BankSettings {
   bank_name: string; account_name: string; account_number: string;
   iban: string; swift: string;
 }
+// The Deal Workflow is one decision — when a client's payment creates the
+// project — plus the manual pre-payment override. See
+// App\Models\CompanyDealSettings::TRIGGERS.
 interface DealWorkflowSettings {
   project_creation_trigger: string;
-  auto_create_project: boolean;
-  require_seller_confirmation: boolean;
-  require_finance_verification: boolean;
   allow_admin_override: boolean;
-  allow_partial_payment_start: boolean;
-  default_advance_percentage: number | null;
-  minimum_advance_percentage: number | null;
-  notify_seller_on_payment: boolean;
-  notify_ops_on_project_created: boolean;
   triggers: Record<string, string>;
 }
 interface GatewayConfig { [key: string]: string; }
@@ -771,50 +766,55 @@ export default function SettingsPage() {
           ) : (
             <div style={card}>
               <div style={cardHead}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Lead-Won → Project Creation Workflow</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Project Creation Workflow</div>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#94a3b8' }}>
-                  Controls when a Seller is allowed to create a Project after a Lead is marked Won — by default, only after the required kickoff payment has been received and verified.
+                  Choose when a client&apos;s invoice payment creates the project. Either way the project is created as a
+                  draft holding only its name — you fill in the rest and activate it before any work shows up for the client.
                 </p>
               </div>
               <div style={cardBody}>
-                <div style={{ marginBottom: 18 }}>
-                  <label style={lbl}>Project Creation Trigger</label>
-                  <select style={inp} value={dealSettings.project_creation_trigger}
-                    onChange={e => setDealSettings(p => p ? { ...p, project_creation_trigger: e.target.value } : p)}>
-                    {Object.entries(dealSettings.triggers).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                  </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 22 }}>
+                  {Object.entries(dealSettings.triggers).map(([key, label]) => {
+                    const active = dealSettings.project_creation_trigger === key;
+                    const [heading, detail] = label.split(' — ');
+                    return (
+                      <label key={key} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 11, padding: '13px 16px', borderRadius: 9,
+                        cursor: 'pointer', border: `2px solid ${active ? '#2563eb' : '#e2e8f0'}`,
+                        background: active ? '#eff6ff' : '#fafafa',
+                      }}>
+                        <input
+                          type="radio"
+                          name="project_creation_trigger"
+                          checked={active}
+                          onChange={() => setDealSettings(p => p ? { ...p, project_creation_trigger: key } : p)}
+                          style={{ width: 16, height: 16, accentColor: '#2563eb', marginTop: 1, flexShrink: 0 }}
+                        />
+                        <span>
+                          <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: active ? '#1d4ed8' : '#374151' }}>{heading}</span>
+                          {detail && <span style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{detail}</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
 
-                {([
-                  ['auto_create_project', 'Automatically create project after payment'],
-                  ['require_seller_confirmation', 'Require seller confirmation before project creation'],
-                  ['require_finance_verification', 'Require finance verification'],
-                  ['allow_admin_override', 'Allow admin override'],
-                  ['allow_partial_payment_start', 'Allow partial-payment project start'],
-                  ['notify_seller_on_payment', 'Notify seller when payment is received'],
-                  ['notify_ops_on_project_created', 'Notify operations team after project creation'],
-                ] as [keyof DealWorkflowSettings, string][]).map(([key, label]) => (
-                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!!dealSettings[key]} onChange={() => toggleDealSetting(key)}
-                      style={{ width: 16, height: 16, accentColor: '#2563eb' }} />
-                    <span style={{ fontSize: 13, color: '#374151' }}>{label}</span>
-                  </label>
-                ))}
+                {dealSettings.project_creation_trigger === 'full_payment' && (
+                  <div style={{ marginBottom: 20, padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, color: '#64748b' }}>
+                    💡 A part payment won&apos;t start anything — the client is emailed that their project begins once the invoice is paid in full.
+                  </div>
+                )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 8, marginBottom: 20 }}>
-                  <div>
-                    <label style={lbl}>Default Advance Percentage</label>
-                    <input type="number" min={0} max={100} style={inp}
-                      value={dealSettings.default_advance_percentage ?? ''}
-                      onChange={e => setDealSettings(p => p ? { ...p, default_advance_percentage: e.target.value ? Number(e.target.value) : null } : p)} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Minimum Advance Percentage</label>
-                    <input type="number" min={0} max={100} style={inp}
-                      value={dealSettings.minimum_advance_percentage ?? ''}
-                      onChange={e => setDealSettings(p => p ? { ...p, minimum_advance_percentage: e.target.value ? Number(e.target.value) : null } : p)} />
-                  </div>
-                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!dealSettings.allow_admin_override} onChange={() => toggleDealSetting('allow_admin_override')}
+                    style={{ width: 16, height: 16, accentColor: '#2563eb' }} />
+                  <span style={{ fontSize: 13, color: '#374151' }}>
+                    Allow admin override
+                    <span style={{ display: 'block', fontSize: 12, color: '#94a3b8' }}>
+                      Lets a user holding &quot;Override Project Creation Before Payment&quot; raise a project by hand before the payment lands.
+                    </span>
+                  </span>
+                </label>
 
                 <button onClick={saveDealSettings} disabled={savingDeal}
                   style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: savingDeal ? '#93c5fd' : 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: savingDeal ? 'not-allowed' : 'pointer' }}>

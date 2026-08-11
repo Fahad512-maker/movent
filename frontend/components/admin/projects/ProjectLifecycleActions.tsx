@@ -5,6 +5,7 @@ import { inp, lbl } from './shared';
 
 interface LifecycleService {
   completionStatus: (id: number) => Promise<CompletionStatus>;
+  activate: (id: number) => Promise<Project>;
   complete: (id: number) => Promise<Project>;
   close: (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }) => Promise<Project>;
   reopen: (id: number, reason: string) => Promise<Project>;
@@ -21,6 +22,9 @@ interface Props {
   canClose: boolean;
   canReopen: boolean;
   canForceClose: boolean;
+  // canActivateProjects — gates the draft → active transition. A sub-user
+  // without it never even sees a draft project (see visibleProjects()).
+  canActivate: boolean;
   onUpdated: (project: Project) => void;
 }
 
@@ -61,7 +65,7 @@ function BlockerGroup({ title, items, render }: { title: string; items: { id: nu
   );
 }
 
-export default function ProjectLifecycleActions({ projectId, status, service, canComplete, canClose, canReopen, canForceClose, onUpdated }: Props) {
+export default function ProjectLifecycleActions({ projectId, status, service, canComplete, canClose, canReopen, canForceClose, canActivate, onUpdated }: Props) {
   const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | null>(null);
   const [loadingCheck, setLoadingCheck] = useState(false);
   const [checklist, setChecklist] = useState<CompletionStatus | null>(null);
@@ -103,6 +107,19 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
   };
 
   const close = () => { setMode(null); setChecklist(null); };
+
+  // Activating a draft needs no confirmation modal — there is nothing to
+  // review yet, the project is a name-only stub until someone fills it in.
+  const submitActivate = async () => {
+    setSubmitting(true);
+    try {
+      const updated = await service.activate(projectId);
+      toast.success('Project activated');
+      onUpdated(updated);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to activate project');
+    } finally { setSubmitting(false); }
+  };
 
   const submitComplete = async () => {
     setSubmitting(true);
@@ -157,6 +174,14 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
 
   return (
     <>
+      {/* A draft is pre-lifecycle: activating it is the ONLY action available,
+          so none of the complete/close/reopen buttons render alongside it. */}
+      {status === 'draft' ? (canActivate && (
+        <button onClick={submitActivate} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#2563eb', '#fff')}>
+          {submitting ? 'Activating…' : 'Activate Project'}
+        </button>
+      )) : (
+      <>
       {!isTerminal && canComplete && (
         <button onClick={openComplete} style={btn('#059669', '#fff')}>Mark as Complete</button>
       )}
@@ -168,6 +193,8 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
       )}
       {isTerminal && canReopen && (
         <button onClick={openReopen} style={btn('#2563eb', '#fff')}>Reopen Project</button>
+      )}
+      </>
       )}
 
       {mode === 'complete' && (

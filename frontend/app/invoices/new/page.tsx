@@ -6,12 +6,14 @@ import { adminInvoiceService, InvoicePayload } from '@/lib/services/adminInvoice
 import { adminClientService, ClientCompany } from '@/lib/services/adminClientService';
 import { userClientService } from '@/lib/services/userClientService';
 import { adminLeadService, userLeadService, Lead } from '@/lib/services/adminLeadService';
+import { adminProjectService, Project } from '@/lib/services/adminProjectService';
+import { userProjectService } from '@/lib/services/userProjectService';
 import { Client, User } from '@/types';
 import { getAuthType, getAuthUser, can } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
-import { HiArrowLeft, HiPlusCircle, HiTrash, HiUserCircle, HiUsers } from 'react-icons/hi2';
+import { HiArrowLeft, HiFolder, HiFolderPlus, HiPlusCircle, HiTrash, HiUserCircle, HiUsers } from 'react-icons/hi2';
 
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -37,6 +39,7 @@ function defaultGatewaySelection(accounts: GatewayAccountOption[]): number[] {
 }
 
 type CustomerType = 'client' | 'guest';
+type ProjectMode = 'new' | 'existing';
 
 function NewInvoiceForm() {
   useAdminGuard();
@@ -83,12 +86,29 @@ function NewInvoiceForm() {
   // array) before its actual client ever loaded.
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientId, setClientId]         = useState<number | null>(null);
+  // Why the client list came back empty, when it wasn't simply "none exist".
+  // A 403 from GET /user/clients (missing canViewClients) used to be swallowed
+  // and rendered as "No clients found for this company", which reads as an empty
+  // database rather than the permission problem it actually is.
+  const [clientsError, setClientsError] = useState('');
 
   // Guest fields
   const [guestName, setGuestName]       = useState('');
   const [guestEmail, setGuestEmail]     = useState('');
   const [guestPhone, setGuestPhone]     = useState('');
   const [guestAddress, setGuestAddress] = useState('');
+
+  // Project — 'existing' mirrors the manual Line Items flow this form
+  // already had; 'new' replaces Line Items entirely with a single
+  // title/reference/amount, since the project (and its billing) doesn't
+  // exist yet.
+  const [projectMode, setProjectMode]         = useState<ProjectMode>('existing');
+  const [projects, setProjects]               = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectId, setProjectId]             = useState<number | null>(null);
+  const [projectTitle, setProjectTitle]       = useState('');
+  const [projectReference, setProjectReference] = useState('');
+  const [projectAmount, setProjectAmount]     = useState(0);
 
   // Payment gateway selection for this invoice
   const [gatewayAccounts, setGatewayAccounts]     = useState<GatewayAccountOption[]>([]);
@@ -129,13 +149,36 @@ function NewInvoiceForm() {
     if (!companyId) { setClients([]); return; }
     setLoadingClients(true);
     setClientId(null);
+    setClientsError('');
     const load = isAdmin
       ? adminClientService.list({ company_id: String(companyId) }).then(res => res.clients)
       : userClientService.list();
     load
       .then(list => setClients(list))
-      .catch(() => setClients([]))
+      .catch((err: unknown) => {
+        setClients([]);
+        const status = (err as { response?: { status?: number } }).response?.status;
+        setClientsError(status === 403
+          ? 'You don’t have permission to view this company’s clients. Ask your Company Admin to grant you "View Clients", or switch to Guest.'
+          : 'Could not load clients. Please retry, or switch to Guest.');
+      })
       .finally(() => setLoadingClients(false));
+  }, [companyId, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load this company's projects for the "Existing Project" picker — the
+  // same visibility rule the Projects module already applies (created by
+  // this staff member, or a Seller's own assigned/handed-off projects).
+  useEffect(() => {
+    if (!companyId) { setProjects([]); return; }
+    setLoadingProjects(true);
+    setProjectId(null);
+    const load = isAdmin
+      ? adminProjectService.list({ company_id: String(companyId) })
+      : userProjectService.list();
+    load
+      .then(list => setProjects(list))
+      .catch(() => setProjects([]))
+      .finally(() => setLoadingProjects(false));
   }, [companyId, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-fill from a Lead (e.g. arriving via /invoices/new?lead_id=50 from a
@@ -169,6 +212,12 @@ function NewInvoiceForm() {
       if (lead.proposed_project_title) {
         setInvoicePurpose(lead.required_kickoff_amount ? 'Kickoff Payment' : lead.proposed_project_title);
       }
+
+      // A won lead has no project yet — default to naming one, carrying the
+      // deal's own proposed title/reference so they travel with the invoice.
+      setProjectMode('new');
+      if (lead.proposed_project_title) setProjectTitle(lead.proposed_project_title);
+      if (lead.deal_reference) setProjectReference(lead.deal_reference);
       const kickoff = lead.required_kickoff_amount ?? lead.estimated_value ?? 0;
       if (kickoff > 0) {
         setItems([{
@@ -243,7 +292,18 @@ function NewInvoiceForm() {
   const addItem    = () => setItems(p => [...p, EMPTY_ITEM()]);
   const removeItem = (i: number) => setItems(p => p.filter((_, idx) => idx !== i));
 
-  const subtotal = items.reduce((s, r) => s + r.quantity * r.unit_price, 0);
+  // "New Project" normally replaces the manual Line Items list with a single
+  // title/amount row — there's no project yet to itemize billing against.
+  // Arriving from a won lead is the exception: that lead's own figures are
+  // already prefilled into Line Items above, so those stand as the billing
+  // detail and only the project's title/reference are named here.
+  const showLineItems = projectMode === 'existing' || !!leadId;
+
+  const effectiveItems: LineItem[] = showLineItems
+    ? items
+    : [{ description: projectTitle.trim() || 'New Project', quantity: 1, unit_price: projectAmount }];
+
+  const subtotal = effectiveItems.reduce((s, r) => s + r.quantity * r.unit_price, 0);
   const taxAmt   = (subtotal * taxRate) / 100;
   const total    = Math.max(0, subtotal + taxAmt - discount);
 
@@ -256,9 +316,16 @@ function NewInvoiceForm() {
   // the error state) if the form isn't ready to submit.
   const buildPayload = (): InvoicePayload | null => {
     if (!companyId) { setError('Select a company'); return null; }
-    if (items.some(r => !r.description.trim())) { setError('All items need a description'); return null; }
     if (customerType === 'client' && !clientId) { setError('Select a client, or switch to Guest for an external customer'); return null; }
     if (customerType === 'guest' && !guestName.trim()) { setError('Customer name is required for guest invoices'); return null; }
+    if (projectMode === 'existing' && !projectId) { setError('Select an existing project, or switch to New Project'); return null; }
+    if (projectMode === 'new' && !projectTitle.trim()) { setError('Project title is required'); return null; }
+    if (showLineItems) {
+      if (items.some(r => !r.description.trim())) { setError('All items need a description'); return null; }
+    } else if (!projectAmount || projectAmount <= 0) {
+      setError('Enter the amount for this invoice');
+      return null;
+    }
 
     return {
       company_id:      companyId,
@@ -270,7 +337,7 @@ function NewInvoiceForm() {
       due_date:        dueDate || null,
       invoice_purpose: invoicePurpose || undefined,
       payment_type:    paymentType || undefined,
-      items: items.map(r => ({ description: r.description, quantity: r.quantity, unit_price: r.unit_price })),
+      items: effectiveItems.map(r => ({ description: r.description, quantity: r.quantity, unit_price: r.unit_price })),
       gateway_account_ids: selectedGatewayIds,
       ...(customerType === 'client'
         ? { client_id: clientId }
@@ -281,6 +348,10 @@ function NewInvoiceForm() {
             customer_phone:   guestPhone.trim()   || null,
             customer_address: guestAddress.trim() || null,
           }
+      ),
+      ...(projectMode === 'existing'
+        ? { project_id: projectId }
+        : { project_id: null, project_title: projectTitle.trim(), project_reference: projectReference.trim() || null }
       ),
     };
   };
@@ -374,6 +445,29 @@ function NewInvoiceForm() {
       <button
         type="button"
         onClick={() => setCustomerType(type)}
+        style={{
+          flex: 1, padding: '12px 16px', borderRadius: 9, cursor: 'pointer', textAlign: 'left',
+          border: `2px solid ${active ? '#2563eb' : '#e2e8f0'}`,
+          background: active ? '#eff6ff' : '#fafafa',
+          transition: 'border-color .15s, background .15s',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 3 }}>
+          <span style={{ color: active ? '#2563eb' : '#94a3b8' }}>{icon}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: active ? '#1d4ed8' : '#374151' }}>{label}</span>
+          {active && <span style={{ marginLeft: 'auto', width: 16, height: 16, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 900, flexShrink: 0 }}>✓</span>}
+        </div>
+        <div style={{ fontSize: 11, color: '#94a3b8', paddingLeft: 25 }}>{sub}</div>
+      </button>
+    );
+  };
+
+  const projectModeBtn = (mode: ProjectMode, icon: React.ReactNode, label: string, sub: string): React.ReactNode => {
+    const active = projectMode === mode;
+    return (
+      <button
+        type="button"
+        onClick={() => setProjectMode(mode)}
         style={{
           flex: 1, padding: '12px 16px', borderRadius: 9, cursor: 'pointer', textAlign: 'left',
           border: `2px solid ${active ? '#2563eb' : '#e2e8f0'}`,
@@ -512,6 +606,10 @@ function NewInvoiceForm() {
                       <label style={lbl}>Select Client *</label>
                       {loadingClients ? (
                         <div style={{ padding: '10px 0', fontSize: 13, color: '#94a3b8' }}>Loading clients…</div>
+                      ) : clientsError ? (
+                        <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, color: '#dc2626' }}>
+                          {clientsError} <button type="button" onClick={() => setCustomerType('guest')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 600, fontSize: 13, padding: 0 }}>Switch to Guest</button>
+                        </div>
                       ) : clients.length === 0 ? (
                         <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, color: '#dc2626' }}>
                           No clients found for this company. <button type="button" onClick={() => setCustomerType('guest')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 600, fontSize: 13, padding: 0 }}>Switch to Guest</button>
@@ -577,7 +675,85 @@ function NewInvoiceForm() {
                 </div>
               </div>
 
+              {/* Project card */}
+              <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Project</h3>
+                </div>
+                <div style={{ padding: 22 }}>
+
+                  {/* Mode toggle */}
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+                    {projectModeBtn('existing', <HiFolder size={15} />, 'Existing Project', 'Bill against a project already created or assigned to you')}
+                    {projectModeBtn('new',      <HiFolderPlus size={15} />, 'New Project', 'Name the project and set an amount for this invoice')}
+                  </div>
+
+                  {/* Existing Project picker */}
+                  {projectMode === 'existing' && (
+                    <div>
+                      <label style={lbl}>Select Project *</label>
+                      {loadingProjects ? (
+                        <div style={{ padding: '10px 0', fontSize: 13, color: '#94a3b8' }}>Loading projects…</div>
+                      ) : projects.length === 0 ? (
+                        <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, color: '#dc2626' }}>
+                          No projects found. <button type="button" onClick={() => setProjectMode('new')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 600, fontSize: 13, padding: 0 }}>Switch to New Project</button>
+                        </div>
+                      ) : (
+                        <select
+                          style={inp}
+                          value={projectId ?? ''}
+                          onChange={e => setProjectId(Number(e.target.value) || null)}
+                        >
+                          <option value="">Select a project…</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      {projectId && (() => {
+                        const sel = projects.find(p => p.id === projectId);
+                        if (!sel) return null;
+                        return (
+                          <div style={{ marginTop: 10, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12, color: '#166534' }}>
+                            <div style={{ fontWeight: 700 }}>{sel.name}</div>
+                            {sel.client?.name && <div style={{ marginTop: 2 }}>{sel.client.name}</div>}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* New Project fields */}
+                  {projectMode === 'new' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <div>
+                          <label style={lbl}>Project Title *</label>
+                          <input style={inp} value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. Website Redesign" />
+                        </div>
+                        <div>
+                          <label style={lbl}>Reference <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+                          <input style={inp} value={projectReference} onChange={e => setProjectReference(e.target.value)} placeholder="e.g. PRJ-1042" />
+                        </div>
+                      </div>
+                      {!showLineItems && (
+                        <div>
+                          <label style={lbl}>Amount for the Invoice *</label>
+                          <input type="number" min={0} step="0.01" style={inp} value={projectAmount} onChange={e => setProjectAmount(parseFloat(e.target.value) || 0)} placeholder="0.00" />
+                        </div>
+                      )}
+                      {showLineItems && (
+                        <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', borderRadius: 7, padding: '8px 12px' }}>
+                          💡 This invoice&apos;s amount comes from the Line Items below, pre-filled from the deal — adjust them if needed.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Line items card */}
+              {showLineItems && (
               <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#fafafa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Line Items</h3>
@@ -604,6 +780,7 @@ function NewInvoiceForm() {
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Payment Gateways card */}
               <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden', marginTop: 16 }}>
