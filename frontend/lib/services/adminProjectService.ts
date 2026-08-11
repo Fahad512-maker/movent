@@ -191,7 +191,7 @@ export interface Task {
   start_date: string | null;
   due_date: string | null;
   completed_at: string | null;
-  project?: { id: number; name: string; company_id: number };
+  project?: { id: number; name: string; company_id: number; team_members?: TeamMember[] };
   production_queue?: ProductionQueueItem | null;
   deliverables?: Deliverable[];
   attachments_count?: number;

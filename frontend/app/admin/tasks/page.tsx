@@ -6,15 +6,12 @@ import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, Task, Project } from '@/lib/services/adminProjectService';
 import { adminNotificationService } from '@/lib/services/adminNotificationService';
-import { userService } from '@/lib/services/userService';
-import { User } from '@/types';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
 
 export default function AllTasksPage() {
   useModuleGuard('tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusF, setStatusF]   = useState('');
   const [priorityF, setPriorityF] = useState('');
@@ -38,8 +35,6 @@ export default function AllTasksPage() {
   useEffect(() => {
     load();
     adminProjectService.list().then(setProjects).catch(() => {});
-    // A Seller can never be a task assignee, full stop.
-    userService.list().then(d => setUsers(d.users.filter(u => u.is_active && u.role_type !== 'seller'))).catch(() => {});
     // Clears the Sidebar's Tasks red dot now that the admin has seen this list.
     adminNotificationService.markCategoryRead('tasks')
       .then(() => window.dispatchEvent(new Event('nav_badges_refresh')))
@@ -131,17 +126,17 @@ export default function AllTasksPage() {
                       }}
                     >
                       <option value="">Unassigned</option>
-                      {/* This is a cross-project, cross-company list — each row's
-                          task belongs to its own project/company, so the picker
-                          must only offer users of THAT task's own company, not
-                          every company this admin owns. */}
-                      {users.filter(u => (u.company_assignments ?? []).some(a => a.company_id === t.project?.company_id)).map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                      {/* Only this task's own project team is assignable —
+                          not every user in the company (same fix already
+                          applied to the Projects listing's PM dropdown). */}
+                      {(t.project?.team_members ?? []).filter(tm => tm.user).map(tm => (
+                        <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}</option>
                       ))}
-                      {/* Keep the current assignee selectable even if they've since
-                          become ineligible (e.g. deactivated) so the dropdown never
-                          silently shows the wrong selection. */}
-                      {asRelation(t.assigned_to) && !users.some(u => u.id === asRelation(t.assigned_to)?.id) && (
+                      {/* Keep the current assignee selectable even if they're not
+                          a formal team_members row (e.g. since removed from the
+                          team) so the dropdown never silently shows the wrong
+                          selection. */}
+                      {asRelation(t.assigned_to) && !(t.project?.team_members ?? []).some(tm => tm.user_id === asRelation(t.assigned_to)?.id) && (
                         <option value={asRelation(t.assigned_to)?.id}>{asRelation(t.assigned_to)?.name}</option>
                       )}
                     </select>

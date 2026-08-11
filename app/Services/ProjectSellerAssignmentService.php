@@ -51,12 +51,27 @@ class ProjectSellerAssignmentService
         $isSwitch = (bool) $oldSellerId;
         $oldSeller = $isSwitch ? User::find($oldSellerId) : null;
 
-        $project->update([
+        $updates = [
             'seller_id'                   => $seller->id,
             'seller_assigned_by'          => $actorUserId,
             'seller_assigned_by_admin_id' => $actorAdminId,
             'seller_assigned_at'          => now(),
-        ]);
+        ];
+
+        // No real PM assigned yet (or the "PM" slot was only ever the
+        // previous seller placeholder — same as the self-handoff flow's
+        // project_manager_id ??= $user->id in Api\User\ProjectController::
+        // store()) — follow the seller into that slot too, so the Project
+        // Manager column/dropdown shows this seller as the responsible party
+        // instead of "Unassigned" until a real PM is assigned. isPM()/
+        // isInternalStaff() already hard-exclude role_type='seller'
+        // regardless of project_manager_id match, so this never actually
+        // grants the seller any internal/PM-tier capability — display only.
+        if (!$project->project_manager_id || (int) $project->project_manager_id === (int) $oldSellerId) {
+            $updates['project_manager_id'] = $seller->id;
+        }
+
+        $project->update($updates);
 
         ProjectSellerAssignment::create([
             'company_id'           => $project->company_id,

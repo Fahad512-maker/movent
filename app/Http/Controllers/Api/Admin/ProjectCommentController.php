@@ -65,17 +65,33 @@ class ProjectCommentController extends Controller
         return null;
     }
 
-    // Unlike Api\User\ProjectCommentController::mentionCandidates() (which
-    // narrows to people actually connected to the project, per visibility
-    // tier, since a Seller/Developer must stay isolated), Company Admin has
-    // no such restriction anywhere else in this app — Admin bypasses every
-    // permission check. So Admin can @mention ANY active user in the
-    // project's own company, regardless of team membership or visibility.
+    // Admin can @mention anyone actually connected to this project — its PM,
+    // team members, task-assignees, linked Seller/creator, or the linked
+    // lead's assignee/transferee/client's account manager — same scope
+    // Api\User\ProjectCommentController::project() uses to decide who's a
+    // project member. An unrelated company user (e.g. staff on a completely
+    // different project) never appears, even for Admin — this was previously
+    // "any active company user", which leaked every unrelated Developer/
+    // Designer/QA into the picker for a project they have nothing to do with.
     // $taskId: a Seller has nothing to do with a task's internal/production
     // work, so when this comment is scoped to a specific task, Seller-role
-    // users are stripped out even from Admin's otherwise-unrestricted list.
+    // users are stripped out even from this project-scoped list.
     private function mentionCandidates(Project $project, string $visibility, ?int $taskId = null): array
     {
+        $ids = collect([$project->project_manager_id, $project->seller_id, $project->created_by])
+            ->merge($project->teamMembers()->pluck('user_id'))
+            ->merge(Task::where('project_id', $project->id)->pluck('assigned_to'))
+            ->filter()->unique();
+
+        if ($project->lead_id) {
+            $lead = Lead::find($project->lead_id);
+            if ($lead) $ids = $ids->merge(collect([$lead->assigned_to, $lead->transferred_to])->filter());
+        }
+        if ($project->client_id) {
+            $client = Client::find($project->client_id);
+            if ($client?->account_manager) $ids->push($client->account_manager);
+        }
+
         // role_type='client' is always excluded — these are Client Portal
         // login accounts (often auto-named after the lead they converted
         // from, e.g. "lead_7"), not staff. They have nothing to do with an
@@ -84,7 +100,7 @@ class ProjectCommentController extends Controller
         // mention picker". Unlike Sellers, Clients are never a valid mention
         // target anywhere else in this app either (see the User-guard's
         // mentionCandidates(), which never surfaces a Client-role user).
-        $query = User::where('company_id', $project->company_id)
+        $query = User::whereIn('id', $ids->unique())
             ->where('is_active', true)
             ->where('role_type', '!=', 'client');
         if ($taskId) {

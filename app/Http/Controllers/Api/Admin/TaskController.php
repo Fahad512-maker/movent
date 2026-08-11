@@ -77,8 +77,13 @@ class TaskController extends Controller
     {
         $companyIds = $this->companyIds();
 
+        // project.teamMembers.user is here so the frontend's "Assigned To"
+        // reassignment picker can scope its options to this task's own
+        // project team, instead of every user in the company (same fix
+        // already applied to the Projects listing's PM dropdown).
         $q = Task::whereHas('project', fn ($q) => $q->whereIn('company_id', $companyIds))
-            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue', 'project:id,name,company_id'])
+            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue',
+                'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
             ->withCount('attachments');
 
         if ($request->filled('status'))      $q->where('status', $request->status);

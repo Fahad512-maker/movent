@@ -34,19 +34,20 @@ class ProjectCommentController extends Controller
             ->exists();
     }
 
-    // Mirrors Api\User\ProjectController::visibleProjects() — brought up to
-    // parity (was missing the created_by/seller_id/lead/client legs, which
-    // silently 404'd a Seller trying to comment on their own linked project).
+    // Deliberately NOT mirroring Api\User\ProjectController::visibleProjects()'s
+    // canViewAllCompanyProjects bypass — project comments are restricted to
+    // actual project membership (PM, team member, task-assignee, or the
+    // linked seller/creator/lead/client) even for a company-wide viewer.
+    // canViewAllCompanyProjects still works everywhere else in the app
+    // (attachments, chat, project list, dashboards); here specifically, a
+    // Developer/Designer/etc. holding it must not be able to view or post
+    // comments on a project they were never actually added to.
     private function project(int $projectId): Project
     {
         $user = $this->user();
-        $base = Project::where('company_id', $user->company_id);
 
-        if ($this->can('canViewAllCompanyProjects')) {
-            return $base->findOrFail($projectId);
-        }
-
-        return $base->where(function ($q) use ($user) {
+        return Project::where('company_id', $user->company_id)
+            ->where(function ($q) use ($user) {
                 $q->where('project_manager_id', $user->id)
                   ->orWhere('created_by', $user->id)
                   ->orWhere('seller_id', $user->id)
@@ -160,30 +161,32 @@ class ProjectCommentController extends Controller
         $selfId = $this->user()->id;
         $adminOption = ['user_id' => self::ADMIN_MENTION_ID, 'name' => 'Company Admin'];
 
-        // This project's PM tier (see isProjectPmTier()) gets the same
-        // full-company mention list Company Admin already has (see Api\
-        // Admin\ProjectCommentController::mentionCandidates()) — PM is the
-        // one role allowed to bridge every tier (tag a Seller into an
-        // internal comment, post client-facing, etc. — see store()'s
-        // tag-rule), so narrowing their suggestions to "people already
-        // linked to this project" only got in their way. Regular internal
-        // staff below still get the narrower, project-scoped list.
+        // This project's PM tier (see isProjectPmTier()) gets this project's
+        // own team (PM + team members + task-assignees) plus its linked
+        // Seller and Company Admin — NOT the whole company's user list. PM
+        // is still the one role allowed to bridge every tier (tag the linked
+        // Seller into an internal comment, post client-facing, etc. — see
+        // store()'s tag-rule), so the Seller stays in this list unconditionally
+        // (unless task-scoped, see below) — only the "every unrelated company
+        // user" leak is removed. Regular internal staff below already get
+        // this same narrower, project-scoped list (minus the Seller).
         //
         // Deliberately requires isInternalStaff() too — project_manager_id
         // can itself be a Seller (a project handed off to them, per the
         // Manager-label fix elsewhere this session). Without this guard,
-        // such a Seller would get the full company list (Developer/Designer/
-        // QA/Production included) for what's supposed to be their strictly
-        // client-facing 'client'-tier request, and store()'s mention filter
-        // (which reuses this same list) would let them actually tag those
-        // people too — "Seller cannot communicate directly with internal
-        // project team" would be silently bypassed for a handoff Seller.
+        // such a Seller would get this project's team list for what's
+        // supposed to be their strictly client-facing 'client'-tier request,
+        // and store()'s mention filter (which reuses this same list) would
+        // let them actually tag those people too — "Seller cannot
+        // communicate directly with internal project team" would be
+        // silently bypassed for a handoff Seller.
         if ($this->isInternalStaff() && $this->isProjectPmTier($project)) {
-            $users = User::where('company_id', $this->user()->company_id)
-                ->where('is_active', true)
-                ->where('id', '!=', $selfId)
-                ->orderBy('name')
-                ->get(['id', 'name']);
+            $ids = collect([$project->project_manager_id, $project->seller_id])
+                ->merge($project->teamMembers()->pluck('user_id'))
+                ->merge(Task::where('project_id', $project->id)->pluck('assigned_to'))
+                ->filter()->unique();
+
+            $users = User::whereIn('id', $ids)->where('id', '!=', $selfId)->orderBy('name')->get(['id', 'name']);
 
             $fullList = [...$users->map(fn ($u) => ['user_id' => $u->id, 'name' => $u->name])->values()->all(), $adminOption];
             return $taskId ? $this->excludeSellerCandidates($fullList) : $fullList;

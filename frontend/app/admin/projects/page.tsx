@@ -9,8 +9,6 @@ import { adminNotificationService } from '@/lib/services/adminNotificationServic
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
-interface PmOption { id: number; name: string }
-
 export default function ProjectsPage() {
   useModuleGuard('projects');
   const router = useRouter();
@@ -19,10 +17,6 @@ export default function ProjectsPage() {
   const [search, setSearch]     = useState('');
   const [statusF, setStatusF]   = useState('');
   const [priorityF, setPriorityF] = useState('');
-  // Project Manager dropdown options, per company (a Company Admin can own
-  // several companies, and each project's assignable PM list is scoped to
-  // its own company — same source as the Create/Edit Project forms).
-  const [pmOptionsByCompany, setPmOptionsByCompany] = useState<Record<number, PmOption[]>>({});
   const [reassigningId, setReassigningId] = useState<number | null>(null);
 
   const load = async () => {
@@ -34,18 +28,6 @@ export default function ProjectsPage() {
       if (priorityF) params.priority = priorityF;
       const list = await adminProjectService.list(params);
       setProjects(list);
-
-      const companyIds = [...new Set(list.map(p => p.company_id).filter((id): id is number => !!id))];
-      const missing = companyIds.filter(id => !(id in pmOptionsByCompany));
-      if (missing.length > 0) {
-        const entries = await Promise.all(missing.map(async id => {
-          try {
-            const d = await adminProjectService.projectUsers(id);
-            return [id, d.project_managers.map(u => ({ id: u.user_id, name: u.name }))] as const;
-          } catch { return [id, []] as const; }
-        }));
-        setPmOptionsByCompany(prev => ({ ...prev, ...Object.fromEntries(entries) }));
-      }
     } catch { toast.error('Failed to load projects'); }
     finally { setLoading(false); }
   };
@@ -157,13 +139,19 @@ export default function ProjectsPage() {
                       }}
                     >
                       <option value="">Unassigned</option>
-                      {(pmOptionsByCompany[p.company_id] ?? []).map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                      {/* Only this project's own team members are assignable
+                          as PM — not every company-wide project_manager-role
+                          user (that list belongs on Create/Edit Project's
+                          initial team-building step, not reassignment here). */}
+                      {(p.team_members ?? []).filter(tm => tm.user).map(tm => (
+                        <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}</option>
                       ))}
-                      {/* Keep the current PM selectable even if they've since become
-                          ineligible (e.g. deactivated) so the dropdown never silently
-                          shows the wrong selection. */}
-                      {p.project_manager && !(pmOptionsByCompany[p.company_id] ?? []).some(u => u.id === p.project_manager_id) && (
+                      {/* Keep the current PM selectable even if they're not a
+                          formal team_members row (e.g. the seller-fallback
+                          auto-assignment, or someone since removed from the
+                          team) so the dropdown never silently shows the wrong
+                          selection. */}
+                      {p.project_manager && !(p.team_members ?? []).some(tm => tm.user_id === p.project_manager_id) && (
                         <option value={p.project_manager_id ?? ''}>{p.project_manager.name}</option>
                       )}
                     </select>
