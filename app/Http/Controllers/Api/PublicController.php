@@ -90,7 +90,10 @@ class PublicController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'company_name'    => ['required', 'string', 'max:200'],
+            // Letters/digits only — no spaces, no special characters.
+            // Mirrored client-side in the register form's onChange filter;
+            // enforced here too so a direct API call can't bypass it.
+            'company_name'    => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
             'name'            => ['required', 'string', 'max:150'],
             'email'           => [
                 'required', 'email', 'unique:company_admins,email',

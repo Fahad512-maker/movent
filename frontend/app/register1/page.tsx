@@ -1113,7 +1113,8 @@ function RegisterContent() {
                     label="Company Name"
                     required
                     value={companyName}
-                    onChange={e => setCompanyName(e.target.value)}
+                    // No spaces, no special characters — letters/digits only.
+                    onChange={e => setCompanyName(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
                     placeholder=""
                   />
                   <InputField
