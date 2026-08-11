@@ -30,6 +30,7 @@ class ReportController extends Controller
         $clientIds = $this->clientIds($request);
 
         $projects = Project::whereIn('client_id', $clientIds)
+            ->notDraft()
             ->with(['projectManager:id,name'])
             ->get(['id', 'name', 'status', 'start_date', 'deadline', 'completed_at', 'project_manager_id']);
 

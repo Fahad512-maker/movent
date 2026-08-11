@@ -86,6 +86,17 @@ class ProjectController extends Controller
         $user = $this->user();
         $base = Project::where('company_id', $user->company_id);
 
+        // Draft projects are name-only stubs auto-created by a client's payment
+        // (App\Services\PaymentProjectStartService) and are reserved for whoever
+        // can actually act on them — Company Admin (a different guard entirely)
+        // or a sub-user granted canActivateProjects. Everyone else never sees
+        // one, in any list or by id, until it's activated. Applied before the
+        // canViewAllCompanyProjects shortcut below so that broad grant doesn't
+        // leak drafts.
+        if (!$this->can('canActivateProjects')) {
+            $base->where('status', '!=', 'draft');
+        }
+
         if ($this->can('canViewAllCompanyProjects')) {
             return $base;
         }
@@ -239,7 +250,7 @@ class ProjectController extends Controller
                         \App\Models\Company::find($companyId)?->admin_id ?? 0
                     );
                     $partiallyEligible = $sourceInvoice->status === 'partially_paid'
-                        && $dealSettings->allow_partial_payment_start
+                        && $dealSettings->startsOnPartialPayment()
                         && (float) $sourceInvoice->paid_amount > 0;
 
                     if (!$partiallyEligible && !$canOverridePayment) {
@@ -298,7 +309,7 @@ class ProjectController extends Controller
                 $dealSettings = \App\Models\CompanyDealSettings::forAdmin(
                     \App\Models\Company::find($companyId)?->admin_id ?? 0
                 );
-                $eligible = $dealSettings->allow_partial_payment_start
+                $eligible = $dealSettings->startsOnPartialPayment()
                     ? \App\Services\DealEligibilityService::netPaidAmount($lead) > 0
                     : \App\Services\DealEligibilityService::isEligible($lead);
 
@@ -462,10 +473,17 @@ class ProjectController extends Controller
     // Next PRJ-{year}-{seq} reference — same generator pattern as
     // Api\User\LeadController's deal_reference / InvoiceController's
     // invoice_number.
+    // withTrashed() on BOTH queries is essential, not defensive: Project is
+    // soft-deleting, so a deleted project's row — and its reference — stays in
+    // the table behind projects_reference_unique. Without it the uniqueness
+    // probe reports "free" for a reference the index still holds, the loop exits
+    // on the first candidate, and Project::create() dies on a duplicate key —
+    // i.e. project creation broke permanently once any project was deleted.
     private function nextProjectReference(): string
     {
         $year = now()->year;
-        $last = Project::whereYear('created_at', $year)
+        $last = Project::withTrashed()
+            ->whereYear('created_at', $year)
             ->where('reference', 'like', "PRJ-{$year}-%")
             ->latest('id')
             ->value('reference');
@@ -474,7 +492,7 @@ class ProjectController extends Controller
 
         do {
             $reference = sprintf('PRJ-%d-%04d', $year, $seq++);
-        } while (Project::where('reference', $reference)->exists());
+        } while (Project::withTrashed()->where('reference', $reference)->exists());
 
         return $reference;
     }
@@ -953,6 +971,41 @@ class ProjectController extends Controller
     // canCompleteProjects (not part of any role's defaults — see
     // RoleDefaultPermissions) so they're excluded from this action simply by
     // never having the permission, without needing a role_type check here.
+    // Activate a draft project — the name-only stub auto-created when a client's
+    // invoice payment starts one (see App\Services\PaymentProjectStartService).
+    // canActivateProjects is what both reveals drafts to this user (see
+    // visibleProjects()) and permits this transition; it is granted to no role
+    // by default, so Company Admin must hand it out deliberately.
+    //
+    // Folders are created here rather than at auto-creation time: a draft that
+    // nobody activates shouldn't leave storage behind.
+    public function activate(int $id): JsonResponse
+    {
+        if (!$this->can('canActivateProjects')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $project = $this->visibleProjects()->findOrFail($id);
+        $user = $this->user();
+
+        if ($project->status !== 'draft') {
+            return ApiResponse::error("Only a draft project can be activated — this one is {$project->status}.", 422);
+        }
+
+        $project->update(['status' => 'active']);
+
+        if ($project->folders()->count() === 0) {
+            $this->createProjectFolders($project, $user->id);
+        }
+
+        $project->logActivity('activated', "Draft project activated by {$user->name}.", $user->name);
+        $this->logActivity($project->company_id, 'activated', 'Project', $project->id);
+
+        $this->notifyLifecycle($project, 'project_activated', 'Project activated', "\"{$project->name}\" was activated by {$user->name}.");
+
+        return ApiResponse::success($project->fresh(), 'Project activated');
+    }
+
     public function complete(int $id): JsonResponse
     {
         if (!$this->can('canCompleteProjects')) {
@@ -961,6 +1014,11 @@ class ProjectController extends Controller
 
         $project = $this->visibleProjects()->findOrFail($id);
         $user = $this->user();
+
+        // A draft has no work to complete — it must be activated first.
+        if ($project->status === 'draft') {
+            return ApiResponse::error('Activate this draft project before completing it.', 422);
+        }
 
         if (in_array($project->status, ['completed', 'closed'])) {
             return ApiResponse::error("Project is already {$project->status}.", 422);
@@ -1003,6 +1061,11 @@ class ProjectController extends Controller
 
         if ($force && !$this->can('canForceCloseProjects')) {
             return ApiResponse::error('Permission denied', 403);
+        }
+
+        // A never-activated draft isn't something to "close" — it's a stub.
+        if ($project->status === 'draft') {
+            return ApiResponse::error('Activate this draft project before closing it.', 422);
         }
 
         if ($project->status === 'closed') {

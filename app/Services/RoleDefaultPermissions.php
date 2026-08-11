@@ -26,6 +26,9 @@ class RoleDefaultPermissions
             // canAssignProjectSeller is deliberately NOT included here — a PM
             // can switch a project's Seller only once Company Admin manually
             // grants that key, same convention as canForceCloseProjects.
+            // canActivateProjects is omitted for the same reason: activating a
+            // payment-started draft project is the gate the spec reserves for
+            // Company Admin, or whoever Company Admin explicitly grants it to.
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
                 'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',

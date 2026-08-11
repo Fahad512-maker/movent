@@ -11,6 +11,8 @@ use App\Models\CompanyPaymentGateway;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Lead;
+use App\Models\Project;
+use App\Services\InvoiceNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -115,6 +117,9 @@ class InvoiceController extends Controller
             'company_id'          => 'required|integer|in:' . implode(',', $ids),
             'client_id'           => 'nullable|exists:clients,id',
             'lead_id'             => 'nullable|exists:leads,id',
+            'project_id'          => 'nullable|exists:projects,id',
+            'project_title'       => 'nullable|string|max:255',
+            'project_reference'   => 'nullable|string|max:100',
             'send_now'            => 'nullable|boolean',
             'due_date'            => 'nullable|date',
             'currency'            => 'nullable|string|max:10',
@@ -148,6 +153,10 @@ class InvoiceController extends Controller
             $lead = Lead::where('company_id', $data['company_id'])->findOrFail($data['lead_id']);
         }
 
+        if (!empty($data['project_id'])) {
+            Project::where('company_id', $data['company_id'])->findOrFail($data['project_id']);
+        }
+
         $taxRate  = (float) ($data['tax_rate']        ?? 0);
         $discount = (float) ($data['discount_amount'] ?? 0);
         $totals   = $this->computeTotals($data['items'], $taxRate, $discount);
@@ -158,6 +167,9 @@ class InvoiceController extends Controller
             'company_id'      => $data['company_id'],
             'client_id'       => $data['client_id'] ?? null,
             'lead_id'         => $data['lead_id'] ?? null,
+            'project_id'         => $data['project_id']         ?? null,
+            'project_title'      => $data['project_title']      ?? null,
+            'project_reference'  => $data['project_reference']  ?? null,
             'invoice_number'  => $this->nextNumber($data['company_id']),
             'subtotal'        => $totals['subtotal'],
             'tax_rate'        => $taxRate,
@@ -194,6 +206,13 @@ class InvoiceController extends Controller
         $invoice->paymentGatewayAccounts()->sync(
             $this->validGatewayAccountIds($data['company_id'], $data['gateway_account_ids'] ?? [])
         );
+
+        // Created straight into 'sent' (send_now) — so it is already visible in
+        // the portal and this is its first send. A draft created here notifies
+        // later instead, when send()/sendEmail() flips it.
+        if ($sendNow) {
+            InvoiceNotificationService::notifyClientInvoiceSent($invoice);
+        }
 
         if ($lead) {
             \App\Services\DealEligibilityService::recomputeFulfillmentStatus($lead);
@@ -309,6 +328,9 @@ class InvoiceController extends Controller
         }
 
         $invoice->update(['status' => 'sent', 'sent_at' => now()]);
+        // Draft-only guard above means this is always the first send.
+        InvoiceNotificationService::notifyClientInvoiceSent($invoice);
+
         return ApiResponse::success(['status' => 'sent'], 'Invoice marked as sent');
     }
 
@@ -434,8 +456,13 @@ class InvoiceController extends Controller
             return ApiResponse::error('Invoice created, but email could not be sent. Please try sending again.', 422);
         }
 
+        // Portal-enabled clients also get an in-portal notification on top of
+        // the email above — only on this first send, when the invoice actually
+        // becomes visible in the portal. Lead-only and guest/external invoices
+        // have no portal inbox, so for them the email is the whole delivery.
         if ($invoice->status === 'draft') {
             $invoice->update(['status' => 'sent', 'sent_at' => now()]);
+            InvoiceNotificationService::notifyClientInvoiceSent($invoice);
         }
 
         if ($invoice->lead_id) {

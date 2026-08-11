@@ -42,6 +42,13 @@ class InvoicePaymentService
     /**
      * Update invoice paid_amount and status after a payment is recorded.
      * Used by public link and client portal flows.
+     *
+     * This is the single place an invoice becomes paid/partially_paid, so it is
+     * also where the Deal Workflow's project kickoff hangs off — see
+     * PaymentProjectStartService, which is a no-op unless the tenant switched
+     * "Automatically create project after payment" on. It is safe to reach here
+     * more than once for the same invoice: the service keys off
+     * invoices.project_id and won't start a second project.
      */
     public static function applyToInvoice(Invoice $invoice, Payment $payment): void
     {
@@ -51,6 +58,8 @@ class InvoicePaymentService
             ? 'paid'
             : 'partially_paid';
         $invoice->save();
+
+        PaymentProjectStartService::handle($invoice);
     }
 
     /**

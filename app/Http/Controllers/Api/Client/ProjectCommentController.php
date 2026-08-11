@@ -30,7 +30,7 @@ class ProjectCommentController extends Controller
 
     private function project(Request $request, int $projectId): Project
     {
-        return Project::whereIn('client_id', $this->clientIds($request))->findOrFail($projectId);
+        return Project::whereIn('client_id', $this->clientIds($request))->notDraft()->findOrFail($projectId);
     }
 
     // GET /client/projects/{id}/comments

@@ -437,17 +437,9 @@ class SettingsController extends Controller
         $settings = \App\Models\CompanyDealSettings::forAdmin($this->admin()->id);
 
         return ApiResponse::success([
-            'project_creation_trigger'      => $settings->project_creation_trigger,
-            'auto_create_project'           => (bool) $settings->auto_create_project,
-            'require_seller_confirmation'   => (bool) $settings->require_seller_confirmation,
-            'require_finance_verification'  => (bool) $settings->require_finance_verification,
-            'allow_admin_override'          => (bool) $settings->allow_admin_override,
-            'allow_partial_payment_start'   => (bool) $settings->allow_partial_payment_start,
-            'default_advance_percentage'    => $settings->default_advance_percentage !== null ? (float) $settings->default_advance_percentage : null,
-            'minimum_advance_percentage'    => $settings->minimum_advance_percentage !== null ? (float) $settings->minimum_advance_percentage : null,
-            'notify_seller_on_payment'      => (bool) $settings->notify_seller_on_payment,
-            'notify_ops_on_project_created' => (bool) $settings->notify_ops_on_project_created,
-            'triggers'                      => \App\Models\CompanyDealSettings::TRIGGERS,
+            'project_creation_trigger' => $settings->project_creation_trigger,
+            'allow_admin_override'     => (bool) $settings->allow_admin_override,
+            'triggers'                 => \App\Models\CompanyDealSettings::TRIGGERS,
         ]);
     }
 
@@ -457,16 +449,8 @@ class SettingsController extends Controller
     public function updateDealWorkflowSettings(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'project_creation_trigger'      => ['required', 'string', 'in:' . implode(',', array_keys(\App\Models\CompanyDealSettings::TRIGGERS))],
-            'auto_create_project'           => ['required', 'boolean'],
-            'require_seller_confirmation'   => ['required', 'boolean'],
-            'require_finance_verification'  => ['required', 'boolean'],
-            'allow_admin_override'          => ['required', 'boolean'],
-            'allow_partial_payment_start'   => ['required', 'boolean'],
-            'default_advance_percentage'    => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'minimum_advance_percentage'    => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'notify_seller_on_payment'      => ['required', 'boolean'],
-            'notify_ops_on_project_created' => ['required', 'boolean'],
+            'project_creation_trigger' => ['required', 'string', 'in:' . implode(',', array_keys(\App\Models\CompanyDealSettings::TRIGGERS))],
+            'allow_admin_override'     => ['required', 'boolean'],
         ]);
 
         \App\Models\CompanyDealSettings::updateOrCreate(

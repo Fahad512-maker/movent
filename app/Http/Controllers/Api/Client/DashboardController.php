@@ -60,6 +60,7 @@ class DashboardController extends Controller
                 ->count();
 
             $recentProjects = Project::whereIn('client_id', $clientIds)
+                ->notDraft()
                 ->orderByDesc('created_at')
                 ->limit(3)
                 ->get(['id', 'name', 'status', 'deadline', 'created_at'])

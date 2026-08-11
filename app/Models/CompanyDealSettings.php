@@ -11,32 +11,34 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CompanyDealSettings extends Model
 {
     protected $fillable = [
-        'company_admin_id', 'project_creation_trigger', 'auto_create_project',
-        'require_seller_confirmation', 'require_finance_verification',
-        'allow_admin_override', 'allow_partial_payment_start',
-        'default_advance_percentage', 'minimum_advance_percentage',
-        'notify_seller_on_payment', 'notify_ops_on_project_created',
+        'company_admin_id', 'project_creation_trigger', 'allow_admin_override',
     ];
 
     protected $casts = [
-        'auto_create_project'           => 'boolean',
-        'require_seller_confirmation'   => 'boolean',
-        'require_finance_verification'  => 'boolean',
-        'allow_admin_override'          => 'boolean',
-        'allow_partial_payment_start'   => 'boolean',
-        'default_advance_percentage'    => 'decimal:2',
-        'minimum_advance_percentage'    => 'decimal:2',
-        'notify_seller_on_payment'      => 'boolean',
-        'notify_ops_on_project_created' => 'boolean',
+        'allow_admin_override' => 'boolean',
     ];
 
+    /**
+     * The whole Deal Workflow: when does a client's payment create the project?
+     * These two are mutually exclusive and are the only options — see
+     * 2026_08_11_170000_simplify_company_deal_settings.php for what was removed
+     * and why.
+     */
     public const TRIGGERS = [
-        'full_payment'      => 'Full Invoice Payment',
-        'deposit_received'  => 'Required Deposit Received',
-        'kickoff_amount'    => 'Required Kickoff Amount Received',
-        'manual_finance'    => 'Manual Finance Approval',
-        'admin_approval'    => 'Admin Approval After Payment',
+        'full_payment'    => 'After Full Payment — create the project once the invoice is paid in full',
+        'partial_payment' => 'After Partial Payment — create the project as soon as any payment is received',
     ];
+
+    /**
+     * True when any payment, part or full, is enough to start the project.
+     * Read by App\Services\PaymentProjectStartService (auto-creation) and by
+     * Api\User\ProjectController::store() (the manual paid-invoice handoff), so
+     * both answer the question the same way.
+     */
+    public function startsOnPartialPayment(): bool
+    {
+        return $this->project_creation_trigger === 'partial_payment';
+    }
 
     public function companyAdmin(): BelongsTo
     {
@@ -52,14 +54,9 @@ class CompanyDealSettings extends Model
         return static::firstOrNew(
             ['company_admin_id' => $companyAdminId],
             [
-                'project_creation_trigger'      => 'kickoff_amount',
-                'auto_create_project'           => false,
-                'require_seller_confirmation'   => true,
-                'require_finance_verification'  => true,
-                'allow_admin_override'          => true,
-                'allow_partial_payment_start'   => false,
-                'notify_seller_on_payment'      => true,
-                'notify_ops_on_project_created' => true,
+                // The safer of the two: nothing starts until the invoice is settled.
+                'project_creation_trigger' => 'full_payment',
+                'allow_admin_override'     => true,
             ]
         );
     }

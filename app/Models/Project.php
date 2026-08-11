@@ -36,6 +36,16 @@ class Project extends Model
         'seller_assigned_at' => 'datetime',
     ];
 
+    // A 'draft' project is the name-only stub auto-created when a client's
+    // invoice payment starts one (App\Services\PaymentProjectStartService). It
+    // isn't work yet — nobody has filled it in or activated it — so the Client
+    // Portal must never surface one. Keeping the rule here means every
+    // Api\Client\* query states the same thing the same way.
+    public function scopeNotDraft($query)
+    {
+        return $query->where('status', '!=', 'draft');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

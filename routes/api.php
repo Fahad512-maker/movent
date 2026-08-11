@@ -421,6 +421,7 @@ Route::prefix('admin')->group(function () {
             Route::delete('projects/{id}/team/{memberId}',          [AdminProjectController::class, 'removeTeamMember']);
             Route::get('projects/{id}/activity',                    [AdminProjectController::class, 'activity']);
             Route::get('projects/{id}/completion-status',           [AdminProjectController::class, 'completionStatus']);
+            Route::post('projects/{id}/activate',                   [AdminProjectController::class, 'activate']);
             Route::post('projects/{id}/complete',                   [AdminProjectController::class, 'complete']);
             Route::post('projects/{id}/close',                      [AdminProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                     [AdminProjectController::class, 'reopen']);
@@ -773,6 +774,7 @@ Route::prefix('user')->group(function () {
             Route::delete('projects/{id}/team/{memberId}',      [UserProjectController::class, 'removeTeamMember']);
             Route::get('projects/{id}/completion-status',       [UserProjectController::class, 'completionStatus']);
             Route::get('projects/{id}/activity',                [UserProjectController::class, 'activity']);
+            Route::post('projects/{id}/activate',               [UserProjectController::class, 'activate']);
             Route::post('projects/{id}/complete',               [UserProjectController::class, 'complete']);
             Route::post('projects/{id}/close',                  [UserProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                 [UserProjectController::class, 'reopen']);
@@ -928,6 +930,15 @@ Route::prefix('client')->group(function () {
         Route::get('permissions',  [\App\Http\Controllers\Api\Client\AuthController::class, 'permissions']);
 
         Route::get('dashboard', [\App\Http\Controllers\Api\Client\DashboardController::class, 'index']);
+
+        // Portal notifications — the client-side counterpart to the staff bell.
+        // Not module-gated: a notification can come from any portal section the
+        // client has, and each row's own writer already checked that gate.
+        Route::get('notifications',                  [\App\Http\Controllers\Api\Client\NotificationController::class, 'index']);
+        Route::patch('notifications/read-all',       [\App\Http\Controllers\Api\Client\NotificationController::class, 'markAllRead']);
+        Route::patch('notifications/{id}/read',      [\App\Http\Controllers\Api\Client\NotificationController::class, 'markRead']);
+        Route::delete('notifications',               [\App\Http\Controllers\Api\Client\NotificationController::class, 'clearAll']);
+        Route::delete('notifications/{id}',          [\App\Http\Controllers\Api\Client\NotificationController::class, 'clear']);
 
         Route::get('projects',                               [\App\Http\Controllers\Api\Client\ProjectController::class, 'index']);
         Route::get('projects/{id}',                          [\App\Http\Controllers\Api\Client\ProjectController::class, 'show']);

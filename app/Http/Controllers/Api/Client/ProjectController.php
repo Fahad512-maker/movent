@@ -33,6 +33,7 @@ class ProjectController extends Controller
         $clientIds = $this->clientIds($request);
 
         $query = Project::whereIn('client_id', $clientIds)
+            ->notDraft()
             ->with(['projectManager:id,name']);
 
         if ($request->filled('status')) {
@@ -70,6 +71,7 @@ class ProjectController extends Controller
 
         $project = Project::where('id', $id)
             ->whereIn('client_id', $clientIds)
+            ->notDraft()
             ->with([
                 'projectManager:id,name',
                 'deliverables' => fn($q) => $q->whereIn('status', ['delivered', 'approved', 'revision_requested'])

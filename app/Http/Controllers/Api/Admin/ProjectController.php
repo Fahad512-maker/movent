@@ -184,14 +184,19 @@ class ProjectController extends Controller
 
         $counts = (clone $base)->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
 
+        // A draft carries a deadline from nobody — and isn't started work — so it
+        // must not be counted overdue alongside completed/cancelled.
         $overdue = (clone $base)->where('deadline', '<', now())
-            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->whereNotIn('status', ['draft', 'completed', 'cancelled'])
             ->count();
 
         $assignedToMe = (clone $base)->where('project_manager_id', $this->admin()->id ?? 0)->count();
 
         return ApiResponse::success([
             'total'        => (clone $base)->count(),
+            // Payment-started projects awaiting activation — see
+            // App\Services\PaymentProjectStartService.
+            'draft'        => $counts['draft'] ?? 0,
             'planning'     => $counts['planning'] ?? 0,
             'active'       => $counts['active'] ?? 0,
             'on_hold'      => $counts['on_hold'] ?? 0,
@@ -611,12 +616,52 @@ class ProjectController extends Controller
         ]);
     }
 
+    // Activate a draft project — the name-only stub auto-created when a client's
+    // invoice payment starts one (see App\Services\PaymentProjectStartService).
+    // Until this runs the project is invisible to the client portal and to any
+    // sub-user without canActivateProjects. Company Admin is always structurally
+    // allowed, same as complete/close/reopen below.
+    //
+    // Folders are created here rather than at auto-creation time: a draft that
+    // nobody activates shouldn't leave storage behind.
+    public function activate(int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        if ($project->status !== 'draft') {
+            return ApiResponse::error("Only a draft project can be activated — this one is {$project->status}.", 422);
+        }
+
+        $project->update(['status' => 'active']);
+
+        if ($project->folders()->count() === 0) {
+            $this->createProjectFolders($project);
+        }
+
+        $project->logActivity('activated', "Draft project activated by {$this->adminName()}.", $this->adminName());
+
+        SystemAuditLog::create([
+            'company_id' => $project->company_id, 'user_id' => null,
+            'action' => 'activated', 'module_key' => 'project_management',
+            'entity_type' => 'Project', 'entity_id' => $project->id,
+        ]);
+
+        $this->notifyLifecycle($project, 'project_activated', 'Project activated', "\"{$project->name}\" was activated by {$this->adminName()}.");
+
+        return ApiResponse::success($project->fresh(), 'Project activated');
+    }
+
     // Company Admin is always structurally allowed to complete/close/reopen —
     // no permission gate here, mirroring how this guard never checks
     // UserCompanyPermission anywhere else in this controller.
     public function complete(int $id): JsonResponse
     {
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        // A draft has no work to complete — it must be activated first.
+        if ($project->status === 'draft') {
+            return ApiResponse::error('Activate this draft project before completing it.', 422);
+        }
 
         if (in_array($project->status, ['completed', 'closed'])) {
             return ApiResponse::error("Project is already {$project->status}.", 422);
@@ -656,6 +701,11 @@ class ProjectController extends Controller
             'confirm_unpaid_invoice' => ['nullable', 'boolean'],
         ]);
         $force = (bool) ($validated['force'] ?? false);
+
+        // A never-activated draft isn't something to "close" — it's a stub.
+        if ($project->status === 'draft') {
+            return ApiResponse::error('Activate this draft project before closing it.', 422);
+        }
 
         if ($project->status === 'closed') {
             return ApiResponse::error('Project is already closed.', 422);

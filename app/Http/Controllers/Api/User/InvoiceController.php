@@ -13,6 +13,8 @@ use App\Models\InvoiceItem;
 use App\Models\Lead;
 use App\Models\Notification;
 use App\Models\Payment;
+use App\Models\Project;
+use App\Services\InvoiceNotificationService;
 use App\Models\SystemAuditLog;
 use App\Models\UserCompanyPermission;
 use App\Support\PermissionDebug;
@@ -249,6 +251,9 @@ class InvoiceController extends Controller
         $data = $request->validate([
             'client_id'           => 'nullable|exists:clients,id',
             'lead_id'             => 'nullable|exists:leads,id',
+            'project_id'          => 'nullable|exists:projects,id',
+            'project_title'       => 'nullable|string|max:255',
+            'project_reference'   => 'nullable|string|max:100',
             'due_date'            => 'nullable|date',
             'currency'            => 'nullable|string|max:10',
             'tax_rate'            => 'nullable|numeric|min:0|max:100',
@@ -279,6 +284,10 @@ class InvoiceController extends Controller
             $lead = Lead::where('company_id', $companyId)->findOrFail($data['lead_id']);
         }
 
+        if (!empty($data['project_id'])) {
+            Project::where('company_id', $companyId)->findOrFail($data['project_id']);
+        }
+
         $taxRate  = (float) ($data['tax_rate']        ?? 0);
         $discount = (float) ($data['discount_amount'] ?? 0);
 
@@ -296,6 +305,9 @@ class InvoiceController extends Controller
             'company_id'       => $companyId,
             'client_id'        => $data['client_id']       ?? null,
             'lead_id'          => $lead?->id,
+            'project_id'       => $data['project_id']       ?? null,
+            'project_title'    => $data['project_title']    ?? null,
+            'project_reference'=> $data['project_reference']?? null,
             'created_by'       => $user->id,
             'invoice_number'   => $this->nextNumber($companyId),
             'subtotal'         => $subtotal,
@@ -405,6 +417,14 @@ class InvoiceController extends Controller
             'sent_by' => $user->id,
         ], fn ($v) => $v !== null));
 
+        // Portal-enabled clients also get an in-portal notification, on top of
+        // the email above — only on the first send, when the invoice actually
+        // becomes visible in the portal. Lead-only and guest/external invoices
+        // have no portal inbox, so for them the email is the whole delivery.
+        if ($wasFirstSend) {
+            InvoiceNotificationService::notifyClientInvoiceSent($invoice);
+        }
+
         if ($invoice->lead_id) {
             Lead::find($invoice->lead_id)?->logActivity('note_added',
                 "Invoice {$invoice->invoice_number} sent to {$data['email']}", $user->name ?? 'User');
@@ -441,6 +461,8 @@ class InvoiceController extends Controller
         // Auto-mark draft as sent when sharing
         if ($invoice->status === 'draft') {
             $invoice->update(['status' => 'sent', 'sent_at' => now()]);
+            // Now visible in the portal — same first-send-only rule as sendEmail().
+            InvoiceNotificationService::notifyClientInvoiceSent($invoice);
         }
 
         $token = $invoice->generatePublicToken($data['expiry_days'] ?? null);

@@ -159,6 +159,16 @@ class ModuleCatalog
                     // See App\Services\ProjectCompletionService.
                     'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
                     'canForceCloseProjects', 'canViewClosedProjects',
+                    // Activate a draft project — the state a project is auto-created
+                    // in when a client's payment starts it (see
+                    // App\Services\PaymentProjectStartService). Holding this key is
+                    // also what makes draft projects VISIBLE at all to a sub-user;
+                    // without it they're filtered out of every list, since an
+                    // unactivated draft is a name-only stub. Company Admin is always
+                    // structurally allowed (the admin guard bypasses every permission
+                    // check). NOT granted to any role by default — same convention as
+                    // canAssignProjectSeller/canForceCloseProjects.
+                    'canActivateProjects',
                     // Task-level status-workflow lifecycle — distinct from the
                     // project-level Complete/Close/Reopen keys above. See
                     // App\Services\TaskStatusService for the full transition

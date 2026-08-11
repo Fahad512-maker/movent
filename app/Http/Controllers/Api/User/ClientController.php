@@ -34,10 +34,11 @@ class ClientController extends Controller
     }
 
     // Same-company clients this user may see/act on — every client if
-    // canViewAllCompanyClients is held, otherwise only clients they're the
-    // account manager for, whose originating lead is assigned/transferred to
-    // them, who has an invoice they created, or who has a project handed off
-    // to them as seller. Mirrors Api\User\LeadController::visibleLeads() and
+    // canViewAllCompanyClients is held, otherwise only clients that are
+    // unassigned, or that they're the account manager for, whose originating
+    // lead is assigned/transferred to them, who has an invoice they created,
+    // or who has a project handed off to them as seller. Mirrors
+    // Api\User\LeadController::visibleLeads() and
     // Api\User\ProjectController::visibleProjects()'s ownership-scoping
     // pattern, applied to Client for the first time — this controller
     // previously showed every active company client to anyone with
@@ -53,6 +54,16 @@ class ClientController extends Controller
 
         return $base->where(function ($q) use ($user) {
             $q->where('account_manager', $user->id)
+              // A client with no account manager belongs to nobody in
+              // particular — typically one Company Admin just created without
+              // naming an owner — so it stays pickable by any staff member
+              // holding canViewClients. Without this the ownership scope below
+              // hides it from every Seller, making the invoice-create "Select
+              // Client" list read "No clients found" straight after the Admin
+              // adds a client (the exact symptom RoleDefaultPermissions' Seller
+              // "Basic client access" note says these grants exist to prevent).
+              // Clients that DO have an account manager stay private to them.
+              ->orWhereNull('account_manager')
               ->orWhereHas('lead', fn ($l) => $l->where('assigned_to', $user->id)->orWhere('transferred_to', $user->id))
               ->orWhereHas('invoices', fn ($i) => $i->where('created_by', $user->id))
               ->orWhereHas('projects', fn ($p) => $p->where('seller_id', $user->id));

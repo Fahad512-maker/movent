@@ -157,10 +157,11 @@ class PaymentController extends Controller
             'status'         => 'confirmed',
         ]);
 
-        $newPaid = (float) $invoice->paid_amount + (float) $payment->amount;
-        $invoice->paid_amount = $newPaid;
-        $invoice->status = $newPaid >= (float) $invoice->total_amount ? 'paid' : 'partially_paid';
-        $invoice->save();
+        // Was an inline copy of applyToInvoice()'s arithmetic, which meant this
+        // path silently skipped both its rounding and (once added) the Deal
+        // Workflow project-kickoff hook. Delegating keeps every payment path on
+        // one implementation.
+        InvoicePaymentService::applyToInvoice($invoice, $payment);
 
         InvoicePaymentService::logPayment($invoice, $payment, 'admin');
         $this->recomputeDealEligibility($invoice);

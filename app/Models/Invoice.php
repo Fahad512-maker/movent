@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 class Invoice extends Model
 {
     protected $fillable = [
-        'company_id', 'client_id', 'lead_id', 'project_id', 'created_by', 'sent_by', 'invoice_number', 'subtotal',
+        'company_id', 'client_id', 'lead_id', 'project_id', 'project_title', 'project_reference', 'created_by', 'sent_by', 'invoice_number', 'subtotal',
         'tax_rate', 'tax_amount', 'discount_amount', 'total_amount', 'paid_amount',
         'currency', 'status', 'due_date', 'notes', 'sent_at',
         'payment_token', 'token_expires_at',
