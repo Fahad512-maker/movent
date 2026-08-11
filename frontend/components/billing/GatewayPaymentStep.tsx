@@ -132,6 +132,9 @@ export default function GatewayPaymentStep({ amountUsd, summaryLabel, summaryChi
         if (cancelled || !stripe) return;
         stripeRef.current = stripe;
         const cardEl = stripe.elements().create('card', {
+          // Same as app/payment/page.tsx — no billing-address collection
+          // anywhere on this form, so hide Stripe's default ZIP/postal field.
+          hidePostalCode: true,
           style: { base: { fontSize: '15px', color: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif', '::placeholder': { color: '#94a3b8' } }, invalid: { color: '#dc2626' } },
         });
         cardEl.mount('#gw-stripe-card-element');

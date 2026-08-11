@@ -3,9 +3,14 @@ import { useEffect, useState } from 'react';
 import { Package } from '@/types';
 
 const ALL_MODULES = [
-  { key: 'leads',      label: 'Leads' },
-  { key: 'clients',    label: 'Clients' },
-  { key: 'invoices',   label: 'Invoices' },
+  { key: 'leads',         label: 'Leads' },
+  // 'clients' is deliberately NOT offered here — it was never a real,
+  // purchasable module_key (see ModuleSeeder.php's comment); the actual
+  // Client module is 'client_portal'. Checking 'clients' here used to add a
+  // dead entry to a package's module list that could never be enabled for
+  // any company (routes/api.php's module gate checks 'client_portal').
+  { key: 'client_portal', label: 'Client Portal' },
+  { key: 'invoices',      label: 'Invoices' },
   { key: 'projects',   label: 'Projects' },
   { key: 'tasks',      label: 'Tasks' },
   { key: 'production', label: 'Production' },

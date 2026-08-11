@@ -19,7 +19,10 @@ const PRIORITY_C: Record<string, string> = {
 const STATUS_OPTS = ['', 'open', 'in_progress', 'resolved', 'closed'];
 
 export default function AdminSupportPage() {
-  useModuleGuard('clients');
+  // 'client_portal' is the real purchasable module_key backing the Client
+  // module — 'clients' was never a real CompanyModule row (see
+  // ModuleSeeder.php), which made this guard always redirect away.
+  useModuleGuard('client_portal');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus]   = useState('');

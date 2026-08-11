@@ -246,6 +246,10 @@ export default function PaymentPage() {
         stripeRef.current = stripe;
         const elements = stripe.elements();
         const cardEl = elements.create('card', {
+          // Stripe's card element shows a ZIP/postal code field by default —
+          // this form has no billing-address collection anywhere else, so
+          // there'd be nowhere for that value to go; hide it.
+          hidePostalCode: true,
           style: {
             base: {
               fontSize: '15px',

@@ -127,6 +127,9 @@ const InlineGatewayPayment = forwardRef<InlineGatewayPaymentHandle, InlineGatewa
         stripeRef.current = stripe;
         const elements = stripe.elements();
         const cardEl = elements.create('card', {
+          // Same as app/payment/page.tsx — no billing-address collection
+          // anywhere on this form, so hide Stripe's default ZIP/postal field.
+          hidePostalCode: true,
           style: {
             base: { fontSize: '15px', color: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif', '::placeholder': { color: '#94a3b8' } },
             invalid: { color: '#dc2626' },

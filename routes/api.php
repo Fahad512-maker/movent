@@ -354,8 +354,13 @@ Route::prefix('admin')->group(function () {
         Route::post('clients/{id}/direct-chat/{threadId}/participants',            [\App\Http\Controllers\Api\Admin\ClientChatController::class, 'addParticipant']);
         Route::delete('clients/{id}/direct-chat/{threadId}/participants/{userId}', [\App\Http\Controllers\Api\Admin\ClientChatController::class, 'removeParticipant']);
 
-        // Client management + portal access — requires clients module
-        Route::middleware('module:clients')->group(function () {
+        // Client management + portal access — requires the Client module.
+        // The real, purchasable module_key is 'client_portal' (see
+        // ModuleSeeder.php's deliberate "clients is NOT a purchasable module"
+        // comment) — 'clients' was never a real CompanyModule row for any
+        // company, so this gate 403'd unconditionally regardless of purchase
+        // until fixed.
+        Route::middleware('module:client_portal')->group(function () {
             Route::get('clients',                            [AdminClientController::class, 'index']);
             Route::post('clients',                           [AdminClientController::class, 'store']);
             Route::get('clients/{id}',                       [AdminClientController::class, 'show']);

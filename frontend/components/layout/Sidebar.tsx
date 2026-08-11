@@ -33,8 +33,8 @@ const ADMIN_NAV_GROUPS = [
       { href: '/admin/follow-ups', icon: HiCalendarDays, label: 'Follow-ups',      module: 'leads' },
       // A "Basic Clients" admin nav item pointing at /admin/clients used to
       // live here, but every AdminClientController route requires the real
-      // `clients` module (routes/api.php's `module:clients` gate) — it would
-      // 404/403 for a Sales-only company, so removed rather than left dead.
+      // Client module (routes/api.php's `module:client_portal` gate) — it
+      // would 403 for a Sales-only company, so removed rather than left dead.
       // Company Admin sub-users still get the equivalent, permission-gated
       // "Basic Clients" access via the User-guard routes (ungated by module —
       // see routes/api.php's client management comment).
@@ -43,8 +43,8 @@ const ADMIN_NAV_GROUPS = [
   {
     label: 'Client Module',
     items: [
-      { href: '/admin/clients', icon: HiUsers, label: 'Clients', module: 'clients' },
-      { href: '/admin/support', icon: HiChatBubbleLeftRight, label: 'Support Tickets', module: 'clients' },
+      { href: '/admin/clients', icon: HiUsers, label: 'Clients', module: 'client_portal' },
+      { href: '/admin/support', icon: HiChatBubbleLeftRight, label: 'Support Tickets', module: 'client_portal' },
     ],
   },
   {

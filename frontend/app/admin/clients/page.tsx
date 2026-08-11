@@ -24,10 +24,11 @@ const STATUS_C: Record<string, { bg: string; color: string }> = {
 
 export default function AdminClientsPage() {
   // Every AdminClientController endpoint this page calls requires the real
-  // `clients` module (routes/api.php's `module:clients` gate) — Sales
-  // ('leads') alone only grants the limited Basic Clients permission bundle
-  // to sub-users, not this admin page, so it's no longer accepted here.
-  useModuleGuard('clients');
+  // Client module — 'client_portal' is the actual purchasable module_key
+  // ('clients' was never a real CompanyModule row for any company, see
+  // ModuleSeeder.php). Sales ('leads') alone only grants the limited Basic
+  // Clients permission bundle to sub-users, not this admin page.
+  useModuleGuard('client_portal');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [clients,   setClients]   = useState<Client[]>([]);
   const [seat,      setSeat]      = useState<Seat | null>(null);
