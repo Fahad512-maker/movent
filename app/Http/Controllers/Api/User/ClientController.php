@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Mail\ClientPortalWelcomeMail;
 use App\Models\Client;
 use App\Models\ClientPortalPermission;
+use App\Models\Company;
+use App\Models\User;
 use App\Models\UserCompanyPermission;
 use App\Services\ClientPortalService;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class ClientController extends Controller
 {
@@ -223,6 +227,29 @@ class ClientController extends Controller
         return ApiResponse::success($client, 'Client updated');
     }
 
+    // DELETE /user/clients/{id} — gated behind canDeleteClients, not on by
+    // default for any role (Company Admin decides who gets it, e.g. a
+    // Project Manager). Soft delete only (Client uses SoftDeletes) — see
+    // Api\Admin\ClientController::destroy()'s comment: a real row delete
+    // would cascade-wipe the client's invoices, a soft delete never does.
+    // Also deactivates the linked portal login (if any).
+    public function destroy(int $id): JsonResponse
+    {
+        if (!$this->can('canDeleteClients')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $client = $this->visibleClients()->findOrFail($id);
+
+        if ($client->user_id) {
+            User::where('id', $client->user_id)->update(['is_active' => false]);
+        }
+
+        $client->delete();
+
+        return ApiResponse::success(null, 'Client deleted');
+    }
+
     // PUT /user/clients/{id}/permissions — which portal modules this client
     // can see; either portal permission implies "manages portal" broadly,
     // matching Admin's own updatePermissions() (no dedicated key there since
@@ -293,6 +320,16 @@ class ClientController extends Controller
             return ApiResponse::error($error, 422);
         }
         ClientPortalService::seedPermissions($client->id);
+
+        // Same login-details email as Api\Admin\ClientController::enablePortal()
+        // — non-blocking, never fails this action.
+        try {
+            Mail::to($request->portal_email)->send(new ClientPortalWelcomeMail(
+                $client, $client->company ?? Company::find($client->company_id), $request->portal_email, $request->portal_password
+            ));
+        } catch (\Throwable) {
+            // Don't fail portal enablement if mail fails
+        }
 
         return ApiResponse::success($client->fresh(), 'Portal access enabled');
     }

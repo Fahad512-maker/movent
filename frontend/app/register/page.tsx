@@ -330,7 +330,7 @@
 //               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
 //                 <div>
 //                   <label style={labelStyle}>Phone (Optional)</label>
-//                   <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" />
+//                   <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" />
 //                 </div>
 //                 <div>
 //                   <label style={labelStyle}>Timezone</label>
@@ -837,9 +837,10 @@ const COMPANY_OPTIONS: CompanyOption[] = [
   { label: 'Unlimited', value: null, price_pkr: 2500, price_usd: 10 },
 ];
 
+// USA first — primary target market.
 const TIMEZONES: string[] = [
-  'Asia/Karachi', 'Asia/Kolkata', 'Asia/Dubai', 'Europe/London',
-  'America/New_York', 'America/Los_Angeles', 'Asia/Singapore',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Europe/London', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Singapore',
 ];
 
 type PwStrength = { label: string; color: string; pct: number };
@@ -1046,7 +1047,7 @@ function RegisterContent() {
     setShowConfirm(true);
   };
   const [phone, setPhone] = useState<string>('');
-  const [timezone, setTimezone] = useState<string>('Asia/Karachi');
+  const [timezone, setTimezone] = useState<string>('America/New_York');
 
   useEffect(() => {
     setLoadingPackages(true);
@@ -1250,7 +1251,10 @@ function RegisterContent() {
                     label="Company Name"
                     required
                     value={companyName}
-                    onChange={e => setCompanyName(e.target.value)}
+                    // No spaces, no special characters — letters/digits only.
+                    // Mirrored server-side in PublicController::register()'s
+                    // validator so a direct API call can't bypass this.
+                    onChange={e => setCompanyName(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
                     placeholder=""
                     error={companyNameOk === false ? 'This company name is already registered' : undefined}
                     rightEl={

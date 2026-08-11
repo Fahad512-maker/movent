@@ -24,6 +24,24 @@ class PublicController extends Controller
 {
     public function packages(): JsonResponse
     {
+        // A package's own module list (package_modules) never expires or
+        // syncs itself when Super Admin flips a Module's is_active off — it's
+        // a separate table, set once when the package was built. Without
+        // this filter, a globally-deactivated module still showed up (and
+        // was still selectable) for anyone registering via a pre-built
+        // package, even though the "build your own plan" flow (modules()
+        // below) already correctly hid it. Module.key is a top-level catalog
+        // key ('hr', 'finance') while package_modules.module_key is a
+        // granular sub-module key ('employees', 'finance_dashboard') — the
+        // two are different namespaces, so this checks each inactive
+        // Module's sub_modules array, same pattern as
+        // App\Http\Middleware\CheckCompanyModule.
+        $disabledSubModuleKeys = Module::where('is_active', false)
+            ->pluck('sub_modules')
+            ->flatten()
+            ->unique()
+            ->all();
+
         $packages = Package::with('modules')
             ->where('is_visible', true)
             ->where('is_active', true)
@@ -38,7 +56,7 @@ class PublicController extends Controller
                 'trial_days' => $pkg->trial_days,
                 'is_popular' => (bool) $pkg->is_popular,
                 'features'   => $pkg->features ?? [],
-                'modules'    => $pkg->modules->pluck('module_key')->toArray(),
+                'modules'    => array_values(array_diff($pkg->modules->pluck('module_key')->toArray(), $disabledSubModuleKeys)),
             ]);
 
         return ApiResponse::success($packages);
@@ -90,7 +108,10 @@ class PublicController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'company_name'    => ['required', 'string', 'max:200'],
+            // Letters/digits only — no spaces, no special characters.
+            // Mirrored client-side in the register form's onChange filter;
+            // enforced here too so a direct API call can't bypass it.
+            'company_name'    => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
             'name'            => ['required', 'string', 'max:150'],
             'email'           => [
                 'required', 'email', 'unique:company_admins,email',
@@ -127,6 +148,15 @@ class PublicController extends Controller
                 $packageModuleKeys
             ));
         }
+
+        // Also strip any module Super Admin has since globally deactivated —
+        // packages() (the display side) already hides these, but a direct
+        // API call could still submit one from a stale page or by hand. Same
+        // sub_modules-array check as packages() above (harmless no-op for
+        // the "build your own" flow, where selected_modules only ever came
+        // from modules(), already is_active-filtered).
+        $disabledSubModuleKeys = Module::where('is_active', false)->pluck('sub_modules')->flatten()->unique()->all();
+        $validated['selected_modules'] = array_values(array_diff($validated['selected_modules'], $disabledSubModuleKeys));
         $validated['selected_modules'] = array_values(array_unique($validated['selected_modules']));
 
         if (empty($validated['selected_modules'])) {
@@ -173,7 +203,9 @@ class PublicController extends Controller
         $company = Company::create([
             'admin_id'       => $admin->id,
             'name'           => $validated['company_name'],
-            'timezone'       => $validated['timezone'] ?? 'Asia/Karachi',
+            // USA is the primary target market — default here if the
+            // frontend's timezone selector somehow didn't send one.
+            'timezone'       => $validated['timezone'] ?? 'America/New_York',
             'currency'       => $validated['currency'],
             'storage_folder' => 'companies/0/', // temp, updated below
             'is_active'      => true,
