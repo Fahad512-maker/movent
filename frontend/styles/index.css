@@ -1,0 +1,95 @@
+.nav-login-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 10px 16px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+    color: var(--text-body) !important;
+    border: 1.5px solid var(--brand-blue) !important;
+    background: transparent !important;
+    cursor: pointer !important;
+}
+
+.nav-login-btn:hover {
+    background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.nav-register-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 10px 24px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+    color: #fff !important;
+    background: var(--brand-gradient) !important;
+    border: 1.5px solid var(--brand-blue) !important;
+    box-shadow: 0 4px 14px var(--primary-shadow) !important;
+    cursor: pointer !important;
+}
+
+.nav-register-btn:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 18px var(--primary-shadow) !important;
+}
+
+.HeroSection {
+    padding: 50px 0px !important;
+}
+
+
+.hero-primary-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 24px !important;
+    color: var(--bg-white) !important;
+    background-image: var(--brand-gradient) !important;
+    border: none !important;
+    border-radius: 100px !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+}
+
+.hero-primary-btn:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 20px var(--primary-shadow) !important;
+}
+
+.hero-secondary-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 24px !important;
+    background: transparent !important;
+    color: var(--text-heading) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 100px !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+}
+
+.hero-secondary-btn:hover {
+    border-color: var(--brand-blue) !important;
+    color: var(--brand-blue) !important;
+    background: var(--primary-light) !important;
+}
+
+.btn-icon {
+    margin-top: 3px !important;
+}
+
+.Steps {
+    margin-top: 2rem;
+}
+
+.cta_Section {
+    margin-bottom: 2.5rem !important;
+}

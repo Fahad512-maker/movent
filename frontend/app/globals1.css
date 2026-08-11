@@ -1,0 +1,218 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap');
+@import "tailwindcss";
+
+
+body {
+    width: 100%;
+    height: auto;
+    font-family: "Manrope", sans-serif !important;
+    text-decoration: none;
+    overflow-y: auto;
+}
+
+:root {
+
+    /* ========== Primary Brand ========== */
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #dbeafe;
+    --primary-light-bg: #f8fbff;
+    --primary-shadow: rgba(37, 99, 235, 0.22);
+    --primary-shadow-hover: rgba(37, 99, 235, 0.35);
+
+    /* ========== Text ========== */
+    --text-heading: #0f172a;
+    --text-body: #475569;
+    --text-muted: #94a3b8;
+
+    /* ========== Borders ========== */
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+
+    /* ========== Backgrounds ========== */
+    --bg-light: #f8fbff;
+    --bg-white: #ffffff;
+    --bg-hover: #f1f7ff;
+
+    --bg-purple: #eef5ff;
+    --bg-light-1: #fcfdff;
+    --bg-green: #ecfdf5;
+
+    /* ========== Accent Colors ========== */
+    --accent-blue: #2563eb;
+    --accent-blue-dark: #1d4ed8;
+    --accent-sky: #60a5fa;
+    --accent-cyan: #38bdf8;
+    --accent-green: #22c55e;
+    --accent-yellow: #f59e0b;
+
+    /* ========== Radius ========== */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-full: 999px;
+
+    /* =======================================
+            PulseCRM Blue Theme
+    ======================================== */
+
+    /* Brand */
+    --brand-blue: #2563eb;
+    --brand-blue-light: #dbeafe;
+    --brand-sky: #60a5fa;
+    /* linear-gradient(135deg, #f59e0b, #fbbf24)', */
+    --brand-gradient: linear-gradient(90deg, #2563eb, #60a5fa);
+
+    /* Backgrounds */
+    --bg-backgound: #f6f9fe;
+    --bg-blue-light: #f8fbff;
+    --bg-blue-light1: #dae9fd;
+    --bg-sky: #eef6ff;
+    --bg-soft-blue: #f3f8ff;
+
+    --bg-cta-gradient: linear-gradient(135deg, #1d4ed8, #3b82f6);
+
+    /* Text */
+    --text-dark-navy: #0f172a;
+    --text-gray: #64748b;
+    --text-label: #2563eb;
+    --error-label: #ef4444;
+
+    /* Feature Icons */
+    --icon-blue: #2563eb;
+    --icon-sky: #38bdf8;
+    --icon-indigo: #4f46e5;
+    --icon-green: #22c55e;
+    --icon-yellow: #f59e0b;
+
+}
+
+a {
+    text-decoration: none;
+    color: none;
+}
+
+.navItem_color {
+    color: var(--bg-soft) !important;
+}
+
+.heading {
+    color: var(--text-heading) !important;
+    font-size: 3.5rem !important;
+    font-weight: 800 !important;
+}
+
+.titles {
+    color: var(--text-heading) !important;
+    font-weight: 800 !important;
+}
+
+@keyframes floatUpDown {
+    0% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-12px);
+    }
+
+    100% {
+        transform: translateY(0px);
+    }
+}
+
+.float-animation {
+    animation: floatUpDown 3s ease-in-out infinite;
+}
+
+
+.footer-link {
+    color: #64748b;
+    text-decoration: none;
+    font-size: 14px;
+    transition: 0.3s;
+}
+
+.footer-link:hover {
+    color: var(--brand-pink);
+}
+
+.footer-link-small {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.footer-link-small:hover {
+    color: var(--brand-blue);
+}
+
+.features_bnt {
+    display: inline-block !important;
+    padding: 6px 20px !important;
+    background-color: var(--bg-blue-light1) !important;
+    border-radius: 50 !important;
+    font-size: 12 !important;
+    font-weight: 900 !important;
+    color: var(--brand-blue) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+
+.AuthBackground {
+    width: 100%;
+    height: 100%;
+    background-image: url('../public/UI_Images/LoginBackground.png');
+    padding: 60px 0px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.adminLoginBg {
+    width: 100%;
+    height: 100%;
+    background-image: url('../public/UI_Images/adminLoginBg.png');
+    padding: 60px 0px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.PrcingPlan {
+    margin-top: 40px;
+}
+
+.ScrollBar {
+    scrollbar-width: thin;
+    padding-bottom: 20px;
+    scrollbar-color: var(--text-muted) var(--bg-blue-light);
+}
+
+.ScrollBar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.ScrollBar::-webkit-scrollbar-track {
+    background: var(--bg-blue-light);
+    border-radius: 20px;
+}
+
+.ScrollBar::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 20px;
+    border: 1px solid var(--bg-blue-light);
+    min-height: 30px;
+}
+
+.ScrollBar::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-blue);
+}
+
+.ScrollBar::-webkit-scrollbar-thumb:active {
+    background: var(--primary-dark);
+}
+
+.defaultMargin {
+    margin-bottom: 30px;
+}

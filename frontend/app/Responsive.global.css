@@ -1,0 +1,51 @@
+@media(max-width:1200px) {
+    .heading {
+        font-size: 2.5rem !important;
+    }
+}
+
+@media(max-width:550px) {
+    .heroSection {
+        gap: 0 !important;
+    }
+
+    .cta_heading {
+        font-size: 30px !important;
+    }
+
+    .footer_sec {
+        justify-content: center !important;
+        gap: 5px;
+    }
+
+    .AuthBackground {
+        padding: 40px 0px !important;
+    }
+
+    .Login_Heading {
+        font-size: 1.4rem !important;
+    }
+}
+
+@media(max-width:450px) {
+    .heading {
+        font-size: 2rem !important;
+    }
+
+    .loginForm {
+        padding: 20px !important
+    }
+
+    .RegisterForm {
+        padding: 30px 20px !important
+    }
+
+    .cta_Section {
+        padding: 10px 20px !important;
+    }
+
+    .HeroSection {
+        padding: 0px 40px !important;
+
+    }
+}
