@@ -466,6 +466,14 @@ Route::prefix('admin')->group(function () {
             Route::patch('projects/{projectId}/messenger/participants/{userId}/mute', [AdminProjectMessengerController::class, 'muteParticipant']);
             Route::get('projects/{projectId}/messenger/messages/{messageId}/attachment', [AdminProjectMessengerController::class, 'downloadAttachment']);
 
+            // Client Chat — the per-project Client <-> Seller <-> Company Admin
+            // conversation shown on the Client Portal's project page (see
+            // ProjectClientChatService). Separate thread from the internal
+            // messenger above, which the client never sees.
+            Route::get('projects/{projectId}/client-chat',                              [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'index']);
+            Route::post('projects/{projectId}/client-chat',                             [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'store']);
+            Route::get('projects/{projectId}/client-chat/{messageId}/attachment',       [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'downloadAttachment']);
+
             Route::get('projects/{id}/deliverables',                [AdminProductionController::class, 'deliverables']);
             Route::post('projects/{id}/deliverables',               [AdminProductionController::class, 'storeDeliverable']);
             Route::patch('deliverables/{id}/verify',                [AdminProductionController::class, 'verifyDeliverable']);
@@ -801,6 +809,20 @@ Route::prefix('user')->group(function () {
             Route::patch('projects/{projectId}/messenger/mute',                       [UserProjectMessengerController::class, 'toggleMute']);
             Route::get('projects/{projectId}/messenger/messages/{messageId}/attachment', [UserProjectMessengerController::class, 'downloadAttachment']);
 
+            // Client Chat — the project's own Seller answering their client
+            // (see ProjectClientChatService). Identity-gated to
+            // projects.seller_id inside the controller, deliberately no
+            // permission toggle, same as the Sales Chat routes: a Seller must
+            // always be able to answer their own client.
+            Route::get('projects/{projectId}/client-chat',                        [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'index']);
+            Route::post('projects/{projectId}/client-chat',                       [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'store']);
+            Route::get('projects/{projectId}/client-chat/{messageId}/attachment', [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'downloadAttachment']);
+            // Seller pulls this project's PM into the client conversation
+            // (full history or from-now-only), and pings Company Admin to
+            // come look at it.
+            Route::post('projects/{projectId}/client-chat/invite-pm',             [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'invitePm']);
+            Route::post('projects/{projectId}/client-chat/notify-admin',          [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'notifyAdmin']);
+
             Route::get('projects/{projectId}/comments',         [UserProjectCommentController::class, 'index']);
             Route::post('projects/{projectId}/comments',        [UserProjectCommentController::class, 'store']);
             Route::patch('projects/{projectId}/comments/{commentId}', [UserProjectCommentController::class, 'update']);
@@ -947,11 +969,21 @@ Route::prefix('client')->group(function () {
         Route::post('deliverables/{id}/approve',             [\App\Http\Controllers\Api\Client\ProjectController::class, 'approveDeliverable']);
         Route::post('deliverables/{id}/revision',            [\App\Http\Controllers\Api\Client\ProjectController::class, 'requestRevision']);
 
-        // Client-facing Project Comments only — no live chat inside
-        // project/task pages for the client portal (see Client Communication
-        // Rules). Always visibility='client', never sees 'internal'.
+        // Client-facing Project Comments — always visibility='client', never
+        // sees 'internal'. (The per-project live chat added below is a
+        // separate, deliberately narrow channel: Client <-> Seller <-> Company
+        // Admin only, never the internal production team.)
         Route::get('projects/{id}/comments',                 [\App\Http\Controllers\Api\Client\ProjectCommentController::class, 'index']);
         Route::post('projects/{id}/comments',                [\App\Http\Controllers\Api\Client\ProjectCommentController::class, 'store']);
+
+        // Per-PROJECT live chat — Client <-> that project's Seller <-> Company
+        // Admin, one conversation per project (see
+        // Api\Client\ProjectChatController and ProjectClientChatService). The
+        // client only ever reaches the chats of projects that are their own;
+        // the internal team messenger stays invisible to them.
+        Route::get('projects/{id}/chat',                     [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'index']);
+        Route::post('projects/{id}/chat',                    [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'store']);
+        Route::get('projects/{id}/chat/{messageId}/attachment', [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'downloadAttachment']);
 
         Route::get('invoices',                  [\App\Http\Controllers\Api\Client\InvoiceController::class, 'index']);
         Route::get('invoices/{id}',             [\App\Http\Controllers\Api\Client\InvoiceController::class, 'show']);

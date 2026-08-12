@@ -80,6 +80,30 @@ export const clientService = {
     });
     return res.data;
   },
+  // Per-PROJECT chat — a separate conversation for each project, between the
+  // client, that project's own Seller and Company Admin (see
+  // Api\Client\ProjectChatController). Unrelated to the account-level Sales
+  // Chat above.
+  projectChat: async (projectId: number) => {
+    const res = await clientApi.get(`/client/projects/${projectId}/chat`);
+    return res.data.data;
+  },
+  // `data` carries content/file plus any mentions[] entries — see
+  // Api\Client\ProjectChatController::store().
+  projectChatSend: async (projectId: number, data: FormData) => {
+    const res = await clientApi.post(`/client/projects/${projectId}/chat`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  },
+  projectChatAttachment: async (projectId: number, messageId: number, fileName: string) => {
+    const res = await clientApi.get(`/client/projects/${projectId}/chat/${messageId}/attachment`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  },
   support: async () => {
     const res = await clientApi.get('/client/support');
     return res.data.data;

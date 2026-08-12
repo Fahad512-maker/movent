@@ -239,7 +239,11 @@ export default function ProjectChatPage() {
         }}>← Back</button>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Chat{projectName && ` — ${projectName}`}</h2>
         {clientId && (
-          <button onClick={() => router.push(`/clients/${clientId}?tab=messages`)} title="Open this project's Client Messages thread" style={{
+          // THIS project's own client conversation (the "Project Chat" tab the
+          // client sees in their portal) — not the account-level Client
+          // Messages thread it used to open, which was shared across all of
+          // that client's projects. See App\Services\ProjectClientChatService.
+          <button onClick={() => router.push(`/projects/${id}/client-chat`)} title="Open this project's chat with the client" style={{
             marginLeft: 'auto', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8,
             padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#2563eb',
           }}>💬 Chat with Client</button>

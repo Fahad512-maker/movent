@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { clientService } from '@/lib/services/clientService';
 import clientApi from '@/lib/clientAxios';
 import toast from 'react-hot-toast';
+import { mentionQueryOf, matchMentionables, applyMention, renderWithMentions, roleLabel, Mentionable } from '@/lib/chatMentions';
 
 const GREEN = '#10b981';
 const SC: Record<string, { bg: string; color: string }> = {
@@ -35,12 +36,56 @@ const TASK_SC: Record<string, { bg: string; color: string }> = {
   cancelled:   { bg: '#fef2f2', color: '#dc2626' },
 };
 
+const TABS = ['tasks', 'deliverables', 'files', 'activity', 'chat'] as const;
+type Tab = typeof TABS[number];
+
+// Files a client may attach in project chat — mirrors the backend's
+// ALLOWED_MIMES/MAX_FILE_KB in Api\Client\ProjectChatController exactly.
+const CHAT_FILE_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'zip'];
+const CHAT_MAX_MB = 10;
+
+const MENTION_STYLE = { fontWeight: 700, color: '#047857', background: '#d1fae5', borderRadius: 4, padding: '0 3px' };
+const MENTION_STYLE_MINE = { fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.25)', borderRadius: 4, padding: '0 3px' };
+
+function fmtChatTime(d: string | null | undefined): string {
+  if (!d) return '';
+  const date = new Date(d);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return sameDay
+    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString([], { day: '2-digit', month: 'short' }) + ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ClientProjectDetailPage() {
   const { id } = useParams();
   const router  = useRouter();
   const [data, setData]       = useState<any>(null);
-  const [tab, setTab]         = useState<'tasks' | 'deliverables' | 'files' | 'activity'>('tasks');
+  const [tab, setTab]         = useState<Tab>('tasks');
   const [loading, setLoading] = useState(true);
+
+  // Notification deep-links land here as ?tab=chat (see the `link` written by
+  // Api\User\ProjectClientChatController / Api\Admin\ProjectClientChatController).
+  // Read via window.location instead of useSearchParams so this page doesn't
+  // need a Suspense boundary — same as /admin/clients/[id].
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested && (TABS as readonly string[]).includes(requested)) setTab(requested as Tab);
+  }, []);
+
+  // Project chat — this project's own conversation with the Seller and
+  // Company Admin (see Api\Client\ProjectChatController). Polled only while
+  // the tab is open.
+  const [chat, setChat]           = useState<{ participants: any[]; messages: any[]; mentionables: Mentionable[] } | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatText, setChatText]   = useState('');
+  const [chatFile, setChatFile]   = useState<File | null>(null);
+  const [chatSending, setChatSending] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  // @mentions — the client can tag their Seller and Company Admin, plus the
+  // Project Manager once the Seller has invited them into this conversation.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [selectedMentions, setSelectedMentions] = useState<number[]>([]);
 
   // Revision modal
   const [revModal, setRevModal]     = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
@@ -70,6 +115,54 @@ export default function ClientProjectDetailPage() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  const loadChat = () => {
+    clientService.projectChat(Number(id))
+      .then(r => setChat({ participants: r.thread?.participants ?? [], messages: r.messages ?? [], mentionables: r.mentionables ?? [] }))
+      .catch(() => {});
+  };
+
+  // Only polls while the Chat tab is actually open — the other tabs are
+  // static enough not to warrant a background request every few seconds.
+  useEffect(() => {
+    if (tab !== 'chat') return;
+    setChatLoading(true);
+    clientService.projectChat(Number(id))
+      .then(r => setChat({ participants: r.thread?.participants ?? [], messages: r.messages ?? [], mentionables: r.mentionables ?? [] }))
+      .catch(() => toast.error('Failed to load chat'))
+      .finally(() => setChatLoading(false));
+    const interval = setInterval(loadChat, 10000);
+    return () => clearInterval(interval);
+  }, [tab, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chat?.messages?.length]);
+
+  const sendChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatText.trim() && !chatFile) return;
+    if (chatFile) {
+      const ext = chatFile.name.split('.').pop()?.toLowerCase() ?? '';
+      if (!CHAT_FILE_TYPES.includes(ext)) { toast.error(`${chatFile.name}: file type not allowed`); return; }
+      if (chatFile.size > CHAT_MAX_MB * 1024 * 1024) { toast.error(`${chatFile.name}: exceeds ${CHAT_MAX_MB}MB limit`); return; }
+    }
+    setChatSending(true);
+    try {
+      const fd = new FormData();
+      if (chatText.trim()) fd.append('content', chatText.trim());
+      if (chatFile) fd.append('file', chatFile);
+      await clientService.projectChatSend(Number(id), fd);
+      setChatText('');
+      setChatFile(null);
+      loadChat();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send message');
+    } finally { setChatSending(false); }
+  };
+
+  const downloadChatAttachment = async (messageId: number, fileName: string) => {
+    try { await clientService.projectChatAttachment(Number(id), messageId, fileName); }
+    catch { toast.error('Download failed'); }
+  };
 
   const approve = async (deliverableId: number) => {
     try {
@@ -137,7 +230,7 @@ export default function ClientProjectDetailPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 18, borderBottom: '1px solid #e2e8f0' }}>
-        {(['tasks', 'deliverables', 'files', 'activity'] as const).map(t => (
+        {TABS.map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -148,7 +241,7 @@ export default function ClientProjectDetailPage() {
               borderBottom: tab === t ? `2px solid ${GREEN}` : '2px solid transparent',
               textTransform: 'capitalize',
             }}>
-            {t}
+            {t === 'chat' ? '💬 Project Chat' : t}
           </button>
         ))}
       </div>
@@ -296,6 +389,109 @@ export default function ClientProjectDetailPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* PROJECT CHAT — this project only. Same conversation the Seller and
+          Company Admin see on their side; other projects have their own. */}
+      {tab === 'chat' && (
+        <div style={{ display: 'flex', flexDirection: 'column', height: 560, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Project Chat — {p.name}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              {(chat?.participants ?? []).map((x: any) => x.name).filter(Boolean).join(', ') || 'Your Seller and Company Admin'}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f8fafc' }}>
+            {chatLoading && !chat ? (
+              <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 40 }}>Loading…</div>
+            ) : (chat?.messages ?? []).length === 0 ? (
+              <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
+                No messages on this project yet. Say hello 👋
+              </div>
+            ) : (chat?.messages ?? []).map((msg: any) => {
+              // Cookie-free "is this mine" check — the client is the only
+              // role_type='client' party in this thread, so no auth cookie is
+              // read during render (which would break hydration).
+              const isMe = msg.sender?.role_type === 'client';
+              const senderName = msg.sender_admin?.name
+                ? `${msg.sender_admin.name} (Admin)`
+                : msg.sender?.name ?? 'Unknown';
+              return (
+                <div key={msg.id} style={{ display: 'flex', flexDirection: isMe ? 'row-reverse' : 'row', marginBottom: 12, gap: 8 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    background: isMe ? 'linear-gradient(135deg,#10b981,#059669)' : '#e2e8f0',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, color: isMe ? '#fff' : '#64748b',
+                  }}>
+                    {senderName?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div style={{ maxWidth: '70%' }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3, textAlign: isMe ? 'right' : 'left' }}>
+                      {senderName} · {fmtChatTime(msg.sent_at)}
+                    </div>
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 10,
+                      background: isMe ? GREEN : '#fff',
+                      color: isMe ? '#fff' : '#1e293b',
+                      border: isMe ? 'none' : '1px solid #e2e8f0',
+                      fontSize: 13, whiteSpace: 'pre-wrap',
+                    }}>
+                      {msg.content}
+                      {msg.attachment_name && (
+                        <button
+                          onClick={() => downloadChatAttachment(msg.id, msg.attachment_name)}
+                          style={{
+                            display: 'block', marginTop: msg.content ? 6 : 0, padding: '4px 10px',
+                            borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                            border: `1px solid ${isMe ? 'rgba(255,255,255,0.35)' : '#e2e8f0'}`,
+                            background: isMe ? 'rgba(255,255,255,0.12)' : '#f8fafc',
+                            color: isMe ? '#fff' : GREEN,
+                          }}>
+                          📎 {msg.attachment_name}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatBottomRef} />
+          </div>
+
+          <form onSubmit={sendChat} style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9' }}>
+            {chatFile && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12, color: '#334155' }}>
+                <span>📎 {chatFile.name}</span>
+                <button type="button" onClick={() => setChatFile(null)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <label style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center' }}>
+                📎
+                <input type="file" style={{ display: 'none' }} accept={CHAT_FILE_TYPES.map(t => `.${t}`).join(',')}
+                  onChange={e => { setChatFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+              </label>
+              <input
+                value={chatText}
+                onChange={e => setChatText(e.target.value)}
+                placeholder="Type a message about this project…"
+                style={{ flex: 1, padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' }}
+              />
+              <button
+                type="submit"
+                disabled={chatSending || (!chatText.trim() && !chatFile)}
+                style={{
+                  padding: '8px 18px', background: chatSending ? '#a7f3d0' : GREEN,
+                  color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: chatSending || (!chatText.trim() && !chatFile) ? 'not-allowed' : 'pointer',
+                }}>
+                Send
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
