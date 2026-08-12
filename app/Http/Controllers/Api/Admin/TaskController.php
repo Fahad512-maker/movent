@@ -34,7 +34,7 @@ class TaskController extends Controller
         // — a 3-arg (column, operator, value) call silently misparses, so a
         // closure is required for a "!=" condition.
         return Rule::exists('users', 'id')->whereIn('company_id', $this->companyIds())
-            ->where(fn ($query) => $query->where('role_type', '!=', 'seller'));
+            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client']));
     }
 
     // qa_assigned_to is optional (no dropdown/status-transition requires it

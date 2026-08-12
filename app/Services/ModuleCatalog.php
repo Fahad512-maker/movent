@@ -174,16 +174,14 @@ class ModuleCatalog
                     // App\Services\TaskStatusService for the full transition
                     // matrix these gate.
                     'canCompleteTasks', 'canReopenTasks', 'canOverrideTaskStatus',
-                    // Project-wise messenger (groups + direct chats scoped to a
-                    // project) — distinct from the older, dormant single-thread
-                    // Api\*\ProjectChatController permissions, which these do not
-                    // replace. See Api\*\ProjectMessengerController.
+                    // Project-wise messenger: one conversation per project.
+                    // Group/direct project chat actions were retired with the
+                    // single-thread ProjectMessengerController flow.
                     'canViewProjectChat', 'canSendProjectChatMessage',
-                    'canCreateProjectChatGroup', 'canManageProjectChatParticipants',
-                    'canAddSellerToProjectChat', 'canCreateProjectDirectChat',
+                    'canManageProjectChatParticipants',
+                    'canAddSellerToProjectChat',
                     'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
-                    'canDeleteOwnProjectChatMessage', 'canDeleteAnyProjectChatMessage',
-                    'canViewProjectChatHistory',
+                    'canDeleteAnyProjectChatMessage',
                 ],
             ],
 

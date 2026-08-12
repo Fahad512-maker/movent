@@ -28,6 +28,11 @@ function fmtShort(d: string | null | undefined): string {
     : date.toLocaleDateString([], { day: '2-digit', month: 'short' });
 }
 
+function errorMessage(err: unknown, fallback: string): string {
+  const ex = err as { response?: { data?: { message?: string } } };
+  return ex.response?.data?.message ?? fallback;
+}
+
 // Project Chat — one thread per project, no groups/direct chats, no
 // conversation switching (see Api\User\ProjectMessengerController and
 // ProjectChatService). Every Company employee formally tied to the project
@@ -39,17 +44,9 @@ export default function ProjectChatPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const projectId = Number(id);
-  // can() reads the auth cookie, which isn't available during SSR — calling
-  // it directly in the render body would make the server's HTML (no
-  // permission) disagree with the client's first paint (real permission),
-  // causing a hydration mismatch. Gating on `mounted` (false during SSR and
-  // during the client's pre-hydration first render, flipped true only in a
-  // post-mount effect) keeps that first render identical on both sides.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   // Company Admin/PM can delete ANY message; everyone else can only ever
   // delete their own (plain ownership check, enforced server-side too).
-  const canDeleteAny = mounted && can('project_management', 'canDeleteAnyProjectChatMessage');
+  const canDeleteAny = can('project_management', 'canDeleteAnyProjectChatMessage');
 
   const [projectName, setProjectName] = useState('');
   // A draft project rejects messages server-side (ProjectMessengerController::
@@ -58,11 +55,9 @@ export default function ProjectChatPage() {
   const [isDraft, setIsDraft] = useState(false);
   const [clientId, setClientId] = useState<number | null>(null);
   const [thread, setThread] = useState<ProjectMessengerThread | null>(null);
-  const [isPM, setIsPM] = useState(false);
-  // Narrower than isPM — literal PM only. A canViewAllCompanyProjects
-  // holder who isn't actually this project's PM can manage participants
-  // (isPM) but still can't @mention a Seller — matches the backend's
-  // isLiteralPm() gate in send() exactly.
+  const [canManageParticipants, setCanManageParticipants] = useState(false);
+  // Literal PM only. Delegated participant managers still cannot @mention a
+  // Seller unless they are the actual PM, matching the backend send() gate.
   const [isLiteralPm, setIsLiteralPm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [noAccess, setNoAccess] = useState(false);
@@ -88,12 +83,11 @@ export default function ProjectChatPage() {
   const loadThread = () => {
     userProjectMessengerService.show(projectId)
       .then(r => {
-        setThread(r.thread); setIsPM(r.is_pm); setIsLiteralPm(r.is_literal_pm); setNoAccess(false); loadMessages();
-        // eligible-participants is PM-tier only server-side (Api\User\ProjectMessengerController::eligibleParticipants) —
-        // calling it for a non-PM viewer (e.g. a Seller) always 403s, which the global axios
-        // interceptor surfaces as a permission toast even though this page never uses the result.
+        setThread(r.thread); setCanManageParticipants(r.can_manage_participants); setIsLiteralPm(r.is_literal_pm); setNoAccess(false); loadMessages();
+        // eligible-participants is permission-gated server-side and only used
+        // by the Manage Participants picker.
         // Fetched once (not on every 8s poll) since the eligible pool rarely changes mid-session.
-        if (r.is_pm && !fetchedEligibleRef.current) {
+        if (r.can_manage_participants && !fetchedEligibleRef.current) {
           fetchedEligibleRef.current = true;
           userProjectMessengerService.eligibleParticipants(projectId).then(setEligibleUsers).catch(() => {});
         }
@@ -117,8 +111,8 @@ export default function ProjectChatPage() {
       await userProjectMessengerService.addParticipant(projectId, Number(addParticipantId));
       setAddParticipantId('');
       loadThread();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to add participant');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to add participant'));
     }
   };
 
@@ -150,8 +144,8 @@ export default function ProjectChatPage() {
       setFile(null);
       setSelectedMentions([]);
       loadMessages();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to send message');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to send message'));
     } finally { setSending(false); }
   };
 
@@ -160,8 +154,8 @@ export default function ProjectChatPage() {
     try {
       await userProjectMessengerService.deleteMessage(projectId, messageId);
       setMessages(prev => prev.filter(m => m.id !== messageId));
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to delete message');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to delete message'));
     }
   };
 
@@ -181,8 +175,8 @@ export default function ProjectChatPage() {
       const updated = await userProjectMessengerService.updateMessage(projectId, messageId, editText.trim());
       setMessages(prev => prev.map(m => m.id === messageId ? updated : m));
       cancelEdit();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update message');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to update message'));
     }
   };
 
@@ -271,7 +265,7 @@ export default function ProjectChatPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  {isPM && (
+                  {canManageParticipants && (
                     <button onClick={() => setShowParticipants(v => !v)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 12px', fontSize: 11.5, color: '#64748b', cursor: 'pointer' }}>Participants</button>
                   )}
                   <button onClick={toggleMute} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 12px', fontSize: 11.5, color: '#64748b', cursor: 'pointer' }}>
@@ -286,7 +280,7 @@ export default function ProjectChatPage() {
                 </div>
               )}
 
-              {showParticipants && isPM && (
+              {showParticipants && canManageParticipants && (
                 <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                     {thread.participants.map(p => (

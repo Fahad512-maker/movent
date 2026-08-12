@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
-import { adminProjectService, Project, ProjectComment, ProjectCommentAttachment, MentionableUser, ProjectUserOption } from '@/lib/services/adminProjectService';
+import { adminProjectService, Project, ProjectComment, ProjectCommentAttachment, MentionableUser, ProjectUserOption, ActivityItem } from '@/lib/services/adminProjectService';
 import { getAuthUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
@@ -42,6 +42,17 @@ function buildThreadOrder(comments: ProjectComment[]): { comment: ProjectComment
   return ordered;
 }
 
+function activityText(item: ActivityItem): string {
+  if (item.type === 'comment') return `${item.author ?? 'Unknown'} commented: ${item.body ?? ''}`;
+  if (item.description) return item.description;
+  return item.entity_type === 'Task' ? `Task ${item.action ?? 'updated'}` : `Project ${item.action ?? 'updated'}`;
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  const ex = err as { response?: { data?: { message?: string } } };
+  return ex.response?.data?.message ?? fallback;
+}
+
 export default function ProjectOverviewPage() {
   useModuleGuard('projects');
   const me = getAuthUser() as Admin | null;
@@ -49,6 +60,7 @@ export default function ProjectOverviewPage() {
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentBody, setCommentBody] = useState('');
   const [postingComment, setPostingComment] = useState(false);
@@ -123,6 +135,7 @@ export default function ProjectOverviewPage() {
       const p = await adminProjectService.getOne(Number(id));
       setProject(p);
       setComments(await adminProjectService.comments.list(Number(id)).catch(() => []));
+      setRecentActivity(await adminProjectService.activity(Number(id)).catch(() => []));
       setSellersLoading(true);
       adminProjectService.projectUsers(p.company_id)
         .then(d => setSellers(d.sellers ?? []))
@@ -190,8 +203,8 @@ export default function ProjectOverviewPage() {
       const updated = await adminProjectService.comments.update(Number(id), commentId, editCommentBody.trim());
       setComments(prev => prev.map(c => c.id === commentId ? updated : c));
       cancelEditComment();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update comment');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to update comment'));
     }
   };
 
@@ -206,9 +219,9 @@ export default function ProjectOverviewPage() {
     try {
       const res = await adminProjectService.comments.toggleLike(Number(id), c.id);
       setComments(prev => prev.map(x => x.id === c.id ? { ...x, liked_by_me: res.liked, likes_count: res.likes_count } : x));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setComments(prev => prev.map(x => x.id === c.id ? { ...x, liked_by_me: wasLiked, likes_count: prevCount } : x));
-      toast.error(err?.response?.data?.message || 'Failed to update like');
+      toast.error(errorMessage(err, 'Failed to update like'));
     }
   };
 
@@ -248,8 +261,8 @@ export default function ProjectOverviewPage() {
       await adminProjectService.comments.add(Number(id), replyBody.trim(), undefined, visibility, replySelectedMentions.map(m => m.user_id), undefined, parentId);
       cancelReply();
       loadComments();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to send reply');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to send reply'));
     } finally { setPostingReply(false); }
   };
 
@@ -489,6 +502,28 @@ export default function ProjectOverviewPage() {
                 </tbody>
               </table>
             )}
+          </div>
+
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>History</h3>
+              <button onClick={() => router.push(`/admin/projects/${id}/activity`)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0 }}>View all</button>
+            </div>
+            <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {recentActivity.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#94a3b8' }}>No history yet.</div>
+              ) : (
+                recentActivity.slice(0, 6).map((item, index) => (
+                  <div key={`${item.created_at}-${index}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: item.type === 'comment' ? '#2563eb' : '#64748b', marginTop: 6, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.45 }}>{activityText(item)}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{fmtDate(item.created_at)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           <div style={{ ...card, padding: 0, overflow: 'hidden' }}>

@@ -269,8 +269,16 @@ class ProjectController extends Controller
             'new_values'  => $validated,
         ]);
 
+        $project->logActivity('created', "Project \"{$project->name}\" created by {$this->adminName()}.", $this->adminName(), [
+            'created_by_admin_id' => $this->admin()->id,
+        ]);
+
         if ($project->project_manager_id) {
             $this->addAsProjectManager($project, $project->project_manager_id);
+            $managerName = User::find($project->project_manager_id)?->name ?? 'Unknown';
+            $project->logActivity('manager_assigned', "{$this->adminName()} assigned {$managerName} as project manager.", $this->adminName(), [
+                'to' => $project->project_manager_id,
+            ]);
 
             Notification::create([
                 'user_id'    => $project->project_manager_id,
@@ -350,6 +358,9 @@ class ProjectController extends Controller
         }
 
         $invoice->update(['project_id' => $project->id]);
+        $project->logActivity('invoice_linked', "{$this->adminName()} linked invoice {$invoice->invoice_number} to this project.", $this->adminName(), [
+            'invoice_id' => $invoice->id,
+        ]);
 
         return ApiResponse::success(null, 'Invoice linked to project');
     }
@@ -365,6 +376,9 @@ class ProjectController extends Controller
         }
 
         $invoice->update(['project_id' => null]);
+        $project->logActivity('invoice_unlinked', "{$this->adminName()} unlinked invoice {$invoice->invoice_number} from this project.", $this->adminName(), [
+            'invoice_id' => $invoice->id,
+        ]);
 
         return ApiResponse::success(null, 'Invoice unlinked from project');
     }
@@ -407,6 +421,7 @@ class ProjectController extends Controller
         ]);
 
         $wasManagerId = $project->project_manager_id;
+        $before = $project->only(array_keys($validated));
 
         $project->update($validated);
 
@@ -421,6 +436,19 @@ class ProjectController extends Controller
         ]);
 
         if (isset($validated['project_manager_id']) && $validated['project_manager_id'] !== $wasManagerId) {
+            $oldManagerName = $wasManagerId ? (User::find($wasManagerId)?->name ?? 'Unknown') : null;
+            $newManagerName = $validated['project_manager_id'] ? (User::find($validated['project_manager_id'])?->name ?? 'Unknown') : null;
+            $managerType = $newManagerName ? ($oldManagerName ? 'manager_switched' : 'manager_assigned') : 'manager_unassigned';
+            $managerDescription = $newManagerName
+                ? ($oldManagerName
+                    ? "{$this->adminName()} changed project manager from {$oldManagerName} to {$newManagerName}."
+                    : "{$this->adminName()} assigned {$newManagerName} as project manager.")
+                : "{$this->adminName()} unassigned project manager {$oldManagerName}.";
+            $project->logActivity($managerType, $managerDescription, $this->adminName(), [
+                'from' => $wasManagerId,
+                'to' => $validated['project_manager_id'],
+            ]);
+
             // Notification.user_id is NOT NULL — unassigning (new value null,
             // e.g. via the Projects listing's "Unassigned" option) must never
             // reach the Notification::create below, or it throws a DB
@@ -437,6 +465,24 @@ class ProjectController extends Controller
                     'data'       => ['project_id' => $project->id, 'link' => "/projects/{$project->id}"],
                 ]);
             }
+        }
+
+        $changedFields = collect(array_keys($validated))
+            ->filter(fn ($field) => $field !== 'project_manager_id' && ($before[$field] ?? null) != $project->{$field})
+            ->values();
+
+        if ($changedFields->contains('status')) {
+            $project->logActivity('status_changed', "{$this->adminName()} changed status from {$before['status']} to {$project->status}.", $this->adminName(), [
+                'from' => $before['status'] ?? null,
+                'to' => $project->status,
+            ]);
+        }
+
+        $otherFields = $changedFields->reject(fn ($field) => $field === 'status')->values();
+        if ($otherFields->isNotEmpty()) {
+            $project->logActivity('updated', "{$this->adminName()} updated " . $otherFields->implode(', ') . '.', $this->adminName(), [
+                'fields' => $otherFields->all(),
+            ]);
         }
 
         return ApiResponse::success($project->fresh(['client', 'projectManager']), 'Project updated');
@@ -484,11 +530,29 @@ class ProjectController extends Controller
         ]);
 
         foreach ($validated['members'] as $member) {
+            $existingMember = ProjectTeamMember::where('project_id', $project->id)
+                ->where('user_id', $member['user_id'])
+                ->first();
+            $wasRole = $existingMember?->role_in_project;
             ProjectTeamMember::updateOrCreate(
                 ['project_id' => $project->id, 'user_id' => $member['user_id']],
                 // assigned_by FKs to `users`; Company Admin actor isn't a User row
                 ['role_in_project' => $member['role_in_project'], 'assigned_by' => null]
             );
+            $memberName = User::find($member['user_id'])?->name ?? 'Unknown';
+
+            if (!$existingMember) {
+                $project->logActivity('team_assigned', "{$this->adminName()} added {$memberName} to the project team as " . str_replace('_', ' ', $member['role_in_project']) . '.', $this->adminName(), [
+                    'to' => $member['user_id'],
+                    'role_in_project' => $member['role_in_project'],
+                ]);
+            } elseif ($wasRole !== $member['role_in_project']) {
+                $project->logActivity('team_member_role_changed', "{$this->adminName()} changed {$memberName}'s project role from " . str_replace('_', ' ', $wasRole) . ' to ' . str_replace('_', ' ', $member['role_in_project']) . '.', $this->adminName(), [
+                    'user_id' => $member['user_id'],
+                    'from' => $wasRole,
+                    'to' => $member['role_in_project'],
+                ]);
+            }
 
             Notification::create([
                 'user_id'    => $member['user_id'],
@@ -561,6 +625,12 @@ class ProjectController extends Controller
             'old_values'  => ['user_id' => $member->user_id, 'role_in_project' => $wasRole],
             'new_values'  => ['user_id' => $member->user_id, 'role_in_project' => $validated['role_in_project']],
         ]);
+        $memberName = $member->user?->name ?? User::find($member->user_id)?->name ?? 'Unknown';
+        $project->logActivity('team_member_role_changed', "{$this->adminName()} changed {$memberName}'s project role from " . str_replace('_', ' ', $wasRole) . ' to ' . str_replace('_', ' ', $validated['role_in_project']) . '.', $this->adminName(), [
+            'user_id' => $member->user_id,
+            'from' => $wasRole,
+            'to' => $validated['role_in_project'],
+        ]);
 
         return ApiResponse::success($member->fresh('user:id,name,role_type'), 'Role updated');
     }
@@ -575,6 +645,7 @@ class ProjectController extends Controller
         }
 
         $removedUserId = $member->user_id;
+        $removedUserName = $member->user?->name ?? User::find($removedUserId)?->name ?? 'Unknown';
         $member->delete();
 
         // Losing their team row can also mean losing their project chat
@@ -590,6 +661,9 @@ class ProjectController extends Controller
             'entity_type' => 'Project',
             'entity_id'   => $project->id,
             'old_values'  => ['user_id' => $removedUserId],
+        ]);
+        $project->logActivity('team_member_removed', "{$this->adminName()} removed {$removedUserName} from the project team.", $this->adminName(), [
+            'user_id' => $removedUserId,
         ]);
 
         return ApiResponse::success(null, 'Team member removed');
@@ -825,11 +899,28 @@ class ProjectController extends Controller
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
         $taskIds = Task::where('project_id', $project->id)->pluck('id');
 
-        $logs = SystemAuditLog::where(function ($q) use ($id, $taskIds) {
-                $q->where(['entity_type' => 'Project', 'entity_id' => $id])
-                  ->orWhere(function ($q2) use ($taskIds) {
-                      $q2->where('entity_type', 'Task')->whereIn('entity_id', $taskIds);
-                  });
+        $projectLogs = $project->activities()
+            ->get()
+            ->map(fn ($activity) => [
+                'type'        => 'log',
+                'action'      => $activity->type,
+                'entity_type' => 'Project',
+                'description' => $activity->description,
+                'causer_name' => $activity->causer_name,
+                'meta'        => $activity->meta,
+                'created_at'  => $activity->created_at,
+            ]);
+
+        $projectActivityActions = $projectLogs->pluck('action')->all();
+
+        $logs = SystemAuditLog::where(function ($q) use ($id, $taskIds, $projectActivityActions) {
+                $q->where(function ($q2) use ($id, $projectActivityActions) {
+                    $q2->where(['entity_type' => 'Project', 'entity_id' => $id])
+                        ->when($projectActivityActions, fn ($q3) => $q3->whereNotIn('action', $projectActivityActions));
+                })
+                ->orWhere(function ($q2) use ($taskIds) {
+                    $q2->where('entity_type', 'Task')->whereIn('entity_id', $taskIds);
+                });
             })
             // Comment-added actions already appear as proper comment bubbles
             // via the $comments query below — exclude here to avoid showing
@@ -854,7 +945,7 @@ class ProjectController extends Controller
                 'created_at' => $c->created_at,
             ]);
 
-        $activity = $logs->concat($comments)->sortByDesc('created_at')->values();
+        $activity = $projectLogs->concat($logs)->concat($comments)->sortByDesc('created_at')->values();
 
         return ApiResponse::success($activity);
     }

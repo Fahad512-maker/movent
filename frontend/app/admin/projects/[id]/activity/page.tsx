@@ -103,8 +103,7 @@ export default function ProjectActivityPage() {
                     </>
                   ) : (
                     <span style={{ fontSize: 13, color: '#475569' }}>
-                      {it.entity_type === 'Task' ? 'A task was ' : 'Project was '}
-                      {ACTION_LABEL[it.action ?? ''] ?? it.action}
+                      {it.description ?? `${it.entity_type === 'Task' ? 'A task was ' : 'Project was '}${ACTION_LABEL[it.action ?? ''] ?? it.action}`}
                     </span>
                   )}
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{fmtDateTime(it.created_at)}</div>

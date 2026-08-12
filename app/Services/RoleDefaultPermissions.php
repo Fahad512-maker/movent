@@ -40,7 +40,7 @@ class RoleDefaultPermissions
                 'canViewProjectReports', 'canViewTaskReports',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectChatGroup', 'canManageProjectChatParticipants', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canManageProjectChatParticipants', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
             ],
             // General Chat (direct/group messaging, not tied to a project) —
             // PM is one of the cross-department roles expected to use it.
@@ -55,7 +55,7 @@ class RoleDefaultPermissions
                 'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
             ],
         ],
         'developer' => [
@@ -66,7 +66,7 @@ class RoleDefaultPermissions
                 'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
             ],
         ],
         'designer' => [
@@ -77,7 +77,7 @@ class RoleDefaultPermissions
                 'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
             ],
         ],
         // pm_view + pm_manage_tasks + pm_manage_deliverables + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production)
@@ -88,7 +88,7 @@ class RoleDefaultPermissions
                 'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
             ],
         ],
         // pm_view + pm_manage_tasks + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production, no Deliverables/QA)
@@ -98,7 +98,7 @@ class RoleDefaultPermissions
                 'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
             ],
         ],
         // Sellers only ever see/act on projects they're linked to, and only
@@ -139,9 +139,9 @@ class RoleDefaultPermissions
                 'canCreateInvoices', 'canSendInvoices', 'canViewInvoices',
             ],
             // Seller can only ever share a comment/chat thread with Company
-            // Admin or this project's PM — never the wider team.
-            // canCreateProjectDirectChat IS granted — createDirect() hard-
-            // restricts a Seller's target to Company Admin/PM only.
+            // Admin or this project's PM — never the wider team. Project
+            // chat is now the single project conversation, scoped by
+            // participant rows.
             // canCreateLinkedProjectTask is deliberately NOT granted — the
             // Task feature (viewing or submitting one) is retired for this
             // role entirely; Api\User\TaskController's index()/indexAll()/
@@ -153,14 +153,8 @@ class RoleDefaultPermissions
                 'canCreateProjectHandoff',
                 'canRequestPMAssignment',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat',
+                'canViewProjectChat', 'canSendProjectChatMessage',
                 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
-                // canManageProjectChatParticipants/canAddSellerToProjectChat are
-                // inert no-ops for a Seller — Api\User\ProjectMessengerController::
-                // isPM() hard-blocks role_type='seller' regardless of this grant.
-                // Included only so the "Manage Project Chat Participants"/"Add
-                // Seller To Project Chat" checkboxes show checked; grants nothing.
-                'canManageProjectChatParticipants', 'canAddSellerToProjectChat',
                 // canEditProjects/canCompleteProjects/canCloseProjects/
                 // canReopenProjects ARE functional for a Seller —
                 // visibleProjects()/ProjectController scope includes

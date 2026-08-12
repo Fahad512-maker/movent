@@ -15,6 +15,7 @@ const TASK_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'review', 'completed
 // below). These roles are excluded from the dropdown only for an actor who
 // lacks canAssignTasks — mirrors Api\User\TaskController::assignedToRule().
 const INTERNAL_ASSIGNEE_ROLES = ['production', 'developer', 'designer', 'qa'];
+const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client'];
 
 interface AssigneeOption { id: number; name: string; role_type?: string }
 
@@ -38,7 +39,7 @@ export default function CreateTaskPage() {
   // "review" server-side regardless of what's shown here.
   const canCreateLinkedTask = can('project_management', 'canCreateLinkedProjectTask');
   const canCreateAnyTask = canCreateTasks || canCreateLinkedTask;
-  const assignableTeamUsers = teamOptions.filter(u => u.role_type !== 'seller');
+  const assignableTeamUsers = teamOptions.filter(u => !NEVER_TASK_ASSIGNEE_ROLES.includes(u.role_type ?? ''));
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

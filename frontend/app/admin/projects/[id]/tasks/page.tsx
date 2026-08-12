@@ -19,6 +19,7 @@ const hasProjectManagementAccess = (u: User) =>
 const TASK_TYPE_LABEL: Record<string, string> = {
   general: 'General', production: 'Production', client_request: 'Client Request', internal: 'Internal',
 };
+const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client'];
 
 const EMPTY_FORM = {
   title: '', description: '', assigned_to: '', priority: 'medium', status: 'todo',
@@ -72,11 +73,11 @@ export default function ProjectTasksPage() {
       // Timesheets). Still sourced from userService.list() (not
       // project.team_members directly) since the "no Project Management
       // access" warning below needs each user's full company_assignments,
-      // which team_members' nested user object doesn't carry. A Seller can
-      // never be a task assignee, full stop (also never a team member).
+      // which team_members' nested user object doesn't carry. Seller/client
+      // portal accounts can never be task assignees.
       const teamMemberIds = new Set((p.team_members ?? []).map(tm => tm.user_id));
       userService.list().then(d => setUsers(d.users.filter(u =>
-        u.is_active && u.role_type !== 'seller' && teamMemberIds.has(u.id)
+        u.is_active && !NEVER_TASK_ASSIGNEE_ROLES.includes(u.role_type ?? '') && teamMemberIds.has(u.id)
       ))).catch(() => {});
     }).catch(() => {});
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps

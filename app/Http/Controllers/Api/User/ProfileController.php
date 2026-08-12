@@ -26,7 +26,14 @@ class ProfileController extends Controller
 
     public function show(): JsonResponse
     {
-        return ApiResponse::success(new UserResource($this->user()));
+        return ApiResponse::success(new UserResource($this->user()->load([
+            'company.modules',
+            'company.admin:id,name',
+            'companyAssignments.company:id,name',
+            'userCompanyPermissions',
+            'permissions',
+            'createdBy:id,name',
+        ])));
     }
 
     public function update(Request $request): JsonResponse
@@ -54,7 +61,14 @@ class ProfileController extends Controller
             'user_agent'  => $request->userAgent(),
         ]);
 
-        return ApiResponse::success(new UserResource($user->fresh()), 'Profile updated');
+        return ApiResponse::success(new UserResource($user->fresh()->load([
+            'company.modules',
+            'company.admin:id,name',
+            'companyAssignments.company:id,name',
+            'userCompanyPermissions',
+            'permissions',
+            'createdBy:id,name',
+        ])), 'Profile updated');
     }
 
     public function uploadAvatar(Request $request): JsonResponse
@@ -84,7 +98,14 @@ class ProfileController extends Controller
             'user_agent'  => $request->userAgent(),
         ]);
 
-        return ApiResponse::success(new UserResource($user->fresh()), 'Avatar updated');
+        return ApiResponse::success(new UserResource($user->fresh()->load([
+            'company.modules',
+            'company.admin:id,name',
+            'companyAssignments.company:id,name',
+            'userCompanyPermissions',
+            'permissions',
+            'createdBy:id,name',
+        ])), 'Avatar updated');
     }
 
     public function changePassword(Request $request): JsonResponse
