@@ -150,13 +150,30 @@ export default function ClientProjectDetailPage() {
       const fd = new FormData();
       if (chatText.trim()) fd.append('content', chatText.trim());
       if (chatFile) fd.append('file', chatFile);
+      selectedMentions.forEach(uid => fd.append('mentions[]', String(uid)));
       await clientService.projectChatSend(Number(id), fd);
       setChatText('');
       setChatFile(null);
+      setSelectedMentions([]);
+      setMentionQuery(null);
       loadChat();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to send message');
     } finally { setChatSending(false); }
+  };
+
+  const mentionables = chat?.mentionables ?? [];
+  const mentionNameById = Object.fromEntries(mentionables.map(m => [m.user_id, m.name ?? ''])) as Record<number, string>;
+
+  const onChatTextChange = (v: string) => {
+    setChatText(v);
+    setMentionQuery(mentionQueryOf(v));
+  };
+
+  const pickMention = (userId: number, name: string) => {
+    setChatText(t => applyMention(t, name));
+    setSelectedMentions(prev => prev.includes(userId) ? prev : [...prev, userId]);
+    setMentionQuery(null);
   };
 
   const downloadChatAttachment = async (messageId: number, fileName: string) => {
@@ -439,7 +456,7 @@ export default function ClientProjectDetailPage() {
                       border: isMe ? 'none' : '1px solid #e2e8f0',
                       fontSize: 13, whiteSpace: 'pre-wrap',
                     }}>
-                      {msg.content}
+                      {renderWithMentions(msg.content, msg.mentions, mentionNameById, isMe ? MENTION_STYLE_MINE : MENTION_STYLE)}
                       {msg.attachment_name && (
                         <button
                           onClick={() => downloadChatAttachment(msg.id, msg.attachment_name)}
@@ -461,7 +478,20 @@ export default function ClientProjectDetailPage() {
             <div ref={chatBottomRef} />
           </div>
 
-          <form onSubmit={sendChat} style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9' }}>
+          <form onSubmit={sendChat} style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', position: 'relative' }}>
+            {/* Tag suggestions — exactly who the server will accept, so a tag
+                is never silently dropped on send. */}
+            {mentionQuery !== null && matchMentionables(mentionables, mentionQuery).length > 0 && (
+              <div style={{ position: 'absolute', bottom: '100%', left: 16, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: 6, maxHeight: 180, overflowY: 'auto', minWidth: 200, zIndex: 5 }}>
+                {matchMentionables(mentionables, mentionQuery).map(p => (
+                  <div key={p.user_id} onClick={() => pickMention(p.user_id, p.name ?? '')} style={{ padding: '7px 12px', fontSize: 12.5, cursor: 'pointer', color: '#334155' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                    {p.name} {p.role_type && <span style={{ color: '#94a3b8', fontSize: 11 }}>({roleLabel(p.role_type)})</span>}
+                  </div>
+                ))}
+              </div>
+            )}
             {chatFile && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12, color: '#334155' }}>
                 <span>📎 {chatFile.name}</span>
@@ -476,8 +506,8 @@ export default function ClientProjectDetailPage() {
               </label>
               <input
                 value={chatText}
-                onChange={e => setChatText(e.target.value)}
-                placeholder="Type a message about this project…"
+                onChange={e => onChatTextChange(e.target.value)}
+                placeholder="Type a message… use @ to tag"
                 style={{ flex: 1, padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' }}
               />
               <button
