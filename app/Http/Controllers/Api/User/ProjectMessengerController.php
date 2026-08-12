@@ -662,7 +662,7 @@ class ProjectMessengerController extends Controller
                     'type'  => 'mentioned_in_project_chat',
                     'title' => "You were mentioned on {$project->name}",
                     'body'  => "{$senderName}: {$preview}",
-                    'url'   => "/projects/{$project->id}/chat",
+                    'url'   => "/admin/projects/{$project->id}/chat",
                 ]);
                 continue;
             }
