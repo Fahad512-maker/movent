@@ -142,7 +142,7 @@ const USER_NAV_GROUPS = [
       { href: '/leads',            icon: HiUserGroup,    label: 'Leads',        module: 'leads', permAny: ['canViewLeads'] },
       { href: '/leads/follow-ups', icon: HiCalendarDays, label: 'Follow-ups',   module: 'leads', permAny: ['canViewLeads'] },
       // Visible only when Sales is purchased but full Client module is NOT
-      { href: '/clients', icon: HiUsers, label: 'Basic Clients', module: 'leads', hideIfModule: 'clients', permAny: ['canViewClients'] },
+      { href: '/clients', icon: HiUsers, label: 'Clients', module: 'leads', hideIfModule: 'clients', permAny: ['canViewClients'] },
       { href: '/invoices', icon: HiBanknotes, label: 'Sales Invoices', module: 'invoices', permAny: ['canViewInvoices'] },
       { href: '/sales/targets', icon: HiCurrencyDollar, label: 'Targets', module: 'leads', permAny: ['canViewSalesTargets'] },
       { href: '/sales/reports', icon: HiChartBar, label: 'Sales Reports', module: 'leads', permAny: ['canViewSalesReports'] },
