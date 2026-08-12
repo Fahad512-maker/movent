@@ -5,6 +5,24 @@ export const inp: React.CSSProperties = {
   fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', background: '#fff',
 };
 export const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 };
+
+// Shown on every control a draft project disables — tasks, timesheets,
+// files, comments and chat. Matches Project::DRAFT_BLOCKED_MESSAGE, which is
+// what the server answers if one of those is called anyway.
+export const DRAFT_HINT = 'This project is still a draft. Activate it first — tasks, timesheets, files, comments and chat all open up once it is active.';
+
+// The banner that explains a disabled page, rather than leaving the user to
+// guess why everything is greyed out.
+export function DraftNotice({ style }: { style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a',
+      borderRadius: 8, fontSize: 12.5, color: '#92400e', ...style,
+    }}>
+      📝 <strong>Draft project.</strong> {DRAFT_HINT}
+    </div>
+  );
+}
 export const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '24px 28px', marginBottom: 20 };
 
 export const STATUS_SC: Record<string, { bg: string; color: string }> = {

@@ -151,7 +151,9 @@ class ProjectClientChatController extends Controller
         })->values();
 
         return ApiResponse::success([
-            'project'  => ['id' => $project->id, 'name' => $project->name],
+            // status drives the composer's draft lock on the page — a draft
+            // rejects sends server-side (store()'s isDraft() guard).
+            'project'  => ['id' => $project->id, 'name' => $project->name, 'status' => $project->status],
             // 'seller' owns the conversation and its invite controls; 'pm' is
             // a guest who can read (within their history window) and reply.
             'role'     => $role,
@@ -286,6 +288,11 @@ class ProjectClientChatController extends Controller
     public function store(Request $request, int $projectId): JsonResponse
     {
         [$project] = $this->project($projectId);
+
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $thread  = ProjectClientChatService::threadFor($project);
         $user    = $this->user();
 

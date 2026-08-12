@@ -382,6 +382,10 @@ class ProjectCommentController extends Controller
 
         $project = $this->project($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $validated = $request->validate([
             'task_id'              => ['nullable', 'integer', 'exists:tasks,id'],
             'deliverable_id'       => ['nullable', 'integer', 'exists:deliverables,id'],

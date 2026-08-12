@@ -46,6 +46,22 @@ class Project extends Model
         return $query->where('status', '!=', 'draft');
     }
 
+    // A draft isn't work yet, so nothing that PRODUCES work may happen on it:
+    // no tasks, timesheets, files, deliverables, comments or chat messages
+    // (see the isDraft() guards across Api\User\* and Api\Admin\*). Setting
+    // the project UP is still allowed — editing it, naming a PM, assigning a
+    // team or seller, linking invoices — since that is exactly what someone
+    // does before pressing Activate. Everything blocked here opens up the
+    // moment the project becomes active; no separate switch to flip.
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
+    // One wording for every guard, so a draft explains itself the same way
+    // wherever the user runs into it.
+    public const DRAFT_BLOCKED_MESSAGE = 'This project is still a draft. Activate it first — tasks, timesheets, files, comments and chat all open up once it is active.';
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

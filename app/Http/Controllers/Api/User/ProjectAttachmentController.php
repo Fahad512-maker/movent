@@ -119,6 +119,10 @@ class ProjectAttachmentController extends Controller
 
         $project = $this->visibleProject($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         // Upload (and the visibility it grants over a file) is Admin/PM
         // territory — hard-restricted to this project's actual assigned PM,
         // regardless of who else was left holding canUploadProjectAttachments

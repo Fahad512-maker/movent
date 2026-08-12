@@ -53,7 +53,9 @@ class ProjectClientChatController extends Controller
         $thread->load('participants.user:id,name,role_type');
 
         return ApiResponse::success([
-            'project'  => ['id' => $project->id, 'name' => $project->name],
+            // status drives the composer's draft lock on the page — a draft
+            // rejects sends server-side (store()'s isDraft() guard).
+            'project'  => ['id' => $project->id, 'name' => $project->name, 'status' => $project->status],
             // Admin may tag everyone in the conversation — but not the
             // "Company Admin" sentinel, which is Admin itself.
             'mentionables' => ProjectClientChatService::mentionablesFor($thread, null, false),
@@ -71,6 +73,11 @@ class ProjectClientChatController extends Controller
     public function store(Request $request, int $projectId): JsonResponse
     {
         $project = $this->project($projectId);
+
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $thread  = ProjectClientChatService::threadFor($project);
 
         $validated = $request->validate([

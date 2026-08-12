@@ -206,6 +206,10 @@ class ProductionController extends Controller
     {
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         if ($project->status === 'closed') {
             return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
         }

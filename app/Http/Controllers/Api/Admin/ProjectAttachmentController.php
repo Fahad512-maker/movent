@@ -45,6 +45,10 @@ class ProjectAttachmentController extends Controller
     {
         $project = $this->project($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $validated = $request->validate([
             'file'                 => ['required', 'file', 'max:' . self::MAX_FILE_KB, 'mimes:' . self::ALLOWED_MIMES],
             'is_visible_to_client' => ['nullable', 'boolean'],

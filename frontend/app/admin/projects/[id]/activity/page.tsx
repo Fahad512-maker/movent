@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, ActivityItem } from '@/lib/services/adminProjectService';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
-import { inp, card } from '@/components/admin/projects/shared';
+import { inp, card, DRAFT_HINT } from '@/components/admin/projects/shared';
 
 const ACTION_LABEL: Record<string, string> = {
   created: 'created', updated: 'updated', deleted: 'deleted', team_assigned: 'updated the team',
@@ -33,6 +33,10 @@ export default function ProjectActivityPage() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [posting, setPosting] = useState(false);
+  // Activity itself stays readable on a draft (it's just a log), but the
+  // tab strip must render locked here too, and a draft takes no comments —
+  // see Api\Admin\ProjectCommentController::store()'s isDraft() guard.
+  const [projectDraft, setProjectDraft] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -42,7 +46,10 @@ export default function ProjectActivityPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+    adminProjectService.getOne(projectId).then(p => setProjectDraft(p.status === 'draft')).catch(() => {});
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const postComment = async (e: { preventDefault(): void }) => {
     e.preventDefault();
@@ -66,13 +73,15 @@ export default function ProjectActivityPage() {
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Activity</h2>
       </div>
 
-      <ProjectTabs projectId={projectId} active="activity" />
+      <ProjectTabs projectId={projectId} active="activity" isDraft={projectDraft} />
 
       <form onSubmit={postComment} style={{ ...card, display: 'flex', gap: 10 }}>
-        <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Add a note or update…" style={inp} />
-        <button type="submit" disabled={posting} style={{
-          padding: '9px 20px', background: posting ? '#93c5fd' : '#2563eb', color: '#fff',
-          border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: posting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+        <input value={comment} onChange={e => setComment(e.target.value)} disabled={projectDraft} title={projectDraft ? DRAFT_HINT : undefined}
+          placeholder={projectDraft ? 'Comments open up once the project is activated' : 'Add a note or update…'}
+          style={{ ...inp, background: projectDraft ? '#f8fafc' : '#fff' }} />
+        <button type="submit" disabled={posting || projectDraft} title={projectDraft ? DRAFT_HINT : undefined} style={{
+          padding: '9px 20px', background: projectDraft ? '#cbd5e1' : (posting ? '#93c5fd' : '#2563eb'), color: '#fff',
+          border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: posting || projectDraft ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
         }}>{posting ? 'Posting…' : 'Post'}</button>
       </form>
 

@@ -9,7 +9,7 @@ import { Project, Task, TaskStatus, ProjectStatus, Priority, ProjectComment, Pro
 import { can, getAuthUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
-import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, PRODUCTION_SC, PRODUCTION_LABEL, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation } from '@/components/admin/projects/shared';
+import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, PRODUCTION_SC, PRODUCTION_LABEL, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
 import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses, taskStatusRequiresComment } from '@/lib/taskStatusFlow';
 import toast from 'react-hot-toast';
@@ -586,6 +586,14 @@ export default function UserProjectDetailPage() {
   if (loading) return <DashboardLayout title="Project"><div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>;
   if (!project) return null;
 
+  // A draft is a name-only stub that nobody has activated yet, so nothing
+  // that PRODUCES work is available on it — no tasks, files, comments or
+  // chat. Setting it up (edit, PM, team, seller, invoices) stays open, since
+  // that is exactly what happens before Activate. Mirrors the server-side
+  // guards (Project::isDraft()); everything here re-enables by itself the
+  // moment the project is activated.
+  const isDraft = project.status === 'draft';
+
   const tasks = project.tasks ?? [];
   const team = project.team_members ?? [];
   const projectManager = project.project_manager;
@@ -602,6 +610,7 @@ export default function UserProjectDetailPage() {
   return (
     <DashboardLayout title={project.name}>
       <div style={{ maxWidth: 1100 }}>
+        {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
         {/* ── Header ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -624,10 +633,17 @@ export default function UserProjectDetailPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push(`/projects/${id}/chat`)} style={{
-              padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
-              color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}>
+            {/* The Seller side has no tab strip — this button is its Chat
+                tab, so it locks on a draft like the Admin tabs do. */}
+            <button
+              onClick={() => !isDraft && router.push(`/projects/${id}/chat`)}
+              disabled={isDraft}
+              title={isDraft ? DRAFT_HINT : undefined}
+              style={{
+                padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
+                color: isDraft ? '#cbd5e1' : '#2563eb', fontSize: 13, fontWeight: 600,
+                cursor: isDraft ? 'not-allowed' : 'pointer',
+              }}>
               💬 Chat
             </button>
             <ProjectLifecycleActions
@@ -893,7 +909,11 @@ export default function UserProjectDetailPage() {
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>All Tasks ({tasks.length})</span>
             {canCreateAnyTask && project.status !== 'closed' && (
-              <button onClick={() => router.push(`/projects/${id}/tasks/create`)} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <button
+                onClick={() => !isDraft && router.push(`/projects/${id}/tasks/create`)}
+                disabled={isDraft}
+                title={isDraft ? DRAFT_HINT : undefined}
+                style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: isDraft ? '#cbd5e1' : '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: isDraft ? 'not-allowed' : 'pointer' }}>
                 {canCreateTasks ? '+ Create Task' : '+ Submit Request'}
               </button>
             )}
@@ -1012,14 +1032,17 @@ export default function UserProjectDetailPage() {
                       Visible to client
                     </label>
                   )}
-                  <label style={{
-                    padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
-                    background: uploading ? '#f1f5f9' : '#f8fafc', color: '#475569',
-                    fontSize: 12, fontWeight: 500, cursor: uploading ? 'not-allowed' : 'pointer',
-                  }}>
+                  <label
+                    title={isDraft ? DRAFT_HINT : undefined}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
+                      background: uploading || isDraft ? '#f1f5f9' : '#f8fafc', color: '#475569',
+                      fontSize: 12, fontWeight: 500, cursor: uploading || isDraft ? 'not-allowed' : 'pointer',
+                      opacity: isDraft ? 0.6 : 1,
+                    }}>
                     {uploading ? 'Uploading…' : '+ Add Files'}
                     <input
-                      type="file" multiple disabled={uploading} style={{ display: 'none' }}
+                      type="file" multiple disabled={uploading || isDraft} style={{ display: 'none' }}
                       accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                       onChange={e => { uploadAttachments(e.target.files); e.target.value = ''; }}
                     />
@@ -1245,9 +1268,10 @@ export default function UserProjectDetailPage() {
 
           {/* Composer — pinned below the thread, like a chat input bar */}
           <form onSubmit={addComment} style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
+            {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
             <div style={{ display: 'flex', gap: 10, position: 'relative' }}>
               <div style={{ flex: 1, position: 'relative' }}>
-                <input value={commentBody} onChange={e => handleCommentBodyChange(e.target.value)} placeholder="Add a comment… (@ to mention)" style={{ ...inp, borderRadius: 20 }} />
+                <input value={commentBody} onChange={e => handleCommentBodyChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Comments open up once the project is activated' : 'Add a comment… (@ to mention)'} style={{ ...inp, borderRadius: 20, background: isDraft ? '#f8fafc' : '#fff' }} />
                 {mentionQuery !== null && (mentionCandidates.filter(u => u.name.toLowerCase().includes(mentionQuery)).length > 0 || (mentionCandidates.length > 0 && 'all'.startsWith(mentionQuery))) && (
                   <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}>
                     {mentionCandidates.length > 0 && 'all'.startsWith(mentionQuery) && (
@@ -1267,12 +1291,12 @@ export default function UserProjectDetailPage() {
                   </div>
                 )}
               </div>
-              <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center' }} title="Attach a file">
+              <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: isDraft ? '#f8fafc' : '#fff', cursor: isDraft ? 'not-allowed' : 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', opacity: isDraft ? 0.5 : 1 }} title={isDraft ? DRAFT_HINT : 'Attach a file'}>
                 📎
-                <input type="file" style={{ display: 'none' }} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
+                <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                   onChange={e => { setCommentFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
               </label>
-              <button type="submit" disabled={postingComment} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: postingComment ? 'wait' : 'pointer', opacity: postingComment ? 0.7 : 1 }}>
+              <button type="submit" disabled={postingComment || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (postingComment ? 'wait' : 'pointer'), opacity: postingComment ? 0.7 : 1 }}>
                 {postingComment ? 'Posting…' : 'Send'}
               </button>
             </div>

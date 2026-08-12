@@ -256,6 +256,10 @@ class ProductionController extends Controller
         // not narrowed to visibleProject(), to avoid altering existing behavior.
         $project = Project::where('company_id', $user->company_id)->findOrFail($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         if ($project->status === 'closed') {
             return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
         }

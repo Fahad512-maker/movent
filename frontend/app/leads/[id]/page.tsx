@@ -204,7 +204,11 @@ export default function LeadDetailPage() {
       // must already reflect the conversion instead of still offering
       // "Convert to Client" on an already-converted lead.
       setLead(l => l ? { ...l, client_id } : l);
-      router.push(`/clients/${client_id}`);
+      // Admin and Seller share this page (app/admin/leads/[id]/page.tsx
+      // re-exports it), so the destination must follow the caller's own
+      // guard — an Admin sent to a Seller-guard route gets 401'd out to the
+      // login screen.
+      router.push(isAdmin ? `/admin/clients/${client_id}` : `/clients/${client_id}`);
     } catch (err: unknown) {
       const ex = err as { response?: { data?: { message?: string } } };
       setError(ex.response?.data?.message ?? 'Conversion failed');
@@ -350,7 +354,7 @@ export default function LeadDetailPage() {
                   makes a project eligible). */}
               {hasProjectMod && canCreateProject && lead.status === 'won' && (
                 dealEligibility?.has_project ? (
-                  <button onClick={() => dealEligibility.project_id && router.push(`/projects/${dealEligibility.project_id}`)}
+                  <button onClick={() => dealEligibility.project_id && router.push(isAdmin ? `/admin/projects/${dealEligibility.project_id}` : `/projects/${dealEligibility.project_id}`)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #7c3aed, #a78bfa)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     <HiFolderPlus size={15} /> View Project {dealEligibility.project_reference}
                   </button>

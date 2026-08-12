@@ -8,7 +8,7 @@ import { adminProjectService, Task, ProjectTaskAttachment } from '@/lib/services
 import { userService } from '@/lib/services/userService';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import Link from 'next/link';
-import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, PRODUCTION_SC, PRODUCTION_LABEL, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation } from '@/components/admin/projects/shared';
+import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, PRODUCTION_SC, PRODUCTION_LABEL, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import { TASK_STATUS_LABELS, taskStatusRequiresComment, promptForQaUser, promptForOptionalProductionUser } from '@/lib/taskStatusFlow';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
@@ -49,6 +49,9 @@ export default function ProjectTasksPage() {
   // Only fetched to know whether the project is closed (read-only) — hides
   // "+ Add Task"/row actions rather than letting the backend 422 on submit.
   const [projectClosed, setProjectClosed] = useState(false);
+  // A draft can't have tasks until it's activated — see the isDraft() guard
+  // in Api\Admin\TaskController::store().
+  const [projectDraft, setProjectDraft] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -62,6 +65,7 @@ export default function ProjectTasksPage() {
     load();
     adminProjectService.getOne(projectId).then(p => {
       setProjectClosed(p.status === 'closed');
+      setProjectDraft(p.status === 'draft');
       // Only this project's own team members are assignable — not every
       // active user of the company (same fix already applied to the
       // Projects listing's PM dropdown, the all-Tasks page, and
@@ -239,14 +243,21 @@ export default function ProjectTasksPage() {
         }}>← Back</button>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0, flex: 1 }}>Tasks</h2>
         {!projectClosed && (
-          <button onClick={() => (showForm ? cancelForm() : setShowForm(true))} style={{
-            padding: '9px 18px', background: '#2563eb', color: '#fff',
-            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>{showForm ? 'Cancel' : '+ Add Task'}</button>
+          <button
+            onClick={() => (showForm ? cancelForm() : setShowForm(true))}
+            disabled={projectDraft}
+            title={projectDraft ? DRAFT_HINT : undefined}
+            style={{
+              padding: '9px 18px', background: projectDraft ? '#cbd5e1' : '#2563eb', color: '#fff',
+              border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              cursor: projectDraft ? 'not-allowed' : 'pointer',
+            }}>{showForm ? 'Cancel' : '+ Add Task'}</button>
         )}
       </div>
 
-      <ProjectTabs projectId={projectId} active="tasks" />
+      <ProjectTabs projectId={projectId} active="tasks" isDraft={projectDraft} />
+
+      {projectDraft && <DraftNotice style={{ marginBottom: 16 }} />}
 
       {showForm && (
         <form onSubmit={submit} style={card}>

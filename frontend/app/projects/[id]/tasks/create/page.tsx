@@ -65,6 +65,14 @@ export default function CreateTaskPage() {
           router.replace(`/projects/${projectId}`);
           return;
         }
+        // Same rule the server enforces (TaskController::store()'s isDraft()
+        // guard) — a draft has no tasks until someone activates it. Reached
+        // only by a typed URL; the button that leads here is disabled.
+        if (p.status === 'draft') {
+          toast.error('Activate this draft project before adding tasks.');
+          router.replace(`/projects/${projectId}`);
+          return;
+        }
         setProjectName(p.name);
         const fromTeam = (p.team_members ?? []).map(m => m.user).filter((u): u is AssigneeOption => !!u);
         const options = [...fromTeam];

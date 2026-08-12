@@ -174,6 +174,11 @@ class ProjectChatController extends Controller
     public function store(Request $request, int $projectId): JsonResponse
     {
         [$project, $mode, $tier] = $this->projectForChat($projectId);
+
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $thread = $this->threadFor($project);
 
         $validated = $request->validate([

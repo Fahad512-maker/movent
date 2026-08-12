@@ -165,6 +165,11 @@ class ProjectMessengerController extends Controller
     public function send(Request $request, int $projectId): JsonResponse
     {
         $project = $this->project($projectId);
+
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $thread = ProjectChatService::threadFor($project);
 
         $validated = $request->validate([

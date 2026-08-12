@@ -6,7 +6,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import toast from 'react-hot-toast';
 import { getAuthUser } from '@/lib/auth';
 import { User } from '@/types';
-import { inp, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
+import { inp, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import { userProjectClientChatService, ProjectClientChatPayload } from '@/lib/services/projectClientChatService';
 import { ChatMessage } from '@/lib/services/adminProjectService';
 import { mentionQueryOf, matchMentionables, applyMention, renderWithMentions, roleLabel } from '@/lib/chatMentions';
@@ -126,6 +126,10 @@ export default function ProjectClientChatPage() {
       toast.error(err?.response?.data?.message || 'Failed to notify Company Admin');
     } finally { setNotifying(false); }
   };
+
+  // A draft project accepts no messages (server-side too) — the composer
+  // locks itself and re-opens by itself once the project is activated.
+  const isDraft = data?.project?.status === 'draft';
 
   const mentionables = data?.mentionables ?? [];
   const nameById = Object.fromEntries(mentionables.map(m => [m.user_id, m.name ?? ''])) as Record<number, string>;
@@ -302,14 +306,15 @@ export default function ProjectClientChatPage() {
                     <button type="button" onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
                   </div>
                 )}
+                {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center' }}>
+                  <label title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: isDraft ? '#f8fafc' : '#fff', cursor: isDraft ? 'not-allowed' : 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', opacity: isDraft ? 0.5 : 1 }}>
                     📎
-                    <input type="file" style={{ display: 'none' }} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
+                    <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                       onChange={e => { setFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
                   </label>
-                  <input value={text} onChange={e => onTextChange(e.target.value)} placeholder="Message the client… use @ to tag" style={{ ...inp, borderRadius: 20, flex: 1 }} />
-                  <button type="submit" disabled={sending} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: sending ? '#a7f3d0' : '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: sending ? 'wait' : 'pointer' }}>Send</button>
+                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : 'Message the client… use @ to tag'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
+                  <button type="submit" disabled={sending || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : (sending ? '#a7f3d0' : '#059669'), color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (sending ? 'wait' : 'pointer') }}>Send</button>
                 </div>
               </form>
             </>

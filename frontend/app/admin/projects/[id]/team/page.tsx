@@ -47,6 +47,10 @@ export default function ProjectTeamPage() {
   const role: TeamRole = 'team_member';
   const [saving, setSaving]   = useState(false);
   const [projectClosed, setProjectClosed] = useState(false);
+  // Reached only by a typed URL while the project is a draft — the tab
+  // itself is disabled. Kept so the tab strip renders in the same locked
+  // state here as everywhere else.
+  const [projectDraft, setProjectDraft] = useState(false);
   // The project's linked Seller (project.seller_id) — deliberately NOT part
   // of `members`/TEAM_ELIGIBLE_ROLES below. A Seller is never a real
   // project_team_members row (see Api\User\ProjectMessengerController/
@@ -61,6 +65,7 @@ export default function ProjectTeamPage() {
       const p = await adminProjectService.getOne(projectId);
       setMembers(p.team_members ?? []);
       setProjectClosed(p.status === 'closed');
+      setProjectDraft(p.status === 'draft');
       setProjectCompanyId(p.company_id);
       setSeller(p.seller ?? null);
     } catch { toast.error('Failed to load team'); }
@@ -110,7 +115,7 @@ export default function ProjectTeamPage() {
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Team</h2>
       </div>
 
-      <ProjectTabs projectId={projectId} active="team" />
+      <ProjectTabs projectId={projectId} active="team" isDraft={projectDraft} />
 
       <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>

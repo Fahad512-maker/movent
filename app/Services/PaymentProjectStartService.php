@@ -3,11 +3,15 @@
 namespace App\Services;
 
 use App\Mail\ProjectStartRequiresFullPaymentMail;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyDealSettings;
 use App\Models\Invoice;
+use App\Models\Lead;
 use App\Models\Notification;
 use App\Models\Project;
+use App\Models\ProjectTeamMember;
+use App\Models\User;
 use App\Models\UserCompanyPermission;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -86,6 +90,8 @@ class PaymentProjectStartService
             return null;
         }
 
+        $creator = self::activeUser($invoice->created_by, $invoice->company_id);
+
         $project = Project::create([
             'company_id' => $invoice->company_id,
             'client_id'  => $invoice->client_id,
@@ -99,18 +105,146 @@ class PaymentProjectStartService
             'source'     => $invoice->status === 'paid'
                 ? 'paid_invoice_auto_start'
                 : 'partial_paid_invoice_auto_start',
+            // Whichever guard raised the invoice, so "Created By" names the
+            // real person instead of sitting blank.
+            'created_by'          => $creator?->id,
+            'created_by_admin_id' => $invoice->created_by_admin_id,
         ]);
 
         // Complete the back-link, exactly as the manual handoff does.
         $invoice->update(['project_id' => $project->id]);
 
-        // No project folders and no team members yet: this is a name-only stub.
-        // Both get created when someone activates it and fills in the details —
-        // see Api\*\ProjectController::activate().
+        self::assignOwner($project, $invoice, $creator);
+
+        // No project folders yet: this is still a name-only stub, and folders
+        // are created when someone activates it — see
+        // Api\*\ProjectController::activate().
 
         self::notifyDraftAwaitingActivation($project, $invoice);
 
         return $project;
+    }
+
+    /**
+     * Who this auto-started project belongs to. Before this, an auto-created
+     * project landed with created_by, seller_id and project_manager_id all
+     * null — it belonged to nobody, showed "Unassigned", and never appeared
+     * in the project list of the person whose deal it was.
+     *
+     * First choice is the invoice's own creator, which covers every sub-user
+     * who can raise one — a Seller, a Project Manager, or a Manager holding
+     * the invoicing permission.
+     *
+     * A Company Admin-raised invoice has no such user: Admin isn't a `users`
+     * row, and project_manager_id/seller_id are `users` FKs, so the Admin
+     * literally cannot be assigned. Rather than leave the project ownerless,
+     * it falls to whoever the DEAL belongs to — the lead's current owner
+     * (transferred_to, else assigned_to) or the client's account manager.
+     * That is the person the Admin raised the invoice on behalf of. The same
+     * fallback catches an invoice whose creator has since been deactivated;
+     * assigning work to a disabled account would hide the project from
+     * everyone.
+     */
+    private static function ownerFor(Invoice $invoice, ?User $creator): ?User
+    {
+        if ($creator) {
+            return $creator;
+        }
+
+        $lead = $invoice->lead_id ? Lead::find($invoice->lead_id) : null;
+
+        $candidates = [
+            // A transferred lead's CURRENT owner is transferred_to; the
+            // original assignee is only the fallback.
+            $lead?->transferred_to,
+            $lead?->assigned_to,
+            $invoice->client_id ? Client::where('id', $invoice->client_id)->value('account_manager') : null,
+        ];
+
+        foreach ($candidates as $candidateId) {
+            if ($owner = self::activeUser($candidateId, $invoice->company_id)) {
+                return $owner;
+            }
+        }
+
+        return null;
+    }
+
+    private static function activeUser(?int $userId, int $companyId): ?User
+    {
+        return $userId
+            ? User::where('id', $userId)
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->first(['id', 'name', 'role_type'])
+            : null;
+    }
+
+    /**
+     * Hands the freshly created project to its owner.
+     *
+     * A Seller owner goes through ProjectSellerAssignmentService::assign() —
+     * the same path Admin's "Assign Seller" action and the manual handoff
+     * use — so seller_id, the project_seller_assignments history row, the
+     * audit log, the project chat membership and the "Project assigned to
+     * you" notification all happen exactly as they would for a hand-assigned
+     * seller. NotificationService's own self-skip means the seller who raised
+     * the invoice themselves isn't notified twice (they already get the
+     * draft-awaiting-activation one); a seller who inherited an Admin-raised
+     * invoice IS told, since nothing else would have told them.
+     *
+     * Any other owner (Project Manager, Manager) just takes project_manager_id,
+     * exactly as Api\User\ProjectController::store() defaults the creator to
+     * PM when they don't name someone else.
+     *
+     * Either way the owner also needs a ProjectTeamMember row, or
+     * visibleProjects()'s team-membership leg never actually grants them
+     * access to the project they own — the same reason store() writes that
+     * row straight after creating a project.
+     */
+    private static function assignOwner(Project $project, Invoice $invoice, ?User $creator): void
+    {
+        $owner = self::ownerFor($invoice, $creator);
+
+        if (!$owner) {
+            return;
+        }
+
+        try {
+            $sellerService = app(ProjectSellerAssignmentService::class);
+            $seller = $owner->role_type === 'seller'
+                ? $sellerService->assignableSeller($project->company_id, $owner->id)
+                : null;
+
+            if ($seller) {
+                $sellerService->assign(
+                    $project,
+                    $seller,
+                    "Auto-assigned from invoice {$invoice->invoice_number}",
+                    $creator?->id,
+                    $creator ? null : $invoice->created_by_admin_id,
+                    $creator?->name ?? 'Company Admin'
+                );
+                $project->refresh();
+            }
+
+            // assign() already fills project_manager_id when it was empty;
+            // this covers every other owner, and a Seller whose account no
+            // longer passes assignableSeller() (display only either way —
+            // isPM()/isInternalStaff() hard-exclude role_type='seller').
+            if (!$project->project_manager_id) {
+                $project->update(['project_manager_id' => $owner->id]);
+            }
+
+            ProjectTeamMember::updateOrCreate(
+                ['project_id' => $project->id, 'user_id' => $project->project_manager_id],
+                ['role_in_project' => 'project_manager', 'assigned_by' => $creator?->id]
+            );
+        } catch (\Throwable $e) {
+            // Same swallow-and-log posture as handle() — a project that got
+            // created must never be undone by a follow-up write failing.
+            Log::warning('[project-start] project ' . $project->id . ' owner assign: ' . $e->getMessage());
+        }
     }
 
     /**

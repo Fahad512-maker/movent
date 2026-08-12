@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, ProjectAttachment, ProjectTaskAttachment, Task } from '@/lib/services/adminProjectService';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
-import { card, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES } from '@/components/admin/projects/shared';
+import { card, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 
 interface TaskAttachmentGroup {
   task: Task;
@@ -24,6 +24,9 @@ export default function ProjectAttachmentsPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [visibleToClient, setVisibleToClient] = useState(false);
+  // Files can't be added to a draft — see the isDraft() guard in
+  // Api\Admin\ProjectAttachmentController::store().
+  const [projectDraft, setProjectDraft] = useState(false);
 
   // Task-level attachments are a separate feature/table from the project-
   // level ones above (see Api\Admin\TaskAttachmentController) — shown here
@@ -53,7 +56,11 @@ export default function ProjectAttachmentsPage() {
     finally { setTaskAttLoading(false); }
   };
 
-  useEffect(() => { load(); loadTaskAttachments(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+    loadTaskAttachments();
+    adminProjectService.getOne(projectId).then(p => setProjectDraft(p.status === 'draft')).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const downloadTaskAttachment = async (taskId: number, a: ProjectTaskAttachment) => {
     try { await adminProjectService.taskAttachments.download(projectId, taskId, a.id, a.original_name); }
@@ -103,7 +110,9 @@ export default function ProjectAttachmentsPage() {
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Attachments</h2>
       </div>
 
-      <ProjectTabs projectId={projectId} active="attachments" />
+      <ProjectTabs projectId={projectId} active="attachments" isDraft={projectDraft} />
+
+      {projectDraft && <DraftNotice style={{ marginBottom: 16 }} />}
 
       <div style={{ ...card, marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -116,14 +125,17 @@ export default function ProjectAttachmentsPage() {
               />
               Visible to client
             </label>
-            <label style={{
-              padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
-              background: uploading ? '#f1f5f9' : '#f8fafc', color: '#475569',
-              fontSize: 12, fontWeight: 500, cursor: uploading ? 'not-allowed' : 'pointer',
-            }}>
+            <label
+              title={projectDraft ? DRAFT_HINT : undefined}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
+                background: uploading || projectDraft ? '#f1f5f9' : '#f8fafc', color: '#475569',
+                fontSize: 12, fontWeight: 500, cursor: uploading || projectDraft ? 'not-allowed' : 'pointer',
+                opacity: projectDraft ? 0.6 : 1,
+              }}>
               {uploading ? 'Uploading…' : '+ Add Files'}
               <input
-                type="file" multiple disabled={uploading} style={{ display: 'none' }}
+                type="file" multiple disabled={uploading || projectDraft} style={{ display: 'none' }}
                 accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                 onChange={e => { uploadAttachments(e.target.files); e.target.value = ''; }}
               />

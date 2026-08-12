@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\Timesheet;
 use App\Models\UserCompanyPermission;
@@ -54,8 +55,16 @@ class TimesheetController extends Controller
             'notes'        => ['nullable', 'string'],
         ]);
 
-        Task::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
+        $task = Task::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
+            ->with('project:id,status')
             ->findOrFail($validated['task_id']);
+
+        // Time is logged against a task, and a draft project can't have tasks
+        // (see TaskController::store()) — this covers a task that predates
+        // that guard, so no hours can be booked to work that hasn't started.
+        if ($task->project?->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
 
         $validated['user_id'] = $user->id;
         $validated['status']  = 'pending';

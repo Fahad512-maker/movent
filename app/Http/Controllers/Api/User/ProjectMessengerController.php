@@ -413,6 +413,10 @@ class ProjectMessengerController extends Controller
         $project = $this->project($projectId);
         $user = $this->user();
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         if (!$this->can('canSendProjectChatMessage')) {
             return ApiResponse::error('You do not have permission to send project chat messages.', 403);
         }

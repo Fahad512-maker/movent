@@ -30,7 +30,9 @@ export interface ProjectClientChatPm {
 }
 
 export interface ProjectClientChatPayload {
-  project: { id: number; name: string };
+  // status is here so the composer can lock itself on a draft project,
+  // matching the server's own isDraft() rejection.
+  project: { id: number; name: string; status?: string };
   // Everyone the caller may @mention — the rest of the conversation, plus a
   // synthetic { user_id: 0, name: 'Company Admin' } entry for every caller
   // except Admin itself.

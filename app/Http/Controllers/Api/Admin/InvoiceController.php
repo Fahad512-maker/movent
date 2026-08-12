@@ -190,6 +190,10 @@ class InvoiceController extends Controller
             'payment_type'                      => $data['payment_type']             ?? null,
             'required_payment_amount'           => $data['required_payment_amount']  ?? null,
             'counts_toward_project_activation'  => $data['counts_toward_project_activation'] ?? true,
+            // The sub-user side writes created_by; Admin isn't a `users` row,
+            // so it records itself here instead. Both are what
+            // PaymentProjectStartService hands the project it auto-creates.
+            'created_by_admin_id'               => $this->admin()->id,
         ]);
 
         foreach ($data['items'] as $i => $item) {

@@ -10,7 +10,7 @@ import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
-import { card, lbl, inp, Badge, ThumbIcon, STATUS_SC, PRIORITY_SC, fmtDate, ALLOWED_ATTACHMENT_TYPES, fmtFileSize, asRelation } from '@/components/admin/projects/shared';
+import { card, lbl, inp, Badge, ThumbIcon, STATUS_SC, PRIORITY_SC, fmtDate, ALLOWED_ATTACHMENT_TYPES, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 
 // Groups a flat, newest-first comment list into proper reply threads — each
 // root comment immediately followed by all of its replies (oldest first,
@@ -327,8 +327,13 @@ export default function ProjectOverviewPage() {
   if (loading) return (<DashboardLayout title="Project"><div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>);
   if (!project) return (<DashboardLayout title="Project"><div style={{ padding: 60, textAlign: 'center', color: '#dc2626' }}>Project not found.</div></DashboardLayout>);
 
+  // See the Seller-side twin (app/projects/[id]/page.tsx) — a draft only
+  // allows SETUP; everything that produces work stays disabled until Activate.
+  const isDraft = project.status === 'draft';
+
   return (
     <DashboardLayout title="Project">
+      {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <button onClick={() => router.push('/admin/projects')} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -361,7 +366,7 @@ export default function ProjectOverviewPage() {
         }}>Delete</button>
       </div>
 
-      <ProjectTabs projectId={Number(id)} active="overview" />
+      <ProjectTabs projectId={Number(id)} active="overview" isDraft={isDraft} />
 
       <div>
         <div style={card}>
@@ -641,11 +646,14 @@ export default function ProjectOverviewPage() {
 
             {/* Composer — pinned below the thread, like a chat input bar */}
             <form onSubmit={addComment} style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
+              {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <input
                     value={commentBody} onChange={e => handleCommentBodyChange(e.target.value)}
-                    placeholder="Write a comment… (@ to mention)" style={{ ...inp, borderRadius: 20 }}
+                    disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined}
+                    placeholder={isDraft ? 'Comments open up once the project is activated' : 'Write a comment… (@ to mention)'}
+                    style={{ ...inp, borderRadius: 20, background: isDraft ? '#f8fafc' : '#fff' }}
                   />
                   {mentionQuery !== null && (mentionCandidates.filter(u => u.name.toLowerCase().includes(mentionQuery)).length > 0 || (mentionCandidates.length > 0 && 'all'.startsWith(mentionQuery))) && (
                     <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}>
@@ -666,14 +674,14 @@ export default function ProjectOverviewPage() {
                     </div>
                   )}
                 </div>
-                <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center' }} title="Attach a file">
+                <label title={isDraft ? DRAFT_HINT : 'Attach a file'} style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: isDraft ? '#f8fafc' : '#fff', cursor: isDraft ? 'not-allowed' : 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', opacity: isDraft ? 0.5 : 1 }}>
                   📎
-                  <input type="file" style={{ display: 'none' }} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
+                  <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                     onChange={e => { setCommentFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
                 </label>
-                <button type="submit" disabled={postingComment} style={{
-                  padding: '9px 20px', borderRadius: 20, border: 'none', background: '#2563eb', color: '#fff',
-                  fontSize: 13, fontWeight: 600, cursor: postingComment ? 'wait' : 'pointer', opacity: postingComment ? 0.7 : 1,
+                <button type="submit" disabled={postingComment || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{
+                  padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : '#2563eb', color: '#fff',
+                  fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (postingComment ? 'wait' : 'pointer'), opacity: postingComment ? 0.7 : 1,
                 }}>Send</button>
               </div>
               {commentFile && (

@@ -11,7 +11,11 @@ use Illuminate\Support\Str;
 class Invoice extends Model
 {
     protected $fillable = [
-        'company_id', 'client_id', 'lead_id', 'project_id', 'project_title', 'project_reference', 'created_by', 'sent_by', 'invoice_number', 'subtotal',
+        // created_by is a `users` id; created_by_admin_id is set instead when
+        // a Company Admin raised the invoice (Admin isn't a `users` row) —
+        // together they name whoever the project this invoice starts gets
+        // assigned to. See App\Services\PaymentProjectStartService.
+        'company_id', 'client_id', 'lead_id', 'project_id', 'project_title', 'project_reference', 'created_by', 'created_by_admin_id', 'sent_by', 'invoice_number', 'subtotal',
         'tax_rate', 'tax_amount', 'discount_amount', 'total_amount', 'paid_amount',
         'currency', 'status', 'due_date', 'notes', 'sent_at',
         'payment_token', 'token_expires_at',

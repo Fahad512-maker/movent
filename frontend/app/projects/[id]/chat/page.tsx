@@ -6,7 +6,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import toast from 'react-hot-toast';
 import { can, getAuthUser } from '@/lib/auth';
 import { User } from '@/types';
-import { inp, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
+import { inp, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import {
   userProjectMessengerService, ProjectMessengerThread, ProjectMessengerEligibleUser, ProjectMessengerParticipant,
 } from '@/lib/services/projectMessengerService';
@@ -52,6 +52,10 @@ export default function ProjectChatPage() {
   const canDeleteAny = mounted && can('project_management', 'canDeleteAnyProjectChatMessage');
 
   const [projectName, setProjectName] = useState('');
+  // A draft project rejects messages server-side (ProjectMessengerController::
+  // send()'s isDraft() guard) — the composer locks to match, and re-opens
+  // by itself once the project is activated.
+  const [isDraft, setIsDraft] = useState(false);
   const [clientId, setClientId] = useState<number | null>(null);
   const [thread, setThread] = useState<ProjectMessengerThread | null>(null);
   const [isPM, setIsPM] = useState(false);
@@ -100,7 +104,7 @@ export default function ProjectChatPage() {
 
   useEffect(() => {
     loadThread();
-    userProjectService.getOne(projectId).then(p => { setProjectName(p.name); setClientId(p.client_id); }).catch(() => {});
+    userProjectService.getOne(projectId).then(p => { setProjectName(p.name); setClientId(p.client_id); setIsDraft(p.status === 'draft'); }).catch(() => {});
     const interval = setInterval(() => { loadThread(); }, 8000);
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -389,14 +393,15 @@ export default function ProjectChatPage() {
                     <button type="button" onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
                   </div>
                 )}
+                {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center' }}>
+                  <label title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: isDraft ? '#f8fafc' : '#fff', cursor: isDraft ? 'not-allowed' : 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', opacity: isDraft ? 0.5 : 1 }}>
                     📎
-                    <input type="file" style={{ display: 'none' }} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
+                    <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                       onChange={e => { setFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
                   </label>
-                  <input value={text} onChange={e => onTextChange(e.target.value)} placeholder="Type a message… use @ to mention" style={{ ...inp, borderRadius: 20, flex: 1 }} />
-                  <button type="submit" disabled={sending} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: sending ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: sending ? 'wait' : 'pointer' }}>Send</button>
+                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : 'Type a message… use @ to mention'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
+                  <button type="submit" disabled={sending || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : (sending ? '#93c5fd' : '#2563eb'), color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (sending ? 'wait' : 'pointer') }}>Send</button>
                 </div>
               </form>
             </>

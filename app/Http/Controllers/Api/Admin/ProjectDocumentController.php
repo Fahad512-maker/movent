@@ -45,6 +45,10 @@ class ProjectDocumentController extends Controller
     {
         $project = $this->project($projectId);
 
+        if ($project->isDraft()) {
+            return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
+        }
+
         $validated = $request->validate([
             'file'                  => ['required', 'file', 'max:20480'],
             'folder'                => ['required', 'string'],

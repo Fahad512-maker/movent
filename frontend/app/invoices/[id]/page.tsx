@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { adminInvoiceService } from '@/lib/services/adminInvoiceService';
 import api from '@/lib/axios';
-import { getAuthType, can } from '@/lib/auth';
+import { getAuthType } from '@/lib/auth';
 import { Invoice, InvoicePayment } from '@/types';
 import {
   HiArrowLeft, HiPencilSquare, HiPaperAirplane, HiXCircle,
@@ -56,7 +56,6 @@ export default function InvoiceDetailPage() {
 
   const isSubUser = getAuthType() === 'user';
   const isAdmin   = getAuthType() === 'admin';
-  const canHandoff = isAdmin || can('project_management', 'canCreateProjectHandoff');
 
   const load = () => {
     const fetch = isSubUser
@@ -227,27 +226,18 @@ export default function InvoiceDetailPage() {
                   <HiXCircle size={14} /> Cancel
                 </button>
               )}
-              {/* Create Project Handoff — once this invoice is paid and not
-                  already linked to a project. Visible to Admin and Seller
-                  alike (unlike the admin-only buttons above). */}
-              {canHandoff && invoice.status === 'paid' && !invoice.project_id && (
-                <button onClick={() => router.push(isAdmin ? `/admin/projects/create?invoice_id=${invoiceId}` : `/projects?invoice_id=${invoiceId}`)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  <HiPlusCircle size={14} /> Create Project Handoff
-                </button>
-              )}
             </div>
           </div>
 
-          {canHandoff && invoice.status !== 'paid' && invoice.status !== 'cancelled' && !invoice.project_id && (
-            <div style={{ marginTop: 16, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
-              Project can be created after invoice payment is completed.
-            </div>
-          )}
           {invoice.project_id && (
             <div style={{ marginTop: 16, padding: '10px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, fontSize: 13, color: '#5b21b6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>This invoice is linked to a project.</span>
-              <button onClick={() => router.push(`/projects/${invoice.project_id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', fontWeight: 700, fontSize: 13 }}>
+              {/* This page is shared by the Admin and Seller guards (see
+                  app/admin/invoices/[id]/page.tsx, which re-exports it), so
+                  the destination has to follow the caller's own guard — an
+                  Admin sent to the Seller-guard /projects route gets 401'd
+                  straight back out to the login screen. */}
+              <button onClick={() => router.push(isAdmin ? `/admin/projects/${invoice.project_id}` : `/projects/${invoice.project_id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', fontWeight: 700, fontSize: 13 }}>
                 View Project →
               </button>
             </div>
