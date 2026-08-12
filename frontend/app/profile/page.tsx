@@ -14,6 +14,11 @@ const ROLE_TYPE_LABEL: Record<string, string> = {
   viewer: 'Viewer',
 };
 
+function errorMessage(err: unknown, fallback: string): string {
+  const ex = err as { response?: { data?: { message?: string } } };
+  return ex.response?.data?.message ?? fallback;
+}
+
 export default function ProfilePage() {
   const authType = getAuthType() as 'user' | 'admin' | null;
   const isAdmin = authType === 'admin';
@@ -37,9 +42,16 @@ export default function ProfilePage() {
     setName(p.name);
     setPhone(p.phone ?? '');
     // Refresh the cached session so the Navbar/Sidebar reflect the change
-    // immediately, without waiting for the 60s background poll.
+    // immediately, without waiting for the 60s background poll. The profile
+    // API returns a lightweight self-profile, so merge it into the existing
+    // cached login payload instead of replacing modules/company assignments.
     const token = getToken();
-    if (token && authType) setAuthData(token, p, authType as 'user' | 'admin');
+    const cached = getAuthUser();
+    if (token && authType && cached) {
+      setAuthData(token, { ...cached, ...p }, authType as 'user' | 'admin');
+    } else if (token && authType) {
+      setAuthData(token, p, authType as 'user' | 'admin');
+    }
     window.dispatchEvent(new Event('auth_refreshed'));
   };
 
@@ -55,8 +67,8 @@ export default function ProfilePage() {
       const updated = await svc.update({ name: name.trim(), phone: phone.trim() || null });
       applyProfile(updated);
       toast.success('Profile updated');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update profile');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to update profile'));
     } finally { setSaving(false); }
   };
 
@@ -69,8 +81,8 @@ export default function ProfilePage() {
       const updated = await svc.uploadAvatar(file);
       applyProfile(updated);
       toast.success('Avatar updated');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to upload avatar');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to upload avatar'));
     } finally { setUploadingAvatar(false); }
   };
 
@@ -86,8 +98,8 @@ export default function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to change password');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to change password'));
     } finally { setChangingPassword(false); }
   };
 
@@ -98,13 +110,13 @@ export default function ProfilePage() {
     return <DashboardLayout title="My Profile"><div style={{ padding: 48, textAlign: 'center', color: '#dc2626' }}>Failed to load profile.</div></DashboardLayout>;
   }
 
-  const avatarUrl = resolveAvatarUrl((profile as any).avatar_url);
+  const avatarUrl = resolveAvatarUrl(profile.avatar_url);
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const roleLabel = !isAdmin ? (ROLE_TYPE_LABEL[(profile as User).role_type] ?? (profile as User).role_type) : 'Company Admin';
 
   return (
     <DashboardLayout title="My Profile">
-      <div style={{ maxWidth: 640 }}>
+      <div style={{ width: '100%', maxWidth: 1180 }}>
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>My Profile</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>Update your personal details and password</p>
@@ -143,7 +155,7 @@ export default function ProfilePage() {
           </div>
 
           <form onSubmit={saveProfile}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 14 }}>
               <div>
                 <label style={lbl}>Full Name *</label>
                 <input value={name} onChange={e => setName(e.target.value)} style={inp} required />
@@ -153,7 +165,7 @@ export default function ProfilePage() {
                 <input value={phone} onChange={e => setPhone(e.target.value)} style={inp} placeholder="Optional" />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 18 }}>
               <div>
                 <label style={lbl}>Email</label>
                 <input value={profile.email} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }} />
@@ -186,7 +198,7 @@ export default function ProfilePage() {
               <label style={lbl}>Current Password *</label>
               <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} style={inp} required autoComplete="current-password" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 18 }}>
               <div>
                 <label style={lbl}>New Password *</label>
                 <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={inp} required minLength={8} autoComplete="new-password" />

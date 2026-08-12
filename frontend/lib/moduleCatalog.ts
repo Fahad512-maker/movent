@@ -238,12 +238,8 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'canRequestPMAssignment',        label: 'Request PM Assignment',         group: 'Seller / Linked Projects' },
       { key: 'canAddClientFacingComment',     label: 'Add Client-facing Project Comment', group: 'Seller / Linked Projects' },
 
-      // Project Chat is now a single conversation per project — there is no
-      // more "create a group" or "create a direct chat" action to gate, so
-      // canCreateProjectChatGroup/canCreateProjectDirectChat are deliberately
-      // no longer listed here (they stay declared, inert, in the backend
-      // catalog — same precedent as the pre-existing dead
-      // canDeleteOwnProjectChatMessage/canViewProjectChatHistory keys).
+      // Project Chat is now a single conversation per project; there is no
+      // more "create a group" or "create a direct chat" action to gate.
       { key: 'canViewProjectChat',              label: 'View Project Chat',               group: 'Project Chat' },
       { key: 'canSendProjectChatMessage',        label: 'Send Project Chat Message',       group: 'Project Chat' },
       { key: 'canManageProjectChatParticipants', label: 'Manage Project Chat Participants', group: 'Project Chat' },

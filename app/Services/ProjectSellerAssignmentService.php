@@ -72,6 +72,14 @@ class ProjectSellerAssignmentService
         }
 
         $project->update($updates);
+        $project->logActivity(
+            $isSwitch ? 'seller_switched' : 'seller_assigned',
+            $isSwitch && $oldSeller
+                ? "{$actorName} switched seller from {$oldSeller->name} to {$seller->name}."
+                : "{$actorName} assigned {$seller->name} as seller.",
+            $actorName,
+            ['from' => $oldSellerId, 'to' => $seller->id, 'reason' => $reason]
+        );
 
         // Assigning/switching a project's seller now also drops them straight
         // into project chat — no more waiting on a PM/Admin to separately

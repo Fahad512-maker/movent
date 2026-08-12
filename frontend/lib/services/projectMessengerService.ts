@@ -41,7 +41,7 @@ function downloadBlob(blob: Blob, fileName: string): void {
 // User-side project chat — ONE thread per project (no more groups/direct
 // chats — see Api\User\ProjectMessengerController and ProjectChatService).
 export const userProjectMessengerService = {
-  show: async (projectId: number): Promise<{ is_pm: boolean; is_literal_pm: boolean; thread: ProjectMessengerThread }> =>
+  show: async (projectId: number): Promise<{ is_pm: boolean; is_literal_pm: boolean; can_manage_participants: boolean; thread: ProjectMessengerThread }> =>
     (await api.get(`/user/projects/${projectId}/messenger`)).data.data,
 
   eligibleParticipants: async (projectId: number): Promise<ProjectMessengerEligibleUser[]> =>

@@ -29,7 +29,7 @@ class ProfileController extends Controller
         // AdminResource's 'companies'/'modules' fields are whenLoaded() —
         // omitted entirely from the JSON unless eager-loaded here, which
         // meant the Profile page never had a company name to show at all.
-        return ApiResponse::success(new AdminResource($this->admin()->load('companies')));
+        return ApiResponse::success(new AdminResource($this->admin()->load(['companies.modules', 'package'])));
     }
 
     public function update(Request $request): JsonResponse
@@ -57,7 +57,7 @@ class ProfileController extends Controller
             'user_agent'  => $request->userAgent(),
         ]);
 
-        return ApiResponse::success(new AdminResource($admin->fresh()->load('companies')), 'Profile updated');
+        return ApiResponse::success(new AdminResource($admin->fresh()->load(['companies.modules', 'package'])), 'Profile updated');
     }
 
     public function uploadAvatar(Request $request): JsonResponse
@@ -87,7 +87,7 @@ class ProfileController extends Controller
             'user_agent'  => $request->userAgent(),
         ]);
 
-        return ApiResponse::success(new AdminResource($admin->fresh()->load('companies')), 'Avatar updated');
+        return ApiResponse::success(new AdminResource($admin->fresh()->load(['companies.modules', 'package'])), 'Avatar updated');
     }
 
     public function changePassword(Request $request): JsonResponse

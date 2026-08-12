@@ -124,6 +124,29 @@ class ProjectMessengerController extends Controller
             || $project->tasks()->where('assigned_to', $user->id)->exists();
     }
 
+    // Advanced "Manage Project Chat Participants" works as a real delegated
+    // permission. PM-tier can manage implicitly; other staff must already be
+    // in the chat, so the key cannot become company-wide project access.
+    private function canManageParticipants(Project $project): bool
+    {
+        if ($this->user()->role_type === 'seller' || !$this->can('canManageProjectChatParticipants')) {
+            return false;
+        }
+
+        if ($this->isPM($project)) {
+            return true;
+        }
+
+        $thread = ProjectChatService::existingThreadFor($project);
+        if (!$thread) {
+            return false;
+        }
+
+        return ChatParticipant::where('thread_id', $thread->id)
+            ->where('user_id', $this->user()->id)
+            ->exists();
+    }
+
     // Users formally tied to the project: PM, project team members, task
     // assignees, and each task's production-queue assignee. Sellers are
     // handled separately (see eligibleParticipants/blockedSellerIds) since
@@ -263,6 +286,7 @@ class ProjectMessengerController extends Controller
             // frontend's "can I @mention a Seller" check, matching send()'s
             // isLiteralPm() gate exactly.
             'is_literal_pm' => $this->isLiteralPm($project),
+            'can_manage_participants' => $this->canManageParticipants($project),
             'thread' => [
                 'id'           => $thread->id,
                 'visibility'   => $thread->visibility,
@@ -293,7 +317,7 @@ class ProjectMessengerController extends Controller
         $project = $this->project($projectId);
         $user = $this->user();
 
-        if (!$this->isPM($project) || !$this->can('canManageProjectChatParticipants')) {
+        if (!$this->canManageParticipants($project)) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -319,8 +343,8 @@ class ProjectMessengerController extends Controller
         $project = $this->project($projectId);
         $user = $this->user();
 
-        if (!$this->isPM($project) || !$this->can('canManageProjectChatParticipants')) {
-            return ApiResponse::error('Only the Project Manager or Company Admin can manage project chat participants.', 403);
+        if (!$this->canManageParticipants($project)) {
+            return ApiResponse::error('You do not have permission to manage project chat participants.', 403);
         }
 
         $validated = $request->validate([
@@ -347,8 +371,8 @@ class ProjectMessengerController extends Controller
     {
         $project = $this->project($projectId);
 
-        if (!$this->isPM($project) || !$this->can('canManageProjectChatParticipants')) {
-            return ApiResponse::error('Only the Project Manager or Company Admin can manage project chat participants.', 403);
+        if (!$this->canManageParticipants($project)) {
+            return ApiResponse::error('You do not have permission to manage project chat participants.', 403);
         }
 
         $thread = ProjectChatService::existingThreadFor($project);

@@ -32,7 +32,7 @@ class TaskController extends Controller
         // — a 3-arg (column, operator, value) call silently misparses, so a
         // closure is required for a "!=" condition.
         return Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)
-            ->where(fn ($query) => $query->where('role_type', '!=', 'seller'));
+            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client']));
     }
 
     // qa_assigned_to is optional (no dropdown/status-transition requires it
@@ -253,7 +253,7 @@ class TaskController extends Controller
     public function assignableUsers(): JsonResponse
     {
         $users = User::where('company_id', $this->user()->company_id)
-            ->where('role_type', '!=', 'seller')
+            ->whereNotIn('role_type', ['seller', 'client'])
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'role_type']);

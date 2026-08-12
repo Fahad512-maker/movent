@@ -143,7 +143,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewProjectReports', 'canViewTaskReports',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectChatGroup', 'canManageProjectChatParticipants', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canManageProjectChatParticipants', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
     ],
     account: ['canUseGeneralChat'],
   },
@@ -156,7 +156,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
     ],
   },
   developer: {
@@ -167,7 +167,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
     ],
   },
   designer: {
@@ -178,7 +178,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
     ],
   },
   // pm_view + pm_manage_tasks + pm_manage_deliverables + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production)
@@ -189,7 +189,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
     ],
   },
   // pm_view + pm_manage_tasks + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production, no Deliverables/QA)
@@ -199,17 +199,15 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
     ],
   },
   // Sellers only ever see/act on projects they're linked to, and can only
   // ever share a comment/chat thread with Company Admin or this project's
   // PM — never the wider team — no general Task/Production/Deliverables
   // management, no full project attachment access (that flat, untiered file
-  // list would otherwise expose internal project files to a Seller). Seller
-  // CAN initiate a direct chat (canCreateProjectDirectChat) — createDirect()
-  // hard-restricts the target to Company Admin/PM only, same boundary the
-  // comment tag-rule enforces.
+  // list would otherwise expose internal project files to a Seller). Project
+  // chat is now the single project conversation, scoped by participant rows.
   seller: {
     // canTransferLeads is deliberately NOT granted — a Seller works their
     // own leads only; transferring a lead to another Seller is a Lead
@@ -233,9 +231,8 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canCreateProjectHandoff',
       'canRequestPMAssignment',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canCreateProjectDirectChat',
+      'canViewProjectChat', 'canSendProjectChatMessage',
       'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
-      'canManageProjectChatParticipants', 'canAddSellerToProjectChat',
       // canManageProjectInvoices deliberately excluded — billing/invoice data
       // is Company Admin/PM only, never Seller or any other team role.
       'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
@@ -341,26 +338,6 @@ export function getRoleDefaultPermissions(
   }
   return filtered;
 }
-
-// Map new module keys (from company_modules) to canonical catalog module keys
-const MODULE_KEY_MAP: Record<string, string> = {
-  invoices:    'invoice',
-  payments:    'invoice',
-  leads:       'sales',
-  clients:     'sales',
-  employees:   'hr',
-  recruitment: 'hr',
-  attendance:  'hr',
-  leaves:      'hr',
-  payroll:     'hr',
-  projects:    'project_management',
-  tasks:       'project_management',
-  production:  'project_management',
-  finance_dashboard: 'finance',
-  finance_reports:   'finance',
-  compliance:        'compliance',
-  client_portal:     'client_portal',
-};
 
 /** Given a Record<moduleKey, permissionKey[]>, return a concise role label. */
 export function computeAccessLabel(permissions: Record<string, string[]>): string {

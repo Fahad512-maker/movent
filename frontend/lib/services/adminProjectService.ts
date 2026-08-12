@@ -302,6 +302,9 @@ export interface ActivityItem {
   type: 'log' | 'comment';
   action?: string;
   entity_type?: string;
+  description?: string;
+  causer_name?: string | null;
+  meta?: Record<string, unknown> | null;
   body?: string;
   task_id?: number | null;
   author?: string;

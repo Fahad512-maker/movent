@@ -56,7 +56,7 @@ export const SIMPLE_PROJECT_PERMISSIONS: SimpleProjectPermission[] = [
     maps: ['canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments'],
   },
   {
-    key: 'pm_manage_comments', label: 'Manage Project Comments',
+    key: 'pm_manage_comments', label: 'Add Client-facing Project Comments',
     maps: ['canAddClientFacingComment'],
   },
   {
@@ -108,13 +108,10 @@ export const SIMPLE_PROJECT_PERMISSIONS: SimpleProjectPermission[] = [
     maps: ['canDeleteAnyProjectChatMessage'],
   },
   {
-    // Api\User\ProjectMessengerController::isPM() hard-requires the literal
-    // project PM (or a canViewAllCompanyProjects holder) to manage this
-    // project's one chat's participant list — holding just this key without
-    // PM tier is a no-op, so it's deliberately NOT in the basic
-    // pm_manage_chat bundle (only Project Manager defaults to this; see
-    // RoleDefaultPermissions::MAP). There's no more "create a chat group" to
-    // gate — Project Chat is a single conversation per project now.
+    // Delegated participant management for the project's one chat. It stays
+    // outside pm_manage_chat because adding/removing people is a higher-risk
+    // action, and adding the linked Seller still needs the separate Seller
+    // chat permission below.
     key: 'pm_adv_manage_chat_participants', label: 'Manage Project Chat Participants', advanced: true,
     maps: ['canManageProjectChatParticipants'],
   },

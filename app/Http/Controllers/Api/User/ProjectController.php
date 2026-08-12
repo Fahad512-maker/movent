@@ -420,6 +420,15 @@ class ProjectController extends Controller
         }
 
         $this->logActivity($project->company_id, 'created', 'Project', $project->id, $validated);
+        $project->logActivity('created', "Project \"{$project->name}\" created by {$user->name}.", $user->name, [
+            'created_by' => $user->id,
+        ]);
+        if ($project->project_manager_id) {
+            $managerName = User::find($project->project_manager_id)?->name ?? 'Unknown';
+            $project->logActivity('manager_assigned', "{$user->name} assigned {$managerName} as project manager.", $user->name, [
+                'to' => $project->project_manager_id,
+            ]);
+        }
 
         if ($project->lead_id) {
             $lead = \App\Models\Lead::find($project->lead_id);
@@ -770,7 +779,26 @@ class ProjectController extends Controller
             'deadline'    => ['nullable', 'date'],
         ]);
 
+        $before = $project->only(array_keys($validated));
         $project->update($validated);
+
+        $changedFields = collect(array_keys($validated))
+            ->filter(fn ($field) => ($before[$field] ?? null) != $project->{$field})
+            ->values();
+
+        if ($changedFields->contains('status')) {
+            $project->logActivity('status_changed', "{$this->user()->name} changed status from {$before['status']} to {$project->status}.", $this->user()->name, [
+                'from' => $before['status'] ?? null,
+                'to' => $project->status,
+            ]);
+        }
+
+        $otherFields = $changedFields->reject(fn ($field) => $field === 'status')->values();
+        if ($otherFields->isNotEmpty()) {
+            $project->logActivity('updated', "{$this->user()->name} updated " . $otherFields->implode(', ') . '.', $this->user()->name, [
+                'fields' => $otherFields->all(),
+            ]);
+        }
 
         // Budget is financial data — Company Admin only, never surfaced to staff.
         $project->makeHidden('budget');
@@ -914,10 +942,28 @@ class ProjectController extends Controller
         }
 
         foreach ($validated['members'] as $member) {
+            $existingMember = ProjectTeamMember::where('project_id', $project->id)
+                ->where('user_id', $member['user_id'])
+                ->first();
+            $wasRole = $existingMember?->role_in_project;
             ProjectTeamMember::updateOrCreate(
                 ['project_id' => $project->id, 'user_id' => $member['user_id']],
                 ['role_in_project' => $member['role_in_project'], 'assigned_by' => $actor->id]
             );
+            $memberName = User::find($member['user_id'])?->name ?? 'Unknown';
+
+            if (!$existingMember) {
+                $project->logActivity('team_assigned', "{$actor->name} added {$memberName} to the project team as " . str_replace('_', ' ', $member['role_in_project']) . '.', $actor->name, [
+                    'to' => $member['user_id'],
+                    'role_in_project' => $member['role_in_project'],
+                ]);
+            } elseif ($wasRole !== $member['role_in_project']) {
+                $project->logActivity('team_member_role_changed', "{$actor->name} changed {$memberName}'s project role from " . str_replace('_', ' ', $wasRole) . ' to ' . str_replace('_', ' ', $member['role_in_project']) . '.', $actor->name, [
+                    'user_id' => $member['user_id'],
+                    'from' => $wasRole,
+                    'to' => $member['role_in_project'],
+                ]);
+            }
 
             // Skip self-notification — a PM re-saving/expanding the team
             // roster can legitimately include themselves in the payload.
@@ -953,6 +999,7 @@ class ProjectController extends Controller
         }
 
         $removedUserId = $project->teamMembers()->where('id', $memberId)->value('user_id');
+        $removedUserName = $removedUserId ? (User::find($removedUserId)?->name ?? 'Unknown') : 'Unknown';
         $project->teamMembers()->where('id', $memberId)->delete();
 
         // Losing their team row can also mean losing their project chat
@@ -960,6 +1007,9 @@ class ProjectController extends Controller
         // other way (e.g. still assigned to an open task).
         if ($removedUserId) {
             ProjectChatService::removeParticipantIfNoLongerEligible($project, $removedUserId);
+            $project->logActivity('team_member_removed', "{$this->user()->name} removed {$removedUserName} from the project team.", $this->user()->name, [
+                'user_id' => $removedUserId,
+            ]);
         }
 
         return ApiResponse::success(null, 'Team member removed');
@@ -1177,11 +1227,28 @@ class ProjectController extends Controller
         $project = $this->visibleProjects()->findOrFail($id);
         $taskIds = Task::where('project_id', $project->id)->pluck('id');
 
-        $logs = SystemAuditLog::where(function ($q) use ($id, $taskIds) {
-                $q->where(['entity_type' => 'Project', 'entity_id' => $id])
-                  ->orWhere(function ($q2) use ($taskIds) {
-                      $q2->where('entity_type', 'Task')->whereIn('entity_id', $taskIds);
-                  });
+        $projectLogs = $project->activities()
+            ->get()
+            ->map(fn ($activity) => [
+                'type'        => 'log',
+                'action'      => $activity->type,
+                'entity_type' => 'Project',
+                'description' => $activity->description,
+                'causer_name' => $activity->causer_name,
+                'meta'        => $activity->meta,
+                'created_at'  => $activity->created_at,
+            ]);
+
+        $projectActivityActions = $projectLogs->pluck('action')->all();
+
+        $logs = SystemAuditLog::where(function ($q) use ($id, $taskIds, $projectActivityActions) {
+                $q->where(function ($q2) use ($id, $projectActivityActions) {
+                    $q2->where(['entity_type' => 'Project', 'entity_id' => $id])
+                        ->when($projectActivityActions, fn ($q3) => $q3->whereNotIn('action', $projectActivityActions));
+                })
+                ->orWhere(function ($q2) use ($taskIds) {
+                    $q2->where('entity_type', 'Task')->whereIn('entity_id', $taskIds);
+                });
             })
             ->where('action', 'not like', '%_comment_added')
             ->get()
@@ -1203,7 +1270,7 @@ class ProjectController extends Controller
                 'created_at' => $c->created_at,
             ]);
 
-        $activity = $logs->concat($comments)->sortByDesc('created_at')->values();
+        $activity = $projectLogs->concat($logs)->concat($comments)->sortByDesc('created_at')->values();
 
         return ApiResponse::success($activity);
     }
