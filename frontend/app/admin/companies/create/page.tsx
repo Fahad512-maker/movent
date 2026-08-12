@@ -16,12 +16,14 @@ interface FormState {
 }
 
 const TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Asia/Dubai',
   'Asia/Karachi',
   'Asia/Kolkata',
-  'Asia/Dubai',
-  'Europe/London',
-  'America/New_York',
-  'America/Los_Angeles',
   'UTC',
 ];
 
@@ -40,7 +42,7 @@ export default function CreateCompanyPage() {
     email:    '',
     phone:    '',
     address:  '',
-    timezone: 'Asia/Karachi',
+    timezone: 'America/New_York',
   });
 
   const set = (k: keyof FormState) => (e: { target: { value: string } }) =>

@@ -173,7 +173,7 @@ function CreateProjectForm() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
+      <form onSubmit={handleSubmit}>
         <div style={card}>
           {companies.length > 1 && (
             <div style={{ marginBottom: 16 }}>

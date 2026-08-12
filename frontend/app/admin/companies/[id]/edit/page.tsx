@@ -16,12 +16,14 @@ interface FormState {
 }
 
 const TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Asia/Dubai',
   'Asia/Karachi',
   'Asia/Kolkata',
-  'Asia/Dubai',
-  'Europe/London',
-  'America/New_York',
-  'America/Los_Angeles',
   'UTC',
 ];
 
@@ -38,7 +40,7 @@ export default function EditCompanyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
-    name: '', currency: 'PKR', industry: '', email: '', phone: '', address: '', timezone: 'Asia/Karachi',
+    name: '', currency: 'PKR', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York',
   });
 
   useEffect(() => {

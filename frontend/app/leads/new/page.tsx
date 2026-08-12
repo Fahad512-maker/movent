@@ -87,7 +87,7 @@ export default function NewLeadPage() {
 
   return (
     <DashboardLayout title="New Lead">
-      <div style={{ maxWidth: 720 }}>
+      <div style={{ maxWidth: 900 }}>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
         </button>

@@ -41,7 +41,7 @@ const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border
 const cardHead: React.CSSProperties = { padding: '16px 24px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' };
 const cardBody: React.CSSProperties = { padding: 24 };
 
-const TIMEZONES   = ['Asia/Karachi', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Kolkata', 'Europe/London', 'Europe/Paris', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'UTC'];
+const TIMEZONES   = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Karachi', 'Asia/Kolkata', 'UTC'];
 const CURRENCIES  = [{ v: 'PKR', l: 'PKR — Pakistani Rupee' }, { v: 'USD', l: 'USD — US Dollar' }, { v: 'EUR', l: 'EUR — Euro' }, { v: 'GBP', l: 'GBP — British Pound' }, { v: 'AED', l: 'AED — UAE Dirham' }, { v: 'SAR', l: 'SAR — Saudi Riyal' }];
 const INDUSTRIES  = ['Technology', 'Finance', 'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction', 'Real Estate', 'Consulting', 'Marketing', 'Legal', 'Hospitality', 'Other'];
 
@@ -106,7 +106,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'Asia/Karachi', currency: 'PKR', logo_url: null });
+  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', currency: 'PKR', logo_url: null });
   const [invoice,  setInvoice]  = useState<InvoiceSettings>({ prefix: 'INV', tax_rate: 0, payment_terms: 30, notes: '' });
   const [bank,     setBank]     = useState<BankSettings>({ bank_name: '', account_name: '', account_number: '', iban: '', swift: '' });
   const [gateways, setGateways] = useState<GatewayAccount[]>([]);

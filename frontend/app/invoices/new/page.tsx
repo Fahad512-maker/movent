@@ -487,7 +487,7 @@ function NewInvoiceForm() {
 
   return (
     <DashboardLayout title="New Invoice">
-      <div style={{ maxWidth: 900 }}>
+      <div>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
         </button>
