@@ -9,6 +9,7 @@ use App\Models\Lead;
 use App\Models\LeadTransfer;
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -84,6 +85,12 @@ class LeadController extends Controller
             'assigned_to'        => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
+        // Same company-scoped duplicate guard as Api\Admin\ClientController::
+        // store() — a Lead with this email already exists for this company.
+        if (!empty($validated['email']) && Lead::where('company_id', $validated['company_id'])->where('email', $validated['email'])->exists()) {
+            return ApiResponse::error('A lead with this email already exists.', 422);
+        }
+
         $validated['status']   ??= 'new';
         $validated['priority'] ??= 'medium';
 
@@ -102,8 +109,13 @@ class LeadController extends Controller
 
     public function show(int $id): JsonResponse
     {
+        // client:id,lead_id,name — lead_id (the hasOne FK) must be in the
+        // restricted column list, or Eloquent can't match the loaded Client
+        // row back to this Lead and $lead->client silently resolves to
+        // null even when a real Client row exists (format()'s 'client_id'
+        // then always came back null for an already-converted lead).
         $lead = Lead::whereIn('company_id', $this->companyIds())
-            ->with(['assignedTo:id,name', 'client:id,name', 'followUps.assignedTo:id,name', 'activities'])
+            ->with(['assignedTo:id,name', 'client:id,lead_id,name', 'followUps.assignedTo:id,name', 'activities'])
             ->findOrFail($id);
 
         $data         = $this->format($lead);
@@ -150,6 +162,20 @@ class LeadController extends Controller
             'assigned_to'        => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
+        // Same company-scoped duplicate guard as store() — editing a lead's
+        // email must not collide with a different lead's.
+        if (!empty($validated['email']) && $validated['email'] !== $lead->email
+            && Lead::where('company_id', $lead->company_id)->where('email', $validated['email'])->where('id', '!=', $lead->id)->exists()) {
+            return ApiResponse::error('A lead with this email already exists.', 422);
+        }
+
+        // Same one-way Won lock as updateStatus() — the plain Edit form must
+        // not be a backdoor around it.
+        $earlierStages = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
+        if ($old['status'] === 'won' && isset($validated['status']) && in_array($validated['status'], $earlierStages, true)) {
+            return ApiResponse::error('This lead has already been won and cannot be moved back to an earlier stage.', 422);
+        }
+
         $lead->update($validated);
 
         // Log meaningful changes
@@ -180,16 +206,17 @@ class LeadController extends Controller
     private function nextDealReference(): string
     {
         $year = now()->year;
-        $last = Lead::whereYear('created_at', $year)
+        $maxSeq = Lead::withTrashed()
             ->where('deal_reference', 'like', "DEAL-{$year}-%")
-            ->latest('id')
-            ->value('deal_reference');
+            ->pluck('deal_reference')
+            ->map(fn ($reference) => (int) substr($reference, -4))
+            ->max();
 
-        $seq = $last ? ((int) substr($last, -4)) + 1 : 1;
+        $seq = $maxSeq ? $maxSeq + 1 : 1;
 
         do {
             $reference = sprintf('DEAL-%d-%04d', $year, $seq++);
-        } while (Lead::where('deal_reference', $reference)->exists());
+        } while (Lead::withTrashed()->where('deal_reference', $reference)->exists());
 
         return $reference;
     }
@@ -201,12 +228,27 @@ class LeadController extends Controller
 
         $becomingWon = $request->input('status') === 'won' && $old !== 'won';
 
+        // Once Won, a deal can never be walked back to an earlier pipeline
+        // stage — mirrors the existing one-way Lost lock (which requires the
+        // explicit "Reopen" action to leave, never a plain status edit).
+        // Marking a Won deal Lost afterward (it fell through) is still
+        // allowed; re-saving status=won on an already-won lead is a no-op,
+        // not a revert.
+        $earlierStages = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
+        if ($old === 'won' && in_array($request->input('status'), $earlierStages, true)) {
+            return ApiResponse::error('This lead has already been won and cannot be moved back to an earlier stage.', 422);
+        }
+
         $rules = [
             'status'      => ['required', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],
             'lost_reason' => ['nullable', 'string'],
         ];
+        // proposed_project_title is no longer required up front — the
+        // frontend's confirmation modal was removed (flow is now Won ->
+        // Convert to Client -> Create Invoice, no popup) — it defaults to
+        // "{name} — Project" below when not supplied.
         if ($becomingWon) {
-            $rules['proposed_project_title']      = ['required', 'string', 'max:255'];
+            $rules['proposed_project_title']      = ['nullable', 'string', 'max:255'];
             $rules['service_category']            = ['nullable', 'string', 'max:100'];
             $rules['scope_summary']               = ['nullable', 'string'];
             $rules['detailed_scope']              = ['nullable', 'string'];
@@ -227,11 +269,15 @@ class LeadController extends Controller
         }
 
         if ($becomingWon) {
-            $data['deal_reference']     = $this->nextDealReference();
             $data['won_at']             = now();
             $data['fulfillment_status'] = 'awaiting_invoice';
+            // No confirmation modal on the frontend anymore — default the
+            // title instead of requiring it up front.
+            $data['proposed_project_title'] = $request->filled('proposed_project_title')
+                ? $request->input('proposed_project_title')
+                : "{$lead->name} — Project";
             foreach ([
-                'proposed_project_title', 'service_category', 'scope_summary', 'detailed_scope',
+                'service_category', 'scope_summary', 'detailed_scope',
                 'quotation_reference', 'required_kickoff_amount', 'required_kickoff_percentage',
                 'expected_start_date', 'expected_end_date',
             ] as $field) {
@@ -239,9 +285,30 @@ class LeadController extends Controller
                     $data[$field] = $request->input($field);
                 }
             }
-        }
 
-        $lead->update($data);
+            // nextDealReference()'s read-last-then-pick-next-free check isn't
+            // atomic — two concurrent "mark as won" requests can both land on
+            // the same number and one loses to the unique constraint. Retry
+            // with a freshly recomputed reference a few times rather than
+            // losing this whole update (and every deal field submitted
+            // alongside it) to an unhandled 1062.
+            $attempts = 0;
+            while (true) {
+                $data['deal_reference'] = $this->nextDealReference();
+                try {
+                    $lead->update($data);
+                    break;
+                } catch (QueryException $e) {
+                    $isDealRefCollision = (int) $e->getCode() === 23000
+                        && str_contains($e->getMessage(), 'leads_deal_reference_unique');
+                    if (!$isDealRefCollision || ++$attempts >= 5) {
+                        throw $e;
+                    }
+                }
+            }
+        } else {
+            $lead->update($data);
+        }
 
         if ($becomingWon) {
             $lead->logActivity('deal_created', "Deal {$lead->deal_reference} created — {$lead->proposed_project_title}",

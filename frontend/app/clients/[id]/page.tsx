@@ -47,7 +47,7 @@ export default function ClientProfilePage() {
   const canViewClientProjects = !isSubUser
     || can('project_management', 'canViewProjects')
     || can('project_management', 'canViewLinkedProjects');
-  const canManagePortal = !isSubUser
+  const canManagePortalPerm = !isSubUser
     || can('client', 'canEnableClientPortal')
     || can('client', 'canDisableClientPortal');
   const chatSvc = isSubUser ? userSalesChatService : adminSalesChatService;
@@ -64,6 +64,13 @@ export default function ClientProfilePage() {
     }
   }, []);
   const [client, setClient]   = useState<Client | null>(null);
+  // A company without the real Client Portal module only ever gets a Basic
+  // Client record — portal login is never offerable, regardless of the
+  // canEnableClientPortal/canDisableClientPortal permission (see
+  // Api\User\ClientController::enablePortal()'s matching backend check).
+  // Defaults true while `client` hasn't loaded yet, to avoid a flash of
+  // "no Portal tab" that then appears once the response comes back.
+  const canManagePortal = canManagePortalPerm && (client?.has_portal_module ?? true);
   const [perms, setPerms]     = useState<Record<string, { label: string; is_enabled: boolean }>>({});
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [stats, setStats]     = useState<ClientInvoiceStats | null>(null);
@@ -110,8 +117,12 @@ export default function ClientProfilePage() {
       }).catch(() => {}).finally(() => setLoading(false));
       return;
     }
-    adminClientService.getOne(clientId).then(({ client: c, permissions: p }) => {
-      setClient(c);
+    adminClientService.getOne(clientId).then(({ client: c, permissions: p, has_portal_module }) => {
+      // has_portal_module is a sibling of `client` in this endpoint's
+      // response shape (unlike the sub-user endpoint, which merges it onto
+      // the Client object directly) — merge it on here too, since
+      // canManagePortal reads client.has_portal_module for both paths.
+      setClient({ ...c, has_portal_module });
       setPerms(p);
       if (c.user?.email) setPortalEmail(c.user.email);
     }).catch(() => {}).finally(() => setLoading(false));
@@ -320,21 +331,24 @@ export default function ClientProfilePage() {
   if (loading) return <DashboardLayout title="Client"><div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>;
   if (!client) return <DashboardLayout title="Client"><div style={{ padding: 48, textAlign: 'center', color: '#dc2626' }}>Client not found.</div></DashboardLayout>;
 
+  // 'messages' (Client Messages) is deliberately not a clickable tab here —
+  // not needed as a general-purpose tab on this page. Still reachable via
+  // the deep link from the Project Chat page's "Chat with Client" button
+  // (?tab=messages), which sets `tab` state directly — the content block
+  // below still renders for that case.
   const tabs: { key: Tab; label: string }[] = isSubUser
     ? [
         { key: 'details', label: 'Details' },
         ...(canViewClientProjects ? [{ key: 'projects' as const, label: 'Projects' }] : []),
         ...(canManagePortal ? [{ key: 'portal' as const, label: 'Portal' }] : []),
         ...(canUseSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
-        { key: 'messages', label: 'Client Messages' },
       ]
     : [
         { key: 'details', label: 'Details' },
         { key: 'invoices', label: 'Invoices' },
         { key: 'projects', label: 'Projects' },
-        { key: 'portal', label: 'Portal' },
+        ...(canManagePortal ? [{ key: 'portal' as const, label: 'Portal' }] : []),
         ...(canUseSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
-        { key: 'messages', label: 'Client Messages' },
       ];
 
   return (
@@ -498,7 +512,7 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Portal Tab ── */}
-        {tab === 'portal' && (
+        {tab === 'portal' && canManagePortal && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             {/* Enable/disable card */}
             <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>

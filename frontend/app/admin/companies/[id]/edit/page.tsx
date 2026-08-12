@@ -64,7 +64,14 @@ export default function EditCompanyPage() {
     if (!form.name.trim()) { toast.error('Company name is required'); return; }
     setSaving(true);
     try {
-      await api.put(`/admin/companies/${companyId}`, form);
+      await api.put(`/admin/companies/${companyId}`, {
+        currency: form.currency,
+        industry: form.industry,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        timezone: form.timezone,
+      });
       toast.success('Company updated!');
       router.push('/admin/plan');
     } catch (err: unknown) {
@@ -113,9 +120,14 @@ export default function EditCompanyPage() {
               <label style={labelStyle}>Company Name *</label>
               <input
                 value={form.name}
-                onChange={set('name')}
-                placeholder="e.g. Acme Corp"
-                style={inputStyle}
+                placeholder="e.g. AcmeCorp"
+                style={{
+                  ...inputStyle,
+                  background: '#f8fafc',
+                  color: '#64748b',
+                  cursor: 'not-allowed',
+                }}
+                disabled
                 required
               />
             </div>

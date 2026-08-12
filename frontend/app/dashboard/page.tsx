@@ -293,7 +293,7 @@ export default function DashboardPage() {
   // interceptor treats as an expired session and force-logs-out.
   const statCards = [
     has('leads')    && s && { label: 'Leads',        value: s.leads.total,                sub: `${s.leads.new} new · ${s.leads.won} won`,                              color: '#2563eb', href: '/admin/leads' },
-    has('clients')  &&      { label: 'Clients',      value: clientStats.total,            sub: `${clientStats.portal} portal active`,                                  color: '#7c3aed', href: '/admin/clients' },
+    has('client_portal') && { label: 'Clients',      value: clientStats.total,            sub: `${clientStats.portal} portal active`,                                  color: '#7c3aed', href: '/admin/clients' },
     has('projects') && s && { label: 'Projects',     value: s.projects.total,             sub: `${s.projects.active} active · ${s.projects.done} done`,               color: '#059669', href: '/admin/projects' },
     has('tasks')    && s && { label: 'Tasks',        value: s.tasks.todo + s.tasks.in_progress, sub: s.tasks.overdue ? `${s.tasks.overdue} overdue!` : `${s.tasks.completed} done`, color: s.tasks.overdue ? '#dc2626' : '#0891b2', href: '/admin/tasks' },
     has('invoices') &&      { label: 'Invoices',     value: invoiceStats.total,           sub: `${invoiceStats.unpaid} unpaid · ${invoiceStats.overdue} overdue`,       color: '#d97706', href: '/admin/invoices' },
@@ -305,7 +305,7 @@ export default function DashboardPage() {
   const alerts = s ? [
     has('tasks')    && s.tasks.overdue    > 0 && { n: s.tasks.overdue,          label: 'overdue tasks' },
     has('invoices') && s.invoices.overdue > 0 && { n: s.invoices.overdue,       label: 'overdue invoices' },
-    has('clients')  && s.support.open_tickets > 0 && { n: s.support.open_tickets, label: 'open support tickets' },
+    has('client_portal') && s.support.open_tickets > 0 && { n: s.support.open_tickets, label: 'open support tickets' },
   ].filter(Boolean) as { n: number; label: string }[] : [];
 
   const breakdowns = [
@@ -334,7 +334,7 @@ export default function DashboardPage() {
         );
       }),
     },
-    has('clients') && recentClients.length > 0 && {
+    has('client_portal') && recentClients.length > 0 && {
       key: 'clients', title: 'Recent Clients', href: '/admin/clients',
       items: recentClients.map((c: RecentClient) => {
         const cs = sc(c.status);
@@ -527,7 +527,7 @@ export default function DashboardPage() {
               {pl?.can_add_company && (
                 <Link href="/admin/companies/create" style={{ fontSize: 11, color: '#fff', background: '#2563eb', fontWeight: 600, textDecoration: 'none', padding: '4px 12px', borderRadius: 6 }}>+ Add Company</Link>
               )}
-              {has('clients') && (
+              {has('client_portal') && (
                 <Link href="/admin/clients" style={{ fontSize: 11, color: '#2563eb', fontWeight: 600, textDecoration: 'none', padding: '4px 12px', border: '1px solid #bfdbfe', borderRadius: 6 }}>Manage Clients →</Link>
               )}
             </div>

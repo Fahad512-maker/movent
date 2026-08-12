@@ -18,7 +18,9 @@ export default function EditProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const admin = getAuthUser() as Admin | null;
-  const hasClients = admin?.modules?.includes('clients') ?? false;
+  // 'client_portal' is the real purchasable module_key — 'clients' was never
+  // a real CompanyModule row (see ModuleSeeder.php).
+  const hasClients = admin?.modules?.includes('client_portal') ?? false;
 
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [users, setUsers]     = useState<UserOption[]>([]);

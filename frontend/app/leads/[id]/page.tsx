@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { adminLeadService, userLeadService, Lead, FollowUp, LeadActivity, CompanyUser, DealEligibility, DealConfirmationFields } from '@/lib/services/adminLeadService';
+import { adminLeadService, userLeadService, Lead, FollowUp, LeadActivity, CompanyUser, DealEligibility } from '@/lib/services/adminLeadService';
 import { adminSalesChatService, userSalesChatService } from '@/lib/services/salesChatService';
 import { ChatMessage } from '@/lib/services/adminProjectService';
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
@@ -14,7 +14,7 @@ import {
   HiArrowLeft, HiPencilSquare, HiTrash, HiArrowPath,
   HiPlus, HiCheckCircle, HiXCircle, HiClock, HiCalendarDays,
   HiPhone, HiEnvelope, HiUserGroup, HiChatBubbleLeft,
-  HiInformationCircle, HiArrowsRightLeft, HiFolderPlus, HiBanknotes,
+  HiArrowsRightLeft, HiFolderPlus, HiBanknotes,
 } from 'react-icons/hi2';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
@@ -67,7 +67,6 @@ export default function LeadDetailPage() {
 
   // Module / permission gates
   const admin          = isAdmin ? (getAuthUser() as Admin | null) : null;
-  const hasClientMod   = isAdmin && (admin?.modules?.includes('clients') ?? false);
   const hasProjectMod  = isAdmin ? (admin?.modules?.includes('projects') ?? false) : getUserModulePermissions('project_management').length > 0;
   const canEditLead    = isAdmin || can('sales', 'canEditLeads');
   const canDeleteLead  = isAdmin || can('sales', 'canDeleteLeads');
@@ -110,19 +109,6 @@ export default function LeadDetailPage() {
   const [transferring, setTransferring]         = useState(false);
   const [transferError, setTransferError]       = useState('');
 
-  // Mark Won -> Deal confirmation modal (spec: marking Won never by itself
-  // creates a project — it confirms the Deal's proposed project/scope/
-  // kickoff-payment requirement first).
-  const [wonModal, setWonModal]           = useState(false);
-  const [wonTitle, setWonTitle]           = useState('');
-  const [wonCategory, setWonCategory]     = useState('');
-  const [wonScope, setWonScope]           = useState('');
-  const [wonQuoteRef, setWonQuoteRef]     = useState('');
-  const [wonKickoffAmount, setWonKickoffAmount] = useState('');
-  const [wonStartDate, setWonStartDate]   = useState('');
-  const [wonEndDate, setWonEndDate]       = useState('');
-  const [wonSaving, setWonSaving]         = useState(false);
-  const [wonError, setWonError]           = useState('');
 
   // Deal financial/eligibility summary — App\Services\DealEligibilityService
   const [dealEligibility, setDealEligibility] = useState<DealEligibility | null>(null);
@@ -194,51 +180,17 @@ export default function LeadDetailPage() {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!lead || !canManagePipe) return;
-    // Marking Won for the first time opens the Deal-confirmation modal
-    // instead of saving immediately — the spec's core rule is that Won
-    // alone must never make a project eligible; the seller confirms the
-    // proposed project/scope/kickoff-payment requirement here first.
-    if (newStatus === 'won' && lead.status !== 'won') {
-      setWonTitle(lead.proposed_project_title ?? `${lead.name} — Project`);
-      setWonCategory(lead.service_category ?? '');
-      setWonScope(lead.scope_summary ?? '');
-      setWonQuoteRef(lead.quotation_reference ?? '');
-      setWonKickoffAmount(lead.required_kickoff_amount ? String(lead.required_kickoff_amount) : '');
-      setWonStartDate(lead.expected_start_date ?? '');
-      setWonEndDate(lead.expected_end_date ?? '');
-      setWonError('');
-      setWonModal(true);
-      return;
-    }
     try {
+      // Marking Won still creates a Deal server-side (deal_reference,
+      // won_at, fulfillment_status) — proposed_project_title just defaults
+      // to "{name} — Project" when not supplied, no confirmation modal
+      // needed up front. Flow is Won -> Convert to Client -> Create Invoice.
       const updated = await svc.updateStatus(lead.id, newStatus);
       setLead(updated);
-    } catch { setError('Failed to update status'); }
-  };
-
-  const confirmMarkWon = async () => {
-    if (!lead) return;
-    if (!wonTitle.trim()) { setWonError('Proposed project/service title is required'); return; }
-    setWonSaving(true); setWonError('');
-    try {
-      const fields: DealConfirmationFields = {
-        proposed_project_title: wonTitle.trim(),
-        service_category: wonCategory.trim() || undefined,
-        scope_summary: wonScope.trim() || undefined,
-        quotation_reference: wonQuoteRef.trim() || undefined,
-        required_kickoff_amount: wonKickoffAmount ? Number(wonKickoffAmount) : undefined,
-        expected_start_date: wonStartDate || undefined,
-        expected_end_date: wonEndDate || undefined,
-      };
-      const updated = await svc.updateStatus(lead.id, 'won', undefined, fields);
-      setLead(updated);
-      setWonModal(false);
-      toast.success(`Deal ${updated.deal_reference} created`);
     } catch (err: unknown) {
-      const ex = err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
-      const msgs = ex.response?.data?.errors;
-      setWonError(msgs ? Object.values(msgs).flat().join(' · ') : (ex.response?.data?.message ?? 'Failed to mark lead as won'));
-    } finally { setWonSaving(false); }
+      const ex = err as { response?: { data?: { message?: string } } };
+      setError(ex.response?.data?.message ?? 'Failed to update status');
+    }
   };
 
   const handleConvert = async () => {
@@ -247,6 +199,11 @@ export default function LeadDetailPage() {
     setConverting(true); setError('');
     try {
       const { client_id } = await svc.convert(lead.id);
+      // Update local state before navigating away — if the navigation is
+      // ever interrupted (back button, a cached page load), the button here
+      // must already reflect the conversion instead of still offering
+      // "Convert to Client" on an already-converted lead.
+      setLead(l => l ? { ...l, client_id } : l);
       router.push(`/clients/${client_id}`);
     } catch (err: unknown) {
       const ex = err as { response?: { data?: { message?: string } } };
@@ -368,29 +325,19 @@ export default function LeadDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {/* Convert to Client — Admin needs the Client module purchased;
-                  a sub-user's client access is bundled with Sales instead
-                  (canManagePipeline + canCreateClients), no module purchase
-                  required. */}
-              {lead.status !== 'won' && lead.status !== 'lost' && !lead.client_id && (
-                isAdmin ? (
-                  hasClientMod ? (
-                    <button onClick={handleConvert} disabled={converting}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: converting ? '#a7f3d0' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: converting ? 'not-allowed' : 'pointer' }}>
-                      <HiArrowPath size={15} /> {converting ? 'Converting…' : 'Convert to Client'}
-                    </button>
-                  ) : (
-                    <div title="Client module is required to convert leads into clients"
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#f8fafc', color: '#94a3b8', fontSize: 13, cursor: 'not-allowed' }}>
-                      <HiInformationCircle size={15} /> Convert to Client
-                    </div>
-                  )
-                ) : canConvertLead ? (
-                  <button onClick={handleConvert} disabled={converting}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: converting ? '#a7f3d0' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: converting ? 'not-allowed' : 'pointer' }}>
-                    <HiArrowPath size={15} /> {converting ? 'Converting…' : 'Convert to Client'}
-                  </button>
-                ) : null
+              {/* Convert to Client — only once the lead is Won (flow is Won ->
+                  Convert to Client -> Create Invoice). A basic Client record,
+                  same for everyone. Api\Admin\LeadController::convert() has
+                  never required the Client module (it just creates a plain
+                  Client row, same as the sub-user path's Sales-bundled
+                  canManagePipeline + canCreateClients access) — Admin gets it
+                  unconditionally, same as Admin's unrestricted access
+                  everywhere else. */}
+              {lead.status === 'won' && !lead.client_id && (isAdmin || canConvertLead) && (
+                <button onClick={handleConvert} disabled={converting}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: converting ? '#a7f3d0' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: converting ? 'not-allowed' : 'pointer' }}>
+                  <HiArrowPath size={15} /> {converting ? 'Converting…' : 'Convert to Client'}
+                </button>
               )}
               {lead.client_id && (
                 <Link href={`/clients/${lead.client_id}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, background: '#ecfdf5', color: '#059669', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
@@ -412,15 +359,12 @@ export default function LeadDetailPage() {
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #7c3aed, #a78bfa)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     <HiFolderPlus size={15} /> Create Project
                   </button>
-                ) : (
-                  <button disabled title="The required kickoff payment has not yet been received and verified."
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#f8fafc', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'not-allowed' }}>
-                    <HiFolderPlus size={15} /> Create Project
-                  </button>
-                )
+                ) : null
               )}
-              {/* Invoice handoff — only when Invoice is active, user has permission, and lead is won */}
-              {hasInvoiceMod && canCreateInvoice && lead.status === 'won' && (
+              {/* Invoice handoff — only once converted to a Client (flow is
+                  Won -> Convert to Client -> Create Invoice), Invoice module
+                  active, and user has permission. */}
+              {hasInvoiceMod && canCreateInvoice && lead.status === 'won' && !!lead.client_id && (
                 <button onClick={handleCreateInvoice}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   <HiBanknotes size={15} /> Create Invoice
@@ -455,11 +399,17 @@ export default function LeadDetailPage() {
                   const isActive = step === lead.status;
                   const isPast   = pipelineIdx >= 0 && idx < pipelineIdx;
                   const isWon    = step === 'won' && lead.status === 'won';
+                  // Once Won, every earlier stage is locked — a deal can't be
+                  // walked back to New/Contacted/Qualified/Proposal/
+                  // Negotiation from here (mirrors the existing Lost lock,
+                  // which hides the whole bar). "Mark as Lost" below stays
+                  // available for a Won deal that later falls through.
+                  const locked   = lead.status === 'won' && step !== 'won';
                   const bg       = isWon ? '#059669' : isActive ? '#2563eb' : isPast ? '#93c5fd' : '#e2e8f0';
                   const col      = (isActive || isPast || isWon) ? '#fff' : '#94a3b8';
                   return (
-                    <button key={step} onClick={() => handleStatusChange(step)}
-                      style={{ flex: 1, padding: '7px 0', background: bg, color: col, border: 'none', borderRadius: idx === 0 ? '8px 0 0 8px' : idx === PIPELINE_STEPS.length - 1 ? '0 8px 8px 0' : 0, fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer' }}>
+                    <button key={step} onClick={() => !locked && handleStatusChange(step)} disabled={locked}
+                      style={{ flex: 1, padding: '7px 0', background: bg, color: col, border: 'none', borderRadius: idx === 0 ? '8px 0 0 8px' : idx === PIPELINE_STEPS.length - 1 ? '0 8px 8px 0' : 0, fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.6 : 1 }}>
                       {cap(step)}
                     </button>
                   );
@@ -582,7 +532,7 @@ export default function LeadDetailPage() {
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Follow-ups</h3>
-              {(isAdmin || can('sales', 'canEditLeads')) && (
+              {lead.status !== 'won' && (isAdmin || can('sales', 'canEditLeads')) && (
                 <button onClick={() => setFuModal(true)}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   <HiPlus size={15} /> Add Follow-up
@@ -778,57 +728,6 @@ export default function LeadDetailPage() {
         </div>
       )}
 
-      {/* Mark Won -> Deal confirmation modal */}
-      {wonModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 480, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>Confirm Deal Details</h3>
-            <p style={{ margin: '0 0 18px', fontSize: 12, color: '#94a3b8' }}>
-              Marking this lead Won creates a Deal — a Project can only be created after the required kickoff payment is received.
-            </p>
-            {wonError && <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fef2f2', borderRadius: 7, color: '#dc2626', fontSize: 12 }}>{wonError}</div>}
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>Proposed Project / Service Title *</label>
-              <input style={inp} value={wonTitle} onChange={e => setWonTitle(e.target.value)} placeholder="e.g. ABC Website Redesign" />
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>Service Category</label>
-              <input style={inp} value={wonCategory} onChange={e => setWonCategory(e.target.value)} placeholder="e.g. Web Development" />
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>Scope Summary</label>
-              <textarea style={{ ...inp, height: 64, resize: 'vertical' }} value={wonScope} onChange={e => setWonScope(e.target.value)} placeholder="UI design, development and deployment…" />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-              <div>
-                <label style={lbl}>Quotation Reference</label>
-                <input style={inp} value={wonQuoteRef} onChange={e => setWonQuoteRef(e.target.value)} placeholder="QT-0087" />
-              </div>
-              <div>
-                <label style={lbl}>Required Kickoff Amount</label>
-                <input type="number" min={0} style={inp} value={wonKickoffAmount} onChange={e => setWonKickoffAmount(e.target.value)} placeholder="250000" />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <div>
-                <label style={lbl}>Expected Start Date</label>
-                <input type="date" style={inp} value={wonStartDate} onChange={e => setWonStartDate(e.target.value)} />
-              </div>
-              <div>
-                <label style={lbl}>Expected End Date</label>
-                <input type="date" style={inp} value={wonEndDate} onChange={e => setWonEndDate(e.target.value)} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setWonModal(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={confirmMarkWon} disabled={wonSaving}
-                style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: wonSaving ? '#93c5fd' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: wonSaving ? 'not-allowed' : 'pointer' }}>
-                {wonSaving ? 'Saving…' : 'Mark Won & Create Deal'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   );
 }

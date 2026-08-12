@@ -81,7 +81,9 @@ function UserProjectsList() {
   };
 
   useEffect(() => {
-    if (!can('project_management', 'canViewProjects') && !can('project_management', 'canViewLinkedProjects')) {
+    if (!can('project_management', 'canViewProjects') && !can('project_management', 'canViewLinkedProjects')
+      && !can('project_management', 'canViewProjectDashboard') && !can('project_management', 'canViewTeamResources')
+      && !can('project_management', 'canAssignTeamResources') && !can('project_management', 'canViewAllCompanyProjects')) {
       router.replace('/dashboard');
     }
     // Clears the Sidebar's Projects red dot now that the sub-user has seen this list.

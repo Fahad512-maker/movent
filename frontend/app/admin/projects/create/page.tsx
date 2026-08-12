@@ -24,7 +24,9 @@ function CreateProjectForm() {
   const leadId = searchParams.get('lead_id') ? Number(searchParams.get('lead_id')) : null;
   const invoiceId = searchParams.get('invoice_id') ? Number(searchParams.get('invoice_id')) : null;
   const admin = getAuthUser() as Admin | null;
-  const hasClients = admin?.modules?.includes('clients') ?? false;
+  // 'client_portal' is the real purchasable module_key — 'clients' was never
+  // a real CompanyModule row (see ModuleSeeder.php).
+  const hasClients = admin?.modules?.includes('client_portal') ?? false;
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [clients, setClients]     = useState<ClientOption[]>([]);
