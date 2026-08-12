@@ -17,7 +17,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 
 class ClientController extends Controller
 {
@@ -340,13 +339,8 @@ class ClientController extends Controller
     {
         $company = $this->admin()->companies()->findOrFail($id);
 
-        if ($request->has('name') && CompanyName::normalize($request->input('name')) !== CompanyName::normalize($company->name)) {
-            throw ValidationException::withMessages([
-                'name' => ['Company name cannot be changed after creation.'],
-            ]);
-        }
-
         $data = $request->validate([
+            'name'     => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
             'currency' => 'required|in:PKR,USD',
             'industry' => 'nullable|string|max:100',
             'email'    => 'nullable|email|max:255',
@@ -354,6 +348,9 @@ class ClientController extends Controller
             'address'  => 'nullable|string|max:500',
             'timezone' => 'nullable|string|max:100',
         ]);
+
+        $data['name'] = CompanyName::normalize($data['name']);
+        CompanyName::throwIfTaken($data['name'], 'name', $company->id, $this->admin()->id);
 
         $company->update($data);
 
