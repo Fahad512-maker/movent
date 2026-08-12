@@ -97,6 +97,9 @@ export interface Client {
   // canEnableClientPortal/canDisableClientPortal — see
   // Api\User\ClientController::show().
   portal_permissions?: Record<string, { label: string; is_enabled: boolean; purchased: boolean }>;
+  // Same gate — whether this client's company has the real Client Portal
+  // module purchased. Only present alongside portal_permissions above.
+  has_portal_module?: boolean;
 }
 
 export interface InvoiceItem {

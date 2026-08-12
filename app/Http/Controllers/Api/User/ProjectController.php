@@ -124,7 +124,7 @@ class ProjectController extends Controller
         // page, which reuses this same endpoint for its per-project member
         // lists (frontend/app/projects/team/page.tsx) — same reasoning.
         if (!$this->can('canViewProjects') && !$this->can('canViewProjectDashboard') && !$this->can('canViewLinkedProjects')
-            && !$this->can('canViewTeamResources') && !$this->can('canAssignTeamResources')) {
+            && !$this->can('canViewTeamResources') && !$this->can('canAssignTeamResources') && !$this->can('canViewAllCompanyProjects')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
@@ -684,7 +684,8 @@ class ProjectController extends Controller
 
     public function show(int $id): JsonResponse
     {
-        if (!$this->can('canViewProjects') && !$this->can('canViewLinkedProjects')) {
+        if (!$this->can('canViewProjects') && !$this->can('canViewLinkedProjects') && !$this->can('canViewProjectDashboard')
+            && !$this->can('canViewTeamResources') && !$this->can('canAssignTeamResources') && !$this->can('canViewAllCompanyProjects')) {
             return ApiResponse::error('Permission denied', 403);
         }
 

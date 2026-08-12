@@ -453,6 +453,10 @@ class ClientController extends Controller
             'client'      => $client,
             'permissions' => $allModules,
             'seat'        => $this->seatInfo($client->company_id),
+            // Drives the frontend's Portal tab/"Enable Portal" button — a
+            // company without the real Client Portal module only ever gets
+            // a Basic Client record, portal login is never offerable.
+            'has_portal_module' => in_array('client_portal', $companyModules, true),
         ]);
     }
 

@@ -354,22 +354,32 @@ Route::prefix('admin')->group(function () {
         Route::post('clients/{id}/direct-chat/{threadId}/participants',            [\App\Http\Controllers\Api\Admin\ClientChatController::class, 'addParticipant']);
         Route::delete('clients/{id}/direct-chat/{threadId}/participants/{userId}', [\App\Http\Controllers\Api\Admin\ClientChatController::class, 'removeParticipant']);
 
-        // Client management + portal access — requires the Client module.
-        // The real, purchasable module_key is 'client_portal' (see
-        // ModuleSeeder.php's deliberate "clients is NOT a purchasable module"
-        // comment) — 'clients' was never a real CompanyModule row for any
-        // company, so this gate 403'd unconditionally regardless of purchase
-        // until fixed.
+        // Basic client record management — NOT wrapped in module:client_portal,
+        // matching the User-guard's equivalent routes below: Company Admin is
+        // always privileged everywhere else in this app, and Convert-to-Client
+        // (Api\Admin\LeadController::convert()) already creates a basic Client
+        // row unconditionally, with no module check — Admin must also be able
+        // to view/manage that same record afterward regardless of whether the
+        // real Client Portal module is purchased. Portal login/permissions and
+        // Support Tickets below ARE genuinely portal-specific features, so
+        // those stay gated.
+        Route::get('clients',                            [AdminClientController::class, 'index']);
+        Route::post('clients',                           [AdminClientController::class, 'store']);
+        Route::get('clients/{id}',                       [AdminClientController::class, 'show']);
+        Route::put('clients/{id}',                       [AdminClientController::class, 'update']);
+        Route::delete('clients/{id}',                    [AdminClientController::class, 'destroy']);
+        Route::get('clients/{client}/invoices',          [AdminInvoiceController::class, 'forClient']);
+
+        // Portal login/permissions + Support Tickets — requires the real
+        // Client Portal module. The real, purchasable module_key is
+        // 'client_portal' (see ModuleSeeder.php's deliberate "clients is NOT
+        // a purchasable module" comment) — 'clients' was never a real
+        // CompanyModule row for any company, so this gate 403'd
+        // unconditionally regardless of purchase until fixed.
         Route::middleware('module:client_portal')->group(function () {
-            Route::get('clients',                            [AdminClientController::class, 'index']);
-            Route::post('clients',                           [AdminClientController::class, 'store']);
-            Route::get('clients/{id}',                       [AdminClientController::class, 'show']);
-            Route::put('clients/{id}',                       [AdminClientController::class, 'update']);
-            Route::delete('clients/{id}',                    [AdminClientController::class, 'destroy']);
             Route::put('clients/{id}/permissions',           [AdminClientController::class, 'updatePermissions']);
             Route::post('clients/{id}/enable-portal',        [AdminClientController::class, 'enablePortal']);
             Route::post('clients/{id}/disable-portal',       [AdminClientController::class, 'disablePortal']);
-            Route::get('clients/{client}/invoices',          [AdminInvoiceController::class, 'forClient']);
 
             Route::get('support',                            [AdminSupportController::class, 'index']);
             Route::get('support/{id}',                       [AdminSupportController::class, 'show']);

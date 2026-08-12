@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\ClientPortalPermission;
+use App\Models\Company;
 use App\Models\CompanyAdmin;
 use App\Models\User;
 use App\Support\CrossAccountEmail;
@@ -16,6 +17,22 @@ use Illuminate\Support\Facades\Hash;
 // so it lives here once instead of being duplicated per controller.
 class ClientPortalService
 {
+    // Unlike basic Client CRUD (grantable via either the Client module OR
+    // the Sales module — see routes/api.php's comment), actually turning on
+    // a client's portal LOGIN requires the real Client Portal module
+    // specifically — no OR-with-Sales exception. Without this project the
+    // client into having a working login on a Sales-only company that never
+    // bought the module. 'clients' is included defensively even though it's
+    // never a real CompanyModule row (see ModuleSeeder.php).
+    public static function hasPortalModule(int $companyId): bool
+    {
+        return Company::find($companyId)
+            ?->modules()
+            ->whereIn('module_key', ['client_portal', 'clients'])
+            ->where('is_enabled', true)
+            ->exists() ?? false;
+    }
+
     // Per-company seat check — each company has its own independent limit,
     // sourced from the tenant (Company Admin account) that owns it.
     public static function seatInfo(CompanyAdmin $admin, int $companyId): array

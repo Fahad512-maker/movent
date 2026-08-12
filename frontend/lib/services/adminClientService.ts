@@ -29,6 +29,7 @@ export const adminClientService = {
     client: Client;
     permissions: Record<string, { label: string; is_enabled: boolean }>;
     seat: unknown;
+    has_portal_module: boolean;
   }> => {
     const res = await api.get(`/admin/clients/${id}`);
     return res.data.data;

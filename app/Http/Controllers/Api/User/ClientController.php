@@ -146,6 +146,10 @@ class ClientController extends Controller
         // of GET /user/clients/{id} already expects a plain Client back.
         $data = $client->toArray();
         $data['portal_permissions'] = $allModules;
+        // Drives the frontend's Portal tab/"Enable Portal" button — a
+        // company without the real Client Portal module only ever gets a
+        // Basic Client record, portal login is never offerable.
+        $data['has_portal_module'] = in_array('client_portal', $companyModules, true);
 
         return ApiResponse::success($data);
     }
@@ -290,6 +294,10 @@ class ClientController extends Controller
     {
         if (!$this->can('canEnableClientPortal')) {
             return ApiResponse::error('Permission denied', 403);
+        }
+
+        if (!ClientPortalService::hasPortalModule($this->user()->company_id)) {
+            return ApiResponse::error('Client Portal module is not enabled for this company.', 403);
         }
 
         $request->validate([

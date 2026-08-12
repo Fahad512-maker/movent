@@ -55,6 +55,21 @@ class ProjectCommentController extends Controller
                   ->orWhereHas('tasks', fn($t) => $t->where('assigned_to', $user->id))
                   ->orWhereHas('lead', fn($l) => $l->where('assigned_to', $user->id)->orWhere('transferred_to', $user->id))
                   ->orWhereHas('client', fn($c) => $c->where('account_manager', $user->id));
+
+                // A project with literally no PM/seller/team assigned yet has
+                // no real "team" boundary to protect — the membership
+                // restriction above is meant to keep outsiders off projects
+                // that DO have a team, not to make a freshly-created,
+                // not-yet-staffed project uncommentable by everyone
+                // (including a company-wide viewer) until someone gets
+                // formally assigned.
+                if ($this->can('canViewAllCompanyProjects')) {
+                    $q->orWhere(function ($u) {
+                        $u->whereNull('project_manager_id')
+                          ->whereNull('seller_id')
+                          ->doesntHave('teamMembers');
+                    });
+                }
             })
             ->findOrFail($projectId);
     }
