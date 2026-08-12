@@ -293,7 +293,8 @@ class LeadController extends Controller
     private function nextDealReference(): string
     {
         $year = now()->year;
-        $maxSeq = Lead::where('deal_reference', 'like', "DEAL-{$year}-%")
+        $maxSeq = Lead::withTrashed()
+            ->where('deal_reference', 'like', "DEAL-{$year}-%")
             ->pluck('deal_reference')
             ->map(fn ($reference) => (int) substr($reference, -4))
             ->max();
@@ -302,7 +303,7 @@ class LeadController extends Controller
 
         do {
             $reference = sprintf('DEAL-%d-%04d', $year, $seq++);
-        } while (Lead::where('deal_reference', $reference)->exists());
+        } while (Lead::withTrashed()->where('deal_reference', $reference)->exists());
 
         return $reference;
     }
