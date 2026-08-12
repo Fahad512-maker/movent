@@ -86,7 +86,14 @@ function UserTeamPageInner() {
 
   const selected = projects.find(p => String(p.id) === projectId) ?? null;
   const members = selected?.team_members ?? [];
-  const selectedCandidate = users.find(u => String(u.id) === userId) ?? null;
+  // companyUsers() is shared with the Support Ticket staff-assignment picker
+  // (frontend/app/support/[id]/page.tsx), which genuinely needs every role —
+  // so the Project-Manager-only restriction is applied here, client-side,
+  // rather than in that shared endpoint. This also incidentally drops
+  // role_type='client' (client-portal login accounts) and 'seller', which
+  // should never be selectable from this list either way.
+  const addableUsers = users.filter(u => u.role_type === 'project_manager');
+  const selectedCandidate = addableUsers.find(u => String(u.id) === userId) ?? null;
 
   const addMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +140,7 @@ function UserTeamPageInner() {
                 <label style={lbl}>Add Team Member</label>
                 <select value={userId} onChange={e => setUserId(e.target.value)} style={inp}>
                   <option value="">Select user…</option>
-                  {users.map(u => (
+                  {addableUsers.map(u => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.email})
                     </option>

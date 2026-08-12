@@ -119,6 +119,17 @@ class ProjectAttachmentController extends Controller
 
         $project = $this->visibleProject($projectId);
 
+        // Upload (and the visibility it grants over a file) is Admin/PM
+        // territory — hard-restricted to this project's actual assigned PM,
+        // regardless of who else was left holding canUploadProjectAttachments
+        // in their role bundle. A Seller keeps their separate, deliberate
+        // upload-on-own-project allowance (mirrors the frontend gate in
+        // frontend/app/projects/[id]/page.tsx's canUploadAttachments).
+        $isSeller = $this->user()->role_type === 'seller';
+        if (!$isSeller && (int) $project->project_manager_id !== (int) $this->user()->id) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
         $validated = $request->validate([
             'file'                 => ['required', 'file', 'max:' . self::MAX_FILE_KB, 'mimes:' . self::ALLOWED_MIMES],
             'is_visible_to_client' => ['nullable', 'boolean'],

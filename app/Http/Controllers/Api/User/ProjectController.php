@@ -899,6 +899,20 @@ class ProjectController extends Controller
 
         $actor = $this->user();
 
+        // Adding a Seller to the team is Admin/PM territory — everyone else
+        // holding canAssignTeamResources can still add a plain team member,
+        // just not a Seller specifically (mirrors the frontend gate in
+        // frontend/app/projects/team/page.tsx's addableUsers filter).
+        if ((int) $project->project_manager_id !== (int) $actor->id) {
+            $sellerIds = User::where('company_id', $actor->company_id)
+                ->where('role_type', 'seller')
+                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+                ->pluck('id');
+            if ($sellerIds->isNotEmpty()) {
+                return ApiResponse::error('Only the Company Admin or this project\'s Project Manager can add a Seller to the team.', 403);
+            }
+        }
+
         foreach ($validated['members'] as $member) {
             ProjectTeamMember::updateOrCreate(
                 ['project_id' => $project->id, 'user_id' => $member['user_id']],

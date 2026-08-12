@@ -73,7 +73,7 @@ export default function EditClientPage() {
 
   return (
     <DashboardLayout title="Edit Client">
-      <div style={{ maxWidth: 720 }}>
+      <div>
         <button onClick={() => router.push(`/clients/${clientId}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to {client.name}
         </button>

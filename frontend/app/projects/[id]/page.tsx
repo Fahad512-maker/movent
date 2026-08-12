@@ -117,7 +117,14 @@ export default function UserProjectDetailPage() {
   // view/download/delete, store() has no seller-only bypass, it's a real
   // grant on their own linked project.
   const canViewAttachments   = isSeller || can('project_management', 'canViewProjectAttachments');
-  const canUploadAttachments = can('project_management', 'canUploadProjectAttachments');
+  // File upload + the "visible to client" toggle are Admin/PM territory —
+  // hard-restricted to this project's actual assigned PM here regardless of
+  // any canUploadProjectAttachments grant, so a Developer/Team
+  // Member/Designer/QA/Production user never gets it just because that
+  // permission was left checked in their role's bundle. A Seller keeps their
+  // separate, deliberate upload-on-own-project allowance untouched.
+  const canUploadAttachments = (isSeller || project?.project_manager?.id === me?.id)
+    && can('project_management', 'canUploadProjectAttachments');
   const canDownloadAttachments = isSeller || can('project_management', 'canDownloadProjectAttachments');
   const canDeleteAttachments = !isSeller && can('project_management', 'canDeleteProjectAttachments');
   // Same permAny set the sidebar's "Production Queue" nav item already uses —

@@ -64,8 +64,6 @@ export default function ClientPaymentPage() {
           setSelectedAccountId(d.gateways[0].id);
         } else if (d.bank) {
           setSelected('bank_transfer');
-        } else {
-          setSelected('other');
         }
       })
       .catch(() => router.push(`/client/invoices/${invoiceId}`))
@@ -172,7 +170,6 @@ export default function ClientPaymentPage() {
       icon:      GATEWAY_ICONS[g.type] ?? '💳',
     })),
     ...(data.bank ? [{ optionKey: 'bank_transfer', type: 'bank_transfer', accountId: null, label: 'Bank Transfer', icon: '🏦' }] : []),
-    { optionKey: 'other', type: 'other', accountId: null, label: 'Other', icon: '💼' },
   ];
 
   const inputStyle: React.CSSProperties = {
