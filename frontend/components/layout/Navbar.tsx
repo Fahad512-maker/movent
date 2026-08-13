@@ -216,7 +216,7 @@ export default function Navbar({ title = 'Dashboard' }: { title?: string }) {
             ref={notifTriggerRef}
             onClick={openNotifDropdown}
             style={{
-              position: 'relative', width: 38, height: 38, borderRadius: 10,
+              position: 'relative', width: 46, height: 46, borderRadius: 10,
               border: '1px solid #f1f5f9', background: '#fff', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#64748b', transition: 'background 0.15s, border-color 0.15s',
@@ -224,12 +224,12 @@ export default function Navbar({ title = 'Dashboard' }: { title?: string }) {
             onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#f1f5f9'; }}
           >
-            <HiBell size={18} />
+            <HiBell size={28} />
             {unreadCount > 0 && (
               <span
                 style={{
-                  position: 'absolute', top: 7, right: 7,
-                  width: 8, height: 8, borderRadius: '50%',
+                  position: 'absolute', top: 8, right: 8,
+                  width: 9, height: 9, borderRadius: '50%',
                   background: '#ef4444', border: '2px solid #fff',
                 }}
               />
