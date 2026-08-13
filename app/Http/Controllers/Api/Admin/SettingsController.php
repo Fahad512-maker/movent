@@ -122,7 +122,7 @@ class SettingsController extends Controller
             'business_phone' => $validated['phone']    ?? null,
             'address'        => $validated['address']  ?? null,
             'timezone'       => $validated['timezone']  ?? 'Asia/Karachi',
-            'currency'       => $validated['currency']  ?? 'PKR',
+            'currency'       => $validated['currency']  ?? 'USD',
         ]);
 
         return ApiResponse::success(null, 'Company profile updated');

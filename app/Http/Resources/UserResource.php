@@ -36,13 +36,18 @@ class UserResource extends JsonResource
             'company' => $this->whenLoaded('company', fn () => [
                 'id'       => $this->company->id,
                 'name'     => $this->company->name,
-                'currency' => $this->company->currency ?? 'PKR',
+                'currency' => $this->company->currency ?? 'USD',
                 'modules'  => $this->company->relationLoaded('modules')
                     ? $this->company->modules->where('is_enabled', true)->pluck('module_key')->values()
                     : null,
                 'admin'    => $this->company->relationLoaded('admin') ? [
-                    'id'   => $this->company->admin?->id,
-                    'name' => $this->company->admin?->name,
+                    'id'       => $this->company->admin?->id,
+                    'name'     => $this->company->admin?->name,
+                    // The tenant's Settings-configured currency — authoritative
+                    // for invoice creation (see Company::invoicingProfile()),
+                    // unlike the sibling `company.currency` above (legacy,
+                    // pre-tenant-refactor, per-Company column).
+                    'currency' => $this->company->admin?->currency,
                 ] : null,
             ]),
 

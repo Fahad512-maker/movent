@@ -316,7 +316,10 @@ class InvoiceController extends Controller
             'discount_amount'  => $discount,
             'total_amount'     => $subtotal + $taxAmt - $discount,
             'paid_amount'      => 0,
-            'currency'         => $data['currency']        ?? 'PKR',
+            // The currency Company Admin configured in Settings is
+            // authoritative — never a bare 'USD' literal (see
+            // Company::invoicingProfile()).
+            'currency'         => $data['currency']        ?? \App\Models\Company::find($companyId)?->invoicingProfile()['currency'] ?? 'USD',
             'status'           => 'draft',
             'due_date'         => $data['due_date']        ?? null,
             'notes'            => $data['notes']           ?? null,

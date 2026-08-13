@@ -177,7 +177,11 @@ class InvoiceController extends Controller
             'discount_amount' => $discount,
             'total_amount'    => $totals['total_amount'],
             'paid_amount'     => 0,
-            'currency'        => $data['currency'] ?? 'USD',
+            // The currency Company Admin configured in Settings is
+            // authoritative — never a bare 'USD' literal — so every invoice
+            // this admin issues, across any of their companies, lines up with
+            // what they actually set (see Company::invoicingProfile()).
+            'currency'        => $data['currency'] ?? $this->admin()->currency ?? 'USD',
             'status'          => $sendNow ? 'sent' : 'draft',
             'sent_at'         => $sendNow ? now() : null,
             'due_date'        => $data['due_date']        ?? null,

@@ -616,6 +616,17 @@ class ProjectController extends Controller
             $number = sprintf('%s-%d-%04d', $prefix, $year, $seq++);
         } while (Invoice::where('invoice_number', $number)->exists());
 
+        // A milestone invoice must match whatever currency this project has
+        // already been invoiced in — never a hardcoded default — so its
+        // amounts (and, transitively, paid_amount, which carries no currency
+        // of its own) read consistently against every other invoice on this
+        // project. A project with no prior invoice at all falls back to
+        // Company Admin's own configured currency (see
+        // Company::invoicingProfile()), then the request's own currency,
+        // then USD as the last resort.
+        $existingCurrency = $project->invoices()->oldest('created_at')->value('currency')
+            ?? $project->company?->invoicingProfile()['currency'] ?? null;
+
         $invoice = Invoice::create([
             'company_id'      => $project->company_id,
             'client_id'       => $project->client_id,
@@ -629,7 +640,7 @@ class ProjectController extends Controller
             'discount_amount' => $discount,
             'total_amount'    => $subtotal + $taxAmt - $discount,
             'paid_amount'     => 0,
-            'currency'        => $data['currency'] ?? 'PKR',
+            'currency'        => $existingCurrency ?? $data['currency'] ?? 'USD',
             'status'          => 'draft',
             'due_date'        => $data['due_date'] ?? null,
             'notes'           => $data['notes']    ?? null,

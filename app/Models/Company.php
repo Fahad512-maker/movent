@@ -41,6 +41,13 @@ class Company extends Model
         return [
             'name'                  => $admin?->business_name         ?: $this->name,
             'logo_path'             => $admin?->logo_path              ?: $this->logo_path,
+            // The currency Company Admin configures in Settings (tenant-wide,
+            // company_admins.currency) is authoritative for every invoice this
+            // admin issues, regardless of which of their companies it's under
+            // — this company's own (legacy, pre-tenant-refactor) `currency`
+            // column is only ever a fallback for an admin who hasn't opened
+            // Settings yet.
+            'currency'              => $admin?->currency               ?: ($this->currency ?? 'USD'),
             'invoice_prefix'        => $admin?->invoice_prefix         ?: ($this->invoice_prefix ?? 'INV'),
             'invoice_tax_rate'      => $admin?->invoice_tax_rate       ?? ($this->invoice_tax_rate ?? 0),
             'invoice_payment_terms' => $admin?->invoice_payment_terms  ?? ($this->invoice_payment_terms ?? 30),
