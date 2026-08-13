@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import toast from 'react-hot-toast';
-import { can, getAuthUser } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth';
 import { User } from '@/types';
 import { inp, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import {
@@ -44,9 +44,9 @@ export default function ProjectChatPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const projectId = Number(id);
-  // Company Admin/PM can delete ANY message; everyone else can only ever
-  // delete their own (plain ownership check, enforced server-side too).
-  const canDeleteAny = can('project_management', 'canDeleteAnyProjectChatMessage');
+  // Every role here can only ever delete their own message (plain ownership
+  // check, enforced server-side too). Company Admin's unrestricted delete
+  // authority only applies from the Admin panel's own chat page.
 
   const [projectName, setProjectName] = useState('');
   // A draft project rejects messages server-side (ProjectMessengerController::
@@ -153,7 +153,9 @@ export default function ProjectChatPage() {
     if (!confirm('Delete this message?')) return;
     try {
       await userProjectMessengerService.deleteMessage(projectId, messageId);
-      setMessages(prev => prev.filter(m => m.id !== messageId));
+      setMessages(prev => prev.map(m => m.id === messageId
+        ? { ...m, is_deleted: true, content: null, attachment_name: null, attachment_path: null }
+        : m));
     } catch (err: unknown) {
       toast.error(errorMessage(err, 'Failed to delete message'));
     }
@@ -327,7 +329,9 @@ export default function ProjectChatPage() {
                           boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
                           border: isMine ? 'none' : '1px solid #f1f5f9',
                         }}>
-                          {editingMessageId === m.id ? (
+                          {m.is_deleted ? (
+                            <div style={{ fontSize: 13, fontStyle: 'italic', color: isMine ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>This message was deleted</div>
+                          ) : editingMessageId === m.id ? (
                             <div>
                               <input value={editText} onChange={e => setEditText(e.target.value)} style={{ ...inp, fontSize: 13, marginBottom: 6, color: '#0f172a' }} autoFocus />
                               <div style={{ display: 'flex', gap: 8 }}>
@@ -351,14 +355,14 @@ export default function ProjectChatPage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
                           <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{fmtShort(m.sent_at)}{m.edited_at && ' (edited)'}</span>
-                          {isMine && editingMessageId !== m.id && (
+                          {!m.is_deleted && isMine && editingMessageId !== m.id && (
                             <>
                               {m.message_type === 'text' && (
                                 <button onClick={() => startEdit(m)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Edit</button>
                               )}
                             </>
                           )}
-                          {(isMine || canDeleteAny) && editingMessageId !== m.id && (
+                          {!m.is_deleted && isMine && editingMessageId !== m.id && (
                             <button onClick={() => deleteMessage(m.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Delete</button>
                           )}
                         </div>

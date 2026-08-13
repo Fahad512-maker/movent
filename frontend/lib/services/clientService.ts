@@ -104,6 +104,10 @@ export const clientService = {
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   },
+  // Own message only — enforced server-side too.
+  projectChatDelete: async (projectId: number, messageId: number) => {
+    await clientApi.delete(`/client/projects/${projectId}/chat/${messageId}`);
+  },
   support: async () => {
     const res = await clientApi.get('/client/support');
     return res.data.data;

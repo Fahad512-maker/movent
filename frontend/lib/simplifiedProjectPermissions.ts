@@ -102,12 +102,6 @@ export const SIMPLE_PROJECT_PERMISSIONS: SimpleProjectPermission[] = [
     maps: ['canAddSellerToProjectChat'],
   },
   {
-    // Only Project Manager defaults to this (see RoleDefaultPermissions::MAP)
-    // — every other role can only ever delete their own chat message.
-    key: 'pm_adv_delete_any_chat_message', label: 'Delete Any Chat Message', advanced: true,
-    maps: ['canDeleteAnyProjectChatMessage'],
-  },
-  {
     // Delegated participant management for the project's one chat. It stays
     // outside pm_manage_chat because adding/removing people is a higher-risk
     // action, and adding the linked Seller still needs the separate Seller

@@ -5,13 +5,20 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService, CompanyUserOption } from '@/lib/services/userProjectService';
 import { Project, TeamMember, TeamRole } from '@/lib/services/adminProjectService';
-import { can, getUserModulePermissions } from '@/lib/auth';
+import { can, getUserModulePermissions, getAuthUser } from '@/lib/auth';
+import { User } from '@/types';
 import { MODULE_CATALOG } from '@/lib/moduleCatalog';
 import { inp, lbl, card, TEAM_ROLE_LABEL } from '@/components/admin/projects/shared';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import toast from 'react-hot-toast';
 
 const PROJECT_MODULE = MODULE_CATALOG.find(m => m.key === 'project_management');
+
+// Mirrors frontend/app/admin/projects/[id]/team/page.tsx's TEAM_ELIGIBLE_ROLES
+// — every role that can meaningfully sit on a project team, except Seller
+// (handled separately below, since adding one is gated further by who's
+// doing the adding) and Client.
+const TEAM_ELIGIBLE_ROLES = ['project_manager', 'production', 'developer', 'designer', 'qa', 'team_member'];
 
 // A team member's actual job (role_type, e.g. "Developer") is more useful
 // here than the generic 4-value project role_in_project — fall back to the
@@ -21,6 +28,7 @@ const memberRoleLabel = (m: TeamMember): string =>
 
 function UserTeamPageInner() {
   useAdminGuard();
+  const me = getAuthUser() as User | null;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -88,11 +96,17 @@ function UserTeamPageInner() {
   const members = selected?.team_members ?? [];
   // companyUsers() is shared with the Support Ticket staff-assignment picker
   // (frontend/app/support/[id]/page.tsx), which genuinely needs every role —
-  // so the Project-Manager-only restriction is applied here, client-side,
-  // rather than in that shared endpoint. This also incidentally drops
-  // role_type='client' (client-portal login accounts) and 'seller', which
-  // should never be selectable from this list either way.
-  const addableUsers = users.filter(u => u.role_type === 'project_manager');
+  // so the eligible-roles restriction is applied here, client-side, rather
+  // than in that shared endpoint. role_type='client' (client-portal login
+  // accounts) is always excluded — never selectable from this list.
+  //
+  // A Seller is addable ONLY when the caller is literally this project's own
+  // Project Manager — mirrors the server-side gate in
+  // Api\User\ProjectController::assignTeam() exactly (Company Admin or the
+  // literal PM only; every other caller, including a Seller who isn't this
+  // project's PM, would just get a 403 back).
+  const isLiteralPm = !!selected && !!me && selected.project_manager_id === me.id;
+  const addableUsers = users.filter(u => TEAM_ELIGIBLE_ROLES.includes(u.role_type) || (isLiteralPm && u.role_type === 'seller'));
   const selectedCandidate = addableUsers.find(u => String(u.id) === userId) ?? null;
 
   const addMember = async (e: React.FormEvent) => {

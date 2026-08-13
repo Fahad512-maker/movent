@@ -17,7 +17,6 @@ export default function ProjectsPage() {
   const [search, setSearch]     = useState('');
   const [statusF, setStatusF]   = useState('');
   const [priorityF, setPriorityF] = useState('');
-  const [reassigningId, setReassigningId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -30,17 +29,6 @@ export default function ProjectsPage() {
       setProjects(list);
     } catch { toast.error('Failed to load projects'); }
     finally { setLoading(false); }
-  };
-
-  const reassignPm = async (project: Project, newPmId: string) => {
-    setReassigningId(project.id);
-    try {
-      const updated = await adminProjectService.update(project.id, { project_manager_id: newPmId ? Number(newPmId) : null });
-      setProjects(prev => prev.map(p => p.id === project.id ? updated : p));
-      toast.success('Project Manager updated');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update Project Manager');
-    } finally { setReassigningId(null); }
   };
 
   useEffect(() => {
@@ -104,7 +92,7 @@ export default function ProjectsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Project', 'Company', 'Client', 'Assign Project', 'Status', 'Priority', 'Progress', 'Deadline', 'Actions'].map(h => (
+                {['Project', 'Company', 'Client', 'Status', 'Priority', 'Progress', 'Deadline', 'Actions'].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: 'left', fontSize: 11,
                     fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap',
@@ -127,35 +115,6 @@ export default function ProjectsPage() {
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.company?.name ?? '—'}</td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.client?.name ?? '—'}</td>
-                  <td style={{ padding: '12px 16px', fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                    <select
-                      value={p.project_manager_id ?? ''}
-                      disabled={reassigningId === p.id}
-                      onChange={e => reassignPm(p, e.target.value)}
-                      style={{
-                        padding: '5px 8px', border: '1px solid #e2e8f0', borderRadius: 7,
-                        fontSize: 12, outline: 'none', background: '#fafafa', color: '#334155',
-                        maxWidth: 160, cursor: reassigningId === p.id ? 'wait' : 'pointer',
-                      }}
-                    >
-                      <option value="">Unassigned</option>
-                      {/* Only this project's own team members are assignable
-                          as PM — not every company-wide project_manager-role
-                          user (that list belongs on Create/Edit Project's
-                          initial team-building step, not reassignment here). */}
-                      {(p.team_members ?? []).filter(tm => tm.user).map(tm => (
-                        <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}</option>
-                      ))}
-                      {/* Keep the current PM selectable even if they're not a
-                          formal team_members row (e.g. the seller-fallback
-                          auto-assignment, or someone since removed from the
-                          team) so the dropdown never silently shows the wrong
-                          selection. */}
-                      {p.project_manager && !(p.team_members ?? []).some(tm => tm.user_id === p.project_manager_id) && (
-                        <option value={p.project_manager_id ?? ''}>{p.project_manager.name}</option>
-                      )}
-                    </select>
-                  </td>
                   <td style={{ padding: '12px 16px' }}><Badge label={p.status} sc={STATUS_SC[p.status]} /></td>
                   <td style={{ padding: '12px 16px' }}><Badge label={p.priority} sc={PRIORITY_SC[p.priority]} /></td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.progress ?? 0}%</td>

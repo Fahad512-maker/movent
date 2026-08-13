@@ -181,6 +181,23 @@ export default function ClientProjectDetailPage() {
     catch { toast.error('Download failed'); }
   };
 
+  // Own message only — enforced server-side too. Company Admin's unrestricted
+  // delete authority only applies from the Admin panel's own client-chat page.
+  const deleteChatMessage = async (messageId: number) => {
+    if (!confirm('Delete this message?')) return;
+    try {
+      await clientService.projectChatDelete(Number(id), messageId);
+      setChat(prev => prev ? {
+        ...prev,
+        messages: prev.messages.map((m: any) => m.id === messageId
+          ? { ...m, is_deleted: true, content: null, attachment_name: null, attachment_path: null }
+          : m),
+      } : prev);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to delete message');
+    }
+  };
+
   const approve = async (deliverableId: number) => {
     try {
       await clientService.approveDeliverable(deliverableId);
@@ -456,21 +473,32 @@ export default function ClientProjectDetailPage() {
                       border: isMe ? 'none' : '1px solid #e2e8f0',
                       fontSize: 13, whiteSpace: 'pre-wrap',
                     }}>
-                      {renderWithMentions(msg.content, msg.mentions, mentionNameById, isMe ? MENTION_STYLE_MINE : MENTION_STYLE)}
-                      {msg.attachment_name && (
-                        <button
-                          onClick={() => downloadChatAttachment(msg.id, msg.attachment_name)}
-                          style={{
-                            display: 'block', marginTop: msg.content ? 6 : 0, padding: '4px 10px',
-                            borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                            border: `1px solid ${isMe ? 'rgba(255,255,255,0.35)' : '#e2e8f0'}`,
-                            background: isMe ? 'rgba(255,255,255,0.12)' : '#f8fafc',
-                            color: isMe ? '#fff' : GREEN,
-                          }}>
-                          📎 {msg.attachment_name}
-                        </button>
+                      {msg.is_deleted ? (
+                        <div style={{ fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>This message was deleted</div>
+                      ) : (
+                        <>
+                          {renderWithMentions(msg.content, msg.mentions, mentionNameById, isMe ? MENTION_STYLE_MINE : MENTION_STYLE)}
+                          {msg.attachment_name && (
+                            <button
+                              onClick={() => downloadChatAttachment(msg.id, msg.attachment_name)}
+                              style={{
+                                display: 'block', marginTop: msg.content ? 6 : 0, padding: '4px 10px',
+                                borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                                border: `1px solid ${isMe ? 'rgba(255,255,255,0.35)' : '#e2e8f0'}`,
+                                background: isMe ? 'rgba(255,255,255,0.12)' : '#f8fafc',
+                                color: isMe ? '#fff' : GREEN,
+                              }}>
+                              📎 {msg.attachment_name}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
+                    {isMe && !msg.is_deleted && (
+                      <div style={{ textAlign: 'right', marginTop: 3 }}>
+                        <button onClick={() => deleteChatMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Delete</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

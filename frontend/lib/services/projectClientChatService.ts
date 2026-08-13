@@ -87,6 +87,16 @@ export const userProjectClientChatService = {
     downloadBlob(res.data, fileName);
   },
 
+  // Own message only — enforced server-side too.
+  deleteMessage: async (projectId: number, messageId: number): Promise<void> => {
+    await api.delete(`/user/projects/${projectId}/client-chat/${messageId}`);
+  },
+
+  // Own message or the client's — never another staff member's. Purely a
+  // staff-side view toggle, invisible to the client (enforced server-side).
+  toggleHide: async (projectId: number, messageId: number): Promise<{ hidden_for_staff: boolean }> =>
+    (await api.post(`/user/projects/${projectId}/client-chat/${messageId}/toggle-hide`)).data.data,
+
   // Seller-only. 'all' lets the PM read the conversation from the beginning;
   // 'from_now' shows them only what is said after this moment. Calling it
   // again on an already-invited PM just switches their window. userId is only
@@ -121,4 +131,14 @@ export const adminProjectClientChatService = {
     const res = await api.get(`/admin/projects/${projectId}/client-chat/${messageId}/attachment`, { responseType: 'blob' });
     downloadBlob(res.data, fileName);
   },
+
+  // Admin can delete ANY message in the client conversation.
+  deleteMessage: async (projectId: number, messageId: number): Promise<void> => {
+    await api.delete(`/admin/projects/${projectId}/client-chat/${messageId}`);
+  },
+
+  // Admin can hide/unhide ANY message. Purely a staff-side view toggle,
+  // invisible to the client (enforced server-side).
+  toggleHide: async (projectId: number, messageId: number): Promise<{ hidden_for_staff: boolean }> =>
+    (await api.post(`/admin/projects/${projectId}/client-chat/${messageId}/toggle-hide`)).data.data,
 };

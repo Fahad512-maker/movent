@@ -93,8 +93,12 @@ export default function ProjectOverviewPage() {
     if (!sellerSelectId) return;
     setSellerBusy(true);
     try {
-      const updated = await adminProjectService.assignSeller(Number(id), Number(sellerSelectId), sellerReason.trim() || undefined);
-      setProject(updated);
+      await adminProjectService.assignSeller(Number(id), Number(sellerSelectId), sellerReason.trim() || undefined);
+      // Full refetch, not setProject(response) — assignSeller() only returns
+      // the project with `seller` eager-loaded, which would otherwise wipe
+      // tasks/team/invoices/progress etc. from this page's state until a
+      // manual reload, same root cause as the Projects list PM-dropdown bug.
+      await load();
       toast.success('Seller updated');
       setShowChangeSeller(false);
       setSellerReason('');

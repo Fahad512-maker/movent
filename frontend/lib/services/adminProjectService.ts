@@ -285,7 +285,7 @@ export interface ChatMessage {
   attachment_name: string | null;
   sender_id: number | null;
   sender_admin_id: number | null;
-  sender?: { id: number; name: string } | null;
+  sender?: { id: number; name: string; role_type?: string | null } | null;
   sender_admin?: { id: number; name: string } | null;
   // Only populated by the project-wise messenger (Api\*\ProjectMessengerController)
   // — General Chat and the older single-thread ProjectChatController never set this.
@@ -294,6 +294,14 @@ export interface ChatMessage {
   // participants in this list never receive the message at all, same
   // convention as Api\User\ClientChatController.
   hidden_from_user_ids?: number[] | null;
+  // When true, content/attachment have already been wiped server-side —
+  // render the "This message was deleted" placeholder instead.
+  is_deleted?: boolean;
+  // Client-chat only (Api\Admin|User\ProjectClientChatController's
+  // toggleHide()) — a staff-only view suppression, shared across every staff
+  // viewer, never sent to or seen by the client. Render a "hidden" placeholder
+  // in its place on the staff-facing pages only.
+  hidden_for_staff?: boolean;
   sent_at: string;
   edited_at?: string | null;
 }

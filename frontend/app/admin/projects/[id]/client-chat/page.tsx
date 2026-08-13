@@ -105,6 +105,33 @@ export default function AdminProjectClientChatPage() {
     catch { toast.error('Download failed'); }
   };
 
+  // Admin can delete ANY message in this conversation (its own, Seller's, or
+  // the client's) — matching the internal Project Chat's Admin authority.
+  const deleteMessage = async (messageId: number) => {
+    if (!confirm('Delete this message?')) return;
+    try {
+      await adminProjectClientChatService.deleteMessage(projectId, messageId);
+      setData(prev => prev ? {
+        ...prev,
+        messages: prev.messages.map(m => m.id === messageId
+          ? { ...m, is_deleted: true, content: null, attachment_name: null, attachment_path: null }
+          : m),
+      } : prev);
+    } catch { toast.error('Failed to delete message'); }
+  };
+
+  // Admin can hide/unhide ANY message — purely a staff-side view toggle, the
+  // client never knows it happened.
+  const toggleHide = async (m: ChatMessage) => {
+    try {
+      const r = await adminProjectClientChatService.toggleHide(projectId, m.id);
+      setData(prev => prev ? {
+        ...prev,
+        messages: prev.messages.map(x => x.id === m.id ? { ...x, hidden_for_staff: r.hidden_for_staff } : x),
+      } : prev);
+    } catch { toast.error('Failed to update message'); }
+  };
+
   return (
     <DashboardLayout title={`Client Chat${data?.project?.name ? ` — ${data.project.name}` : ''}`}>
       {/* Reached from the Chat tab's "Chat with Client" button — there is no
@@ -158,22 +185,38 @@ export default function AdminProjectClientChatPage() {
                           boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
                           border: isMine ? 'none' : '1px solid #f1f5f9',
                         }}>
-                          {m.content && (
-                            <div style={{ fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                              {renderWithMentions(m.content, m.mentions, nameById, isMine ? MENTION_STYLE_MINE : MENTION_STYLE)}
-                            </div>
-                          )}
-                          {m.attachment_name && (
-                            <button onClick={() => downloadAttachment(m)} style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: m.content ? 6 : 0, padding: '4px 10px',
-                              borderRadius: 6, border: `1px solid ${isMine ? 'rgba(255,255,255,0.3)' : '#e2e8f0'}`,
-                              background: isMine ? 'rgba(255,255,255,0.1)' : '#f8fafc', color: isMine ? '#fff' : '#059669',
-                              fontSize: 12, cursor: 'pointer', width: 'fit-content',
-                            }}>📎 {m.attachment_name}</button>
+                          {m.is_deleted ? (
+                            <div style={{ fontSize: 13, fontStyle: 'italic', color: isMine ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>This message was deleted</div>
+                          ) : m.hidden_for_staff ? (
+                            <div style={{ fontSize: 13, fontStyle: 'italic', color: isMine ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>This message is hidden</div>
+                          ) : (
+                            <>
+                              {m.content && (
+                                <div style={{ fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                                  {renderWithMentions(m.content, m.mentions, nameById, isMine ? MENTION_STYLE_MINE : MENTION_STYLE)}
+                                </div>
+                              )}
+                              {m.attachment_name && (
+                                <button onClick={() => downloadAttachment(m)} style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: m.content ? 6 : 0, padding: '4px 10px',
+                                  borderRadius: 6, border: `1px solid ${isMine ? 'rgba(255,255,255,0.3)' : '#e2e8f0'}`,
+                                  background: isMine ? 'rgba(255,255,255,0.1)' : '#f8fafc', color: isMine ? '#fff' : '#059669',
+                                  fontSize: 12, cursor: 'pointer', width: 'fit-content',
+                                }}>📎 {m.attachment_name}</button>
+                              )}
+                            </>
                           )}
                         </div>
-                        <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
-                          {fmtShort(m.sent_at)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
+                          <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{fmtShort(m.sent_at)}</span>
+                          {!m.is_deleted && (
+                            <button onClick={() => toggleHide(m)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                              {m.hidden_for_staff ? 'Unhide' : 'Hide'}
+                            </button>
+                          )}
+                          {!m.is_deleted && (
+                            <button onClick={() => deleteMessage(m.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Delete</button>
+                          )}
                         </div>
                       </div>
                     </div>

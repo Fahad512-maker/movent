@@ -92,7 +92,9 @@ export default function ProjectTeamPage() {
       toast.success('Team member added');
       setUserId('');
       load();
-    } catch { toast.error('Failed to add team member'); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to add team member');
+    }
     finally { setSaving(false); }
   };
 
@@ -102,7 +104,9 @@ export default function ProjectTeamPage() {
       await adminProjectService.removeTeamMember(projectId, memberId);
       toast.success('Team member removed');
       load();
-    } catch { toast.error('Failed to remove team member'); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to remove team member');
+    }
   };
 
   return (

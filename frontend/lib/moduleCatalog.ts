@@ -246,7 +246,6 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'canAddSellerToProjectChat',        label: 'Add Seller To Project Chat',      group: 'Project Chat' },
       { key: 'canUploadProjectChatAttachment',   label: 'Upload Project Chat Attachment',  group: 'Project Chat' },
       { key: 'canViewProjectChatAttachments',    label: 'View Project Chat Attachments',   group: 'Project Chat' },
-      { key: 'canDeleteAnyProjectChatMessage',   label: 'Delete Any Project Chat Message', group: 'Project Chat' },
     ],
   },
 ];
