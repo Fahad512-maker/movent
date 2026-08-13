@@ -67,6 +67,19 @@ interface PublicProjectSummary {
   total_invoiced?: number | null;
   total_paid?: number | null;
   outstanding?: number | null;
+  invoices?: PublicProjectInvoice[];
+}
+
+interface PublicProjectInvoice {
+  id: number;
+  invoice_number: string;
+  status: string;
+  total_amount: number;
+  paid_amount: number;
+  outstanding: number;
+  currency: string;
+  due_date?: string | null;
+  is_current: boolean;
 }
 
 type PageState = 'loading' | 'invalid' | 'expired' | 'paid' | 'active' | 'success' | 'pending_confirmation';
@@ -176,6 +189,7 @@ function PublicInvoicePayContent() {
     const p = inv.project;
     if (!p) return null;
     const full = p.view_mode === 'full';
+    const projectInvoices = p.invoices ?? [];
 
     return (
       <div style={card}>
@@ -201,12 +215,39 @@ function PublicInvoicePayContent() {
         </div>
 
         {full && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 12, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Start Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.start_date ?? undefined)}</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Due Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.deadline ?? undefined)}</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Project Invoices</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{p.invoice_count}</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Outstanding</div><div style={{ marginTop: 4, fontSize: 13, color: (p.outstanding ?? 0) > 0 ? '#ea580c' : '#059669', fontWeight: 700 }}>{fmt(p.outstanding ?? 0, inv.currency)}</div></div>
-          </div>
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 12, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+              <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Start Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.start_date ?? undefined)}</div></div>
+              <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Due Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.deadline ?? undefined)}</div></div>
+              <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Project Invoices</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{p.invoice_count}</div></div>
+              <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Outstanding</div><div style={{ marginTop: 4, fontSize: 13, color: (p.outstanding ?? 0) > 0 ? '#ea580c' : '#059669', fontWeight: 700 }}>{fmt(p.outstanding ?? 0, inv.currency)}</div></div>
+            </div>
+            {projectInvoices.length > 0 && (
+              <div style={{ marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>Linked Invoices</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {projectInvoices.map(pi => (
+                    <div key={pi.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: pi.is_current ? '#eff6ff' : '#f8fafc', border: `1px solid ${pi.is_current ? '#bfdbfe' : '#e2e8f0'}` }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                          {pi.invoice_number}{pi.is_current ? ' (Current)' : ''}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                          {cap(pi.status)}{pi.due_date ? ` • Due ${fmtDate(pi.due_date)}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{fmt(pi.total_amount, pi.currency)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: pi.outstanding > 0 ? '#ea580c' : '#059669', marginTop: 3 }}>
+                          Outstanding {fmt(pi.outstanding, pi.currency)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     );

@@ -121,7 +121,10 @@ class PublicInvoiceController extends Controller
 
         $projectInvoices = Invoice::where('company_id', $project->company_id)
             ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('id', $project->invoice_id))
-            ->get(['id', 'invoice_number', 'total_amount', 'paid_amount', 'status', 'project_id']);
+            ->orderBy('created_at')
+            ->get(['id', 'invoice_number', 'total_amount', 'paid_amount', 'status', 'due_date', 'currency', 'project_id']);
+        $totalInvoiced = (float) $projectInvoices->sum('total_amount');
+        $totalPaid     = (float) $projectInvoices->sum('paid_amount');
         $isMainInvoice = (int) $project->invoice_id === (int) $invoice->id;
         if ($projectInvoices->count() <= 1) {
             $isMainInvoice = true;
@@ -142,9 +145,20 @@ class PublicInvoiceController extends Controller
             'view_mode'          => $showFull ? 'full' : 'progress',
             'start_date'         => $showFull ? $project->start_date?->toDateString() : null,
             'deadline'           => $showFull ? $project->deadline?->toDateString() : null,
-            'total_invoiced'     => $showFull ? (float) $projectInvoices->sum('total_amount') : null,
-            'total_paid'         => $showFull ? (float) $projectInvoices->sum('paid_amount') : null,
-            'outstanding'        => $showFull ? max(0, round((float) $projectInvoices->sum('total_amount') - (float) $projectInvoices->sum('paid_amount'), 2)) : null,
+            'total_invoiced'     => $showFull ? $totalInvoiced : null,
+            'total_paid'         => $showFull ? $totalPaid : null,
+            'outstanding'        => $showFull ? max(0, round($totalInvoiced - $totalPaid, 2)) : null,
+            'invoices'           => $showFull ? $projectInvoices->map(fn ($i) => [
+                'id'             => $i->id,
+                'invoice_number' => $i->invoice_number,
+                'status'         => $i->status,
+                'total_amount'   => (float) $i->total_amount,
+                'paid_amount'    => (float) $i->paid_amount,
+                'outstanding'    => max(0, round((float) $i->total_amount - (float) $i->paid_amount, 2)),
+                'currency'       => $i->currency,
+                'due_date'       => $i->due_date?->toDateString(),
+                'is_current'     => (int) $i->id === (int) $invoice->id,
+            ])->values() : [],
         ];
     }
 
