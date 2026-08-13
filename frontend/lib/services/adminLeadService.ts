@@ -59,6 +59,15 @@ export interface DealEligibility {
   remaining_amount: number;
   fulfillment_status: string | null;
   project_creation_eligible: boolean;
+  invoice_count: number;
+  latest_invoice: {
+    id: number;
+    invoice_number: string;
+    status: string;
+    total_amount: number;
+    paid_amount: number;
+    due_date: string | null;
+  } | null;
   has_project: boolean;
   project_id?: number | null;
   project_reference?: string | null;

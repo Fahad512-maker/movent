@@ -89,7 +89,6 @@ export default function UserProjectDetailPage() {
 
   const canEditProjects = can('project_management', 'canEditProjects');
   const canManageProjectInvoices = can('project_management', 'canManageProjectInvoices');
-  const canLinkExistingProjectInvoices = canManageProjectInvoices && me?.role_type !== 'project_manager';
   const canEditTasks   = can('project_management', 'canEditTasks');
   const canCreateTasks = can('project_management', 'canCreateTasks');
   const canAssignTasks = can('project_management', 'canAssignTasks');
@@ -195,9 +194,7 @@ export default function UserProjectDetailPage() {
   };
 
   // Invoices & billing
-  const [linkInvoiceId, setLinkInvoiceId] = useState('');
   const [invoiceBusy, setInvoiceBusy]     = useState(false);
-  const [showLinkInvoice, setShowLinkInvoice] = useState(false);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
   const [newInvDesc, setNewInvDesc]   = useState('');
   const [newInvAmount, setNewInvAmount] = useState('');
@@ -218,29 +215,6 @@ export default function UserProjectDetailPage() {
       const ex = err as { response?: { data?: { message?: string } } };
       toast.error(ex.response?.data?.message ?? 'Failed to create invoice');
     } finally { setInvoiceBusy(false); }
-  };
-
-  const handleLinkInvoice = async () => {
-    if (!linkInvoiceId.trim()) return;
-    setInvoiceBusy(true);
-    try {
-      await userProjectService.linkInvoice(id, Number(linkInvoiceId));
-      toast.success('Invoice linked to project');
-      setLinkInvoiceId(''); setShowLinkInvoice(false);
-      load();
-    } catch (err: unknown) {
-      const ex = err as { response?: { data?: { message?: string } } };
-      toast.error(ex.response?.data?.message ?? 'Failed to link invoice');
-    } finally { setInvoiceBusy(false); }
-  };
-
-  const handleUnlinkInvoice = async (invoiceId: number) => {
-    if (!confirm('Unlink this invoice from the project?')) return;
-    try {
-      await userProjectService.unlinkInvoice(id, invoiceId);
-      toast.success('Invoice unlinked');
-      load();
-    } catch { toast.error('Failed to unlink invoice'); }
   };
 
   const loadProduction = async () => {
@@ -607,6 +581,10 @@ export default function UserProjectDetailPage() {
   const overdueTasksCount = tasks.filter(isOverdue).length;
 
   const myTasks = me ? tasks.filter(t => assignedToId(t) === me.id) : [];
+  const projectInvoices = (project.invoices ?? []).filter(inv => inv.project_id === project.id);
+  const projectTotalInvoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+  const projectTotalPaid = projectInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
+  const projectOutstanding = Math.max(0, projectTotalInvoiced - projectTotalPaid);
 
   return (
     <DashboardLayout title={project.name}>
@@ -738,25 +716,11 @@ export default function UserProjectDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={sectionTitle}>Invoices &amp; Billing</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {canLinkExistingProjectInvoices && (
-                  <button onClick={() => setShowLinkInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#2563eb', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                    Link Existing Invoice
-                  </button>
-                )}
                 <button onClick={() => setShowCreateInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
                   + Create Invoice
                 </button>
               </div>
             </div>
-
-            {canLinkExistingProjectInvoices && showLinkInvoice && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
-                <input value={linkInvoiceId} onChange={e => setLinkInvoiceId(e.target.value)} placeholder="Invoice ID" style={{ ...inp, width: 160 }} />
-                <button onClick={handleLinkInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
-                  {invoiceBusy ? 'Linking…' : 'Link'}
-                </button>
-              </div>
-            )}
 
             {showCreateInvoice && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -771,13 +735,13 @@ export default function UserProjectDetailPage() {
 
             {project.billing_summary && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Invoiced</div><div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{project.billing_summary.total_invoiced.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Paid</div><div style={{ fontSize: 15, fontWeight: 700, color: '#059669', marginTop: 4 }}>{project.billing_summary.total_paid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding</div><div style={{ fontSize: 15, fontWeight: 700, color: project.billing_summary.outstanding > 0 ? '#ea580c' : '#059669', marginTop: 4 }}>{project.billing_summary.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
+                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Invoiced</div><div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{projectTotalInvoiced.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
+                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Paid</div><div style={{ fontSize: 15, fontWeight: 700, color: '#059669', marginTop: 4 }}>{projectTotalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
+                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding</div><div style={{ fontSize: 15, fontWeight: 700, color: projectOutstanding > 0 ? '#ea580c' : '#059669', marginTop: 4 }}>{projectOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
               </div>
             )}
 
-            {(project.invoices ?? []).length === 0 ? (
+            {projectInvoices.length === 0 ? (
               <div style={{ fontSize: 13, color: '#94a3b8', padding: '8px 0' }}>No invoices linked to this project yet.</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -789,7 +753,7 @@ export default function UserProjectDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(project.invoices ?? []).map(inv => (
+                  {projectInvoices.map(inv => (
                     <tr key={inv.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                       <td style={{ padding: '9px 10px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.invoice_number}</td>
                       <td style={{ padding: '9px 10px', fontSize: 13, color: '#475569' }}>{inv.currency} {inv.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
@@ -797,7 +761,6 @@ export default function UserProjectDetailPage() {
                       <td style={{ padding: '9px 10px', fontSize: 13, color: '#64748b' }}>{fmtDate(inv.due_date)}</td>
                       <td style={{ padding: '9px 10px', display: 'flex', gap: 10 }}>
                         <Link href={`/invoices/${inv.id}`} style={{ color: '#2563eb', fontSize: 12.5, fontWeight: 600, textDecoration: 'none' }}>View</Link>
-                        <button onClick={() => handleUnlinkInvoice(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12.5, fontWeight: 600 }}>Unlink</button>
                       </td>
                     </tr>
                   ))}

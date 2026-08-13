@@ -216,7 +216,7 @@ function NewInvoiceForm() {
       // A won lead has no project yet — default to naming one, carrying the
       // deal's own proposed title/reference so they travel with the invoice.
       setProjectMode('new');
-      if (lead.proposed_project_title) setProjectTitle(lead.proposed_project_title);
+      setProjectTitle(lead.name);
       if (lead.deal_reference) setProjectReference(lead.deal_reference);
       const kickoff = lead.required_kickoff_amount ?? lead.estimated_value ?? 0;
       if (kickoff > 0) {
