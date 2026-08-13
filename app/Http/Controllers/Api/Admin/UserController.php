@@ -220,8 +220,7 @@ class UserController extends Controller
     {
         $companies = Company::whereIn('id', $this->companyIds())
             ->select('id', 'name')
-            ->where('is_active', true)
-            ->orderBy('name')
+            ->orderBy('id')
             ->get()
             ->map(function (Company $c) {
                 return [
