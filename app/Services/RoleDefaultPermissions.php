@@ -246,7 +246,6 @@ class RoleDefaultPermissions
                 'canViewSalesDashboard', 'canViewLeads', 'canViewAllCompanyLeads',
                 'canCreateLeads', 'canEditLeads', 'canDeleteLeads', 'canAssignLeadOwner', 'canTransferLeads',
                 'canManagePipeline', 'canAddLeadNotes', 'canViewSalesTargets', 'canUpdateSalesTargets', 'canViewSalesReports',
-                'canUseSalesChat',
                 'canViewClients', 'canCreateClients', 'canEditClients',
             ],
             'client' => [

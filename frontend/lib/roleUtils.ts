@@ -296,7 +296,6 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewSalesDashboard', 'canViewLeads', 'canViewAllCompanyLeads',
       'canCreateLeads', 'canEditLeads', 'canDeleteLeads', 'canAssignLeadOwner', 'canTransferLeads',
       'canManagePipeline', 'canAddLeadNotes', 'canViewSalesTargets', 'canUpdateSalesTargets', 'canViewSalesReports',
-      'canUseSalesChat',
       'canViewClients', 'canCreateClients', 'canEditClients',
     ],
     client: [

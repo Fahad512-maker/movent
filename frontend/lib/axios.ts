@@ -13,6 +13,8 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = Cookies.get('auth_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const activeCompanyId = Cookies.get('active_company_id');
+  if (activeCompanyId) config.headers['X-Active-Company-Id'] = activeCompanyId;
   return config;
 });
 

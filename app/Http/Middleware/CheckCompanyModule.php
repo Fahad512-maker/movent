@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Helpers\ApiResponse;
 use App\Models\CompanyAdmin;
 use App\Models\CompanyModule;
+use App\Models\CompanyUserAssignment;
 use App\Models\Module;
 use Closure;
 use Illuminate\Http\Request;
@@ -43,10 +44,19 @@ class CheckCompanyModule
                 ->where('is_enabled', true)
                 ->exists();
         } else {
-            if (!$user->company_id) {
+            $companyId = (int) $request->header('X-Active-Company-Id');
+            if ($companyId && !CompanyUserAssignment::where('user_id', $user->id)
+                ->where('company_id', $companyId)
+                ->where('status', 'active')
+                ->exists()) {
+                $companyId = 0;
+            }
+            $companyId = $companyId ?: (int) $user->company_id;
+
+            if (!$companyId) {
                 return ApiResponse::error('Unauthorized', 401);
             }
-            $enabled = CompanyModule::where('company_id', $user->company_id)
+            $enabled = CompanyModule::where('company_id', $companyId)
                 ->where('module_key', $moduleKey)
                 ->where('is_enabled', true)
                 ->exists();

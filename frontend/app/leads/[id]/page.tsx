@@ -89,9 +89,10 @@ export default function LeadDetailPage() {
   const leadId  = Number(params.id);
   const authType = getAuthType();
   const isAdmin  = authType === 'admin';
+  const authUser = getAuthUser() as { role_type?: string } | Admin | null;
 
   // Module / permission gates
-  const admin          = isAdmin ? (getAuthUser() as Admin | null) : null;
+  const admin          = isAdmin ? (authUser as Admin | null) : null;
   const hasProjectMod  = isAdmin ? (admin?.modules?.includes('projects') ?? false) : getUserModulePermissions('project_management').length > 0;
   const canEditLead    = isAdmin || can('sales', 'canEditLeads');
   const canDeleteLead  = isAdmin || can('sales', 'canDeleteLeads');
@@ -103,7 +104,7 @@ export default function LeadDetailPage() {
   const hasInvoiceMod    = isAdmin ? (admin?.modules?.includes('invoices') ?? false) : getUserModulePermissions('invoice').length > 0;
   const canCreateInvoice = isAdmin || can('invoice', 'canCreateInvoices');
   // Company Admin always sees Sales Chat, same as every other chat surface.
-  const canUseSalesChat = isAdmin || can('sales', 'canUseSalesChat');
+  const canUseSalesChat = isAdmin || ((!authUser || 'role_type' in authUser) && authUser?.role_type === 'seller' && can('sales', 'canUseSalesChat'));
 
   const svc = isAdmin ? adminLeadService : userLeadService;
   const chatSvc = isAdmin ? adminSalesChatService : userSalesChatService;
@@ -417,7 +418,7 @@ export default function LeadDetailPage() {
               {canShowInvoiceStatus && latestInvoice && (
                 <Link href={isAdmin ? `/admin/invoices/${latestInvoice.id}` : `/invoices/${latestInvoice.id}`}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, background: '#fff7ed', border: '1.5px solid #fed7aa', color: '#c2410c', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-                  <HiClock size={15} /> {invoiceStatusLabel(latestInvoice.status, dealEligibility.fulfillment_status)}
+                  <HiClock size={15} /> {invoiceStatusLabel(latestInvoice.status, dealEligibility?.fulfillment_status)}
                 </Link>
               )}
               {canTransferLead && (

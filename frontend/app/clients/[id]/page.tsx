@@ -11,7 +11,7 @@ import { adminSalesChatService, userSalesChatService } from '@/lib/services/sale
 import { ChatMessage } from '@/lib/services/adminProjectService';
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, inp, Badge, STATUS_SC, PRIORITY_SC, fmtDate } from '@/components/admin/projects/shared';
 import api from '@/lib/axios';
-import { getAuthType, can } from '@/lib/auth';
+import { getAuthType, getAuthUser, can } from '@/lib/auth';
 import { Client, Invoice } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -41,9 +41,11 @@ export default function ClientProfilePage() {
   const params = useParams<{ id: string }>();
   const clientId = Number(params.id);
   const isSubUser = getAuthType() === 'user';
+  const authUser = getAuthUser() as { role_type?: string } | null;
+  const isSeller = !isSubUser || authUser?.role_type === 'seller';
   const canEditClient = !isSubUser || can('client', 'canEditClients');
   // Sales Chat is available only for portal-active clients.
-  const canUseSalesChat = !isSubUser || can('sales', 'canUseSalesChat');
+  const canUseSalesChat = !isSubUser || (isSeller && can('sales', 'canUseSalesChat'));
   const canViewClientProjects = !isSubUser
     || can('project_management', 'canViewProjects')
     || can('project_management', 'canViewLinkedProjects');

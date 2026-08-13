@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\UserCompanyPermission;
 use App\Models\UserPermission;
 use App\Services\ModuleCatalog;
+use App\Services\RoleDefaultPermissions;
 use App\Support\CrossAccountEmail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -287,7 +288,7 @@ class UserController extends Controller
             'company_assignments.*.data_scopes'  => ['nullable', 'array'],
         ]);
 
-        $assignments   = $validated['company_assignments'] ?? [];
+        $assignments   = $this->withRoleDefaultPermissions($validated['company_assignments'] ?? [], $validated['role_type'] ?? null);
         $defaultCompId = $assignments[0]['company_id'] ?? $companyIds[0] ?? null;
         if (!$defaultCompId) return ApiResponse::error('No company found', 404);
 
@@ -391,7 +392,7 @@ class UserController extends Controller
             'company_assignments.*.data_scopes'  => ['nullable', 'array'],
         ]);
 
-        $assignments   = $validated['company_assignments'] ?? [];
+        $assignments   = $this->withRoleDefaultPermissions($validated['company_assignments'] ?? [], $validated['role_type'] ?? null);
         $defaultCompId = $assignments[0]['company_id'] ?? $companyIds[0] ?? null;
         if (!$defaultCompId) return ApiResponse::error('No company found', 404);
 
@@ -849,6 +850,11 @@ class UserController extends Controller
             'data_scopes.*' => ['nullable', 'string', 'in:own,assigned,all,view_only,no_access'],
         ]);
         $dataScopes = $validated['data_scopes'] ?? [];
+        $permissions = $this->withMandatoryRolePermissionsForCompany(
+            $validated['permissions'],
+            $user->role_type,
+            $companyId
+        );
 
         // Rule 7: get or create the assignment, then store permissions against its ID
         $assignment = CompanyUserAssignment::firstOrCreate(
@@ -862,7 +868,7 @@ class UserController extends Controller
             ->where('company_id', $companyId)
             ->delete();
 
-        foreach ($validated['permissions'] as $moduleKey => $permKeys) {
+        foreach ($permissions as $moduleKey => $permKeys) {
             foreach ((array) $permKeys as $permKey) {
                 if (!ModuleCatalog::isValidPermission($moduleKey, $permKey)) continue;
                 UserCompanyPermission::create([
@@ -882,7 +888,7 @@ class UserController extends Controller
             ->map(fn ($g) => $g->pluck('permission_key')->toArray())
             ->toArray();
 
-        $this->logAudit($request, $companyId, 'user.permissions_updated', 'User', $user->id, [], ['permissions' => $validated['permissions']]);
+        $this->logAudit($request, $companyId, 'user.permissions_updated', 'User', $user->id, [], ['permissions' => $permissions]);
 
         return ApiResponse::success(['permissions' => $perms, 'data_scopes' => $dataScopes], 'Permissions updated');
     }
@@ -964,5 +970,70 @@ class UserController extends Controller
                 }
             }
         }
+    }
+
+    private function withRoleDefaultPermissions(array $assignments, ?string $role): array
+    {
+        if (!$role) return $assignments;
+
+        return array_map(function (array $assignment) use ($role) {
+            $companyId = $assignment['company_id'] ?? null;
+            if (!$companyId) return $assignment;
+
+            $purchasedCatalogModules = Company::find($companyId)?->modules()
+                ->where('is_enabled', true)
+                ->pluck('module_key')
+                ->map(fn ($key) => ModuleCatalog::dbKeyToCatalog($key))
+                ->unique()
+                ->values()
+                ->toArray() ?? [];
+
+            $defaults = RoleDefaultPermissions::forRole($role, $purchasedCatalogModules);
+            if (empty($defaults)) return $assignment;
+
+            $permissions = $assignment['permissions'] ?? [];
+            foreach ($defaults as $moduleKey => $permKeys) {
+                // If the UI already sent this module bucket, respect whatever
+                // the admin checked/unchecked. Fill only missing buckets so a
+                // role like Lead Manager always gets its default Sales grants
+                // when the frontend payload omitted that bucket entirely.
+                if (array_key_exists($moduleKey, $permissions)) {
+                    if ($role === 'lead_manager' && $moduleKey === 'sales') {
+                        $permissions[$moduleKey] = array_values(array_unique(array_merge(
+                            (array) $permissions[$moduleKey],
+                            $permKeys
+                        )));
+                    }
+                    continue;
+                }
+                $permissions[$moduleKey] = $permKeys;
+            }
+
+            $assignment['permissions'] = $permissions;
+            return $assignment;
+        }, $assignments);
+    }
+
+    private function withMandatoryRolePermissionsForCompany(array $permissions, ?string $role, int $companyId): array
+    {
+        if ($role !== 'lead_manager') return $permissions;
+
+        $purchasedCatalogModules = Company::find($companyId)?->modules()
+            ->where('is_enabled', true)
+            ->pluck('module_key')
+            ->map(fn ($key) => ModuleCatalog::dbKeyToCatalog($key))
+            ->unique()
+            ->values()
+            ->toArray() ?? [];
+
+        $salesDefaults = RoleDefaultPermissions::forRole($role, $purchasedCatalogModules)['sales'] ?? [];
+        if (empty($salesDefaults)) return $permissions;
+
+        $permissions['sales'] = array_values(array_unique(array_merge(
+            (array) ($permissions['sales'] ?? []),
+            $salesDefaults
+        )));
+
+        return $permissions;
     }
 }

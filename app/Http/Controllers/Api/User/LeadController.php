@@ -10,6 +10,7 @@ use App\Models\LeadTransfer;
 use App\Models\Notification;
 use App\Models\SystemAuditLog;
 use App\Models\User;
+use App\Models\CompanyUserAssignment;
 use App\Models\UserCompanyPermission;
 use App\Support\PermissionDebug;
 use Illuminate\Database\QueryException;
@@ -22,15 +23,31 @@ class LeadController extends Controller
     private function user()       { return auth('sanctum')->user(); }
     private function userName(): string { return $this->user()->name ?? 'User'; }
 
+    private function companyId(): int
+    {
+        $user = $this->user();
+        $requested = (int) request()->header('X-Active-Company-Id');
+
+        if ($requested && CompanyUserAssignment::where('user_id', $user->id)
+            ->where('company_id', $requested)
+            ->where('status', 'active')
+            ->exists()) {
+            return $requested;
+        }
+
+        return (int) $user->company_id;
+    }
+
     private function can(string $permKey): bool
     {
         $user = $this->user();
+        $companyId = $this->companyId();
         $result = UserCompanyPermission::where('user_id', $user->id)
-            ->where('company_id', $user->company_id)
+            ->where('company_id', $companyId)
             ->where('module_key', 'sales')
             ->where('permission_key', $permKey)
             ->exists();
-        PermissionDebug::log($user->id, $user->company_id, $user->role_type, 'sales', $permKey, $result);
+        PermissionDebug::log($user->id, $companyId, $user->role_type, 'sales', $permKey, $result);
         return $result;
     }
 
@@ -42,7 +59,7 @@ class LeadController extends Controller
     {
         $user = $this->user();
         return UserCompanyPermission::where('user_id', $user->id)
-            ->where('company_id', $user->company_id)
+            ->where('company_id', $this->companyId())
             ->whereIn('module_key', ['client', 'sales'])
             ->where('permission_key', 'canCreateClients')
             ->exists();
@@ -57,7 +74,7 @@ class LeadController extends Controller
     private function visibleLeads()
     {
         $user = $this->user();
-        $base = Lead::where('company_id', $user->company_id);
+        $base = Lead::where('company_id', $this->companyId());
 
         if ($this->can('canViewAllCompanyLeads')) {
             return $base;
@@ -75,10 +92,12 @@ class LeadController extends Controller
     // this check only ever applies to this User guard.
     private function assignableSeller(int $userId, int $companyId): ?User
     {
-        return User::where('id', $userId)
-            ->where('company_id', $companyId)
+        return User::where('users.id', $userId)
             ->where('is_active', true)
             ->where('role_type', 'seller')
+            ->whereHas('companyAssignments', fn ($q) => $q
+                ->where('company_id', $companyId)
+                ->where('status', 'active'))
             ->first();
     }
 
@@ -174,6 +193,7 @@ class LeadController extends Controller
         }
 
         $user = $this->user();
+        $companyId = $this->companyId();
 
         $validated = $request->validate([
             'name'               => ['required', 'string', 'max:150'],
@@ -191,16 +211,20 @@ class LeadController extends Controller
             // otherwise a second, unguarded path to the exact cross-company
             // assignment transfer()/companyUsers() above are specifically
             // hardened against.
-            'assigned_to'        => ['nullable', 'integer', Rule::exists('users', 'id')->where('company_id', $user->company_id)->where('is_active', true)],
+            'assigned_to'        => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->where('role_type', 'seller')],
         ]);
+
+        if (!empty($validated['assigned_to']) && !$this->assignableSeller((int) $validated['assigned_to'], $companyId)) {
+            return ApiResponse::error('Selected seller does not belong to this company.', 422);
+        }
 
         // Same company-scoped duplicate guard as Api\User\ClientController::
         // store() — a Lead with this email already exists for this company.
-        if (!empty($validated['email']) && Lead::where('company_id', $user->company_id)->where('email', $validated['email'])->exists()) {
+        if (!empty($validated['email']) && Lead::where('company_id', $companyId)->where('email', $validated['email'])->exists()) {
             return ApiResponse::error('A lead with this email already exists.', 422);
         }
 
-        $validated['company_id'] = $user->company_id;
+        $validated['company_id'] = $companyId;
         $validated['assigned_to'] ??= $user->id;
         $validated['status']   ??= 'new';
         $validated['priority'] ??= 'medium';
@@ -246,8 +270,12 @@ class LeadController extends Controller
             // otherwise a second, unguarded path to the exact cross-company
             // assignment transfer()/companyUsers() above are specifically
             // hardened against.
-            'assigned_to'        => ['nullable', 'integer', Rule::exists('users', 'id')->where('company_id', $user->company_id)->where('is_active', true)],
+            'assigned_to'        => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->where('role_type', 'seller')],
         ]);
+
+        if (!empty($validated['assigned_to']) && !$this->assignableSeller((int) $validated['assigned_to'], $lead->company_id)) {
+            return ApiResponse::error('Selected seller does not belong to this company.', 422);
+        }
 
         // Same company-scoped duplicate guard as store() — editing a lead's
         // email must not collide with a different lead's.
@@ -512,7 +540,7 @@ class LeadController extends Controller
 
         $toUserId = (int) $validated['to_user_id'];
 
-        if (!$this->assignableSeller($toUserId, $user->company_id)) {
+        if (!$this->assignableSeller($toUserId, $lead->company_id)) {
             return ApiResponse::error('Selected seller does not belong to this company.', 422);
         }
 
@@ -582,7 +610,10 @@ class LeadController extends Controller
         }
 
         $user = $this->user();
-        $users = User::where('company_id', $user->company_id)
+        $companyId = $this->companyId();
+        $users = User::whereHas('companyAssignments', fn ($q) => $q
+                ->where('company_id', $companyId)
+                ->where('status', 'active'))
             ->where('is_active', true)
             ->where('role_type', 'seller')
             ->orderBy('name')
