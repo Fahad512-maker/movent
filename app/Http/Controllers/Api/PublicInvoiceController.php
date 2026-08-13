@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\CompanyPaymentGateway;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Project;
+use App\Models\Task;
 use App\Services\InvoiceGatewayChargeService;
 use App\Services\InvoicePaymentService;
 use App\Services\PaymentGateways\PaymentGatewayManager;
@@ -21,7 +23,7 @@ class PublicInvoiceController extends Controller
     public function show(Request $request, string $token): JsonResponse
     {
         $invoice = Invoice::where('payment_token', $token)
-            ->with(['company', 'items'])
+            ->with(['company', 'items', 'client', 'project'])
             ->first();
 
         if (!$invoice) {
@@ -95,7 +97,55 @@ class PublicInvoiceController extends Controller
             'gateway_unavailable_message' => $gatewayUnavailableMessage,
             'bank_details'                => $bankDetails ?: null,
             'has_pending_payment'         => $hasPendingPayment,
+            'project'                     => $this->projectSummary($invoice),
         ]);
+    }
+
+    private function projectSummary(Invoice $invoice): ?array
+    {
+        $project = $invoice->project
+            ?: Project::where('company_id', $invoice->company_id)
+                ->where('invoice_id', $invoice->id)
+                ->first();
+
+        if (!$project) {
+            return null;
+        }
+
+        $taskStats = Task::where('project_id', $project->id)
+            ->selectRaw('COUNT(*) as total, SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as done')
+            ->first();
+        $totalTasks = (int) ($taskStats?->total ?? 0);
+        $doneTasks  = (int) ($taskStats?->done ?? 0);
+        $progress   = $totalTasks > 0 ? (int) round(($doneTasks / $totalTasks) * 100) : (int) ($project->progress ?? 0);
+
+        $projectInvoices = Invoice::where('company_id', $project->company_id)
+            ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('id', $project->invoice_id))
+            ->get(['id', 'invoice_number', 'total_amount', 'paid_amount', 'status', 'project_id']);
+        $isMainInvoice = (int) $project->invoice_id === (int) $invoice->id;
+        if ($projectInvoices->count() <= 1) {
+            $isMainInvoice = true;
+        }
+
+        $portalActive = (bool) ($invoice->client?->portal_access && $invoice->client?->user_id);
+        $showFull = $isMainInvoice || $portalActive;
+
+        return [
+            'id'                 => $project->id,
+            'name'               => $project->name,
+            'reference'          => $project->reference,
+            'status'             => $project->status,
+            'progress'           => $progress,
+            'is_main_invoice'    => $isMainInvoice,
+            'invoice_count'      => $projectInvoices->count(),
+            'portal_active'      => $portalActive,
+            'view_mode'          => $showFull ? 'full' : 'progress',
+            'start_date'         => $showFull ? $project->start_date?->toDateString() : null,
+            'deadline'           => $showFull ? $project->deadline?->toDateString() : null,
+            'total_invoiced'     => $showFull ? (float) $projectInvoices->sum('total_amount') : null,
+            'total_paid'         => $showFull ? (float) $projectInvoices->sum('paid_amount') : null,
+            'outstanding'        => $showFull ? max(0, round((float) $projectInvoices->sum('total_amount') - (float) $projectInvoices->sum('paid_amount'), 2)) : null,
+        ];
     }
 
     // The gateway account(s) this invoice's public/client pay page should

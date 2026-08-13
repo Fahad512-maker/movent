@@ -49,6 +49,24 @@ interface PublicInvoice {
   gateway_unavailable_message?: string | null;
   bank_details?: BankDetails | null;
   has_pending_payment: boolean;
+  project?: PublicProjectSummary | null;
+}
+
+interface PublicProjectSummary {
+  id: number;
+  name: string;
+  reference?: string | null;
+  status: string;
+  progress: number;
+  is_main_invoice: boolean;
+  invoice_count: number;
+  portal_active: boolean;
+  view_mode: 'full' | 'progress';
+  start_date?: string | null;
+  deadline?: string | null;
+  total_invoiced?: number | null;
+  total_paid?: number | null;
+  outstanding?: number | null;
 }
 
 type PageState = 'loading' | 'invalid' | 'expired' | 'paid' | 'active' | 'success' | 'pending_confirmation';
@@ -67,6 +85,10 @@ function fmt(n: number, cur = 'USD') {
 function fmtDate(d?: string) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function cap(s: string) {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function PublicInvoicePayContent() {
@@ -150,6 +172,45 @@ function PublicInvoicePayContent() {
     border: '1px solid #e2e8f0', padding: '24px 28px', marginBottom: 16,
   };
   const centreCard: React.CSSProperties = { ...card, textAlign: 'center', padding: '56px 40px', maxWidth: 460, marginLeft: 'auto', marginRight: 'auto' };
+  const renderProjectCard = (inv: PublicInvoice) => {
+    const p = inv.project;
+    if (!p) return null;
+    const full = p.view_mode === 'full';
+
+    return (
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', marginBottom: 4 }}>Project Status</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>{p.name}</div>
+            {full && p.reference && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{p.reference}</div>}
+          </div>
+          <span style={{ padding: '4px 10px', borderRadius: 999, background: '#eff6ff', color: '#2563eb', fontSize: 11, fontWeight: 700 }}>
+            {cap(p.status)}
+          </span>
+        </div>
+
+        <div style={{ marginBottom: full ? 16 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Progress</span>
+            <span style={{ fontSize: 12, color: '#0f172a', fontWeight: 700 }}>{p.progress}%</span>
+          </div>
+          <div style={{ height: 9, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.max(0, Math.min(100, p.progress))}%`, height: '100%', background: 'linear-gradient(135deg, #2563eb, #10b981)' }} />
+          </div>
+        </div>
+
+        {full && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 12, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Start Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.start_date ?? undefined)}</div></div>
+            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Due Date</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{fmtDate(p.deadline ?? undefined)}</div></div>
+            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Project Invoices</div><div style={{ marginTop: 4, fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{p.invoice_count}</div></div>
+            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Outstanding</div><div style={{ marginTop: 4, fontSize: 13, color: (p.outstanding ?? 0) > 0 ? '#ea580c' : '#059669', fontWeight: 700 }}>{fmt(p.outstanding ?? 0, inv.currency)}</div></div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (pageState === 'loading') return (
     <div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -206,6 +267,7 @@ function PublicInvoicePayContent() {
           </div>
         </div>
       </div>
+      {renderProjectCard(invoice)}
     </div></div>
   );
 
@@ -229,6 +291,7 @@ function PublicInvoicePayContent() {
           ))}
         </div>
       </div>
+      {renderProjectCard(invoice)}
     </div></div>
   );
 
@@ -279,6 +342,7 @@ function PublicInvoicePayContent() {
             {isBankTransfer ? `Status will be updated after verification by ${invoice.company_name}` : 'A receipt has been recorded for this payment.'}
           </p>
         </div>
+        {renderProjectCard(invoice)}
       </div></div>
     );
   }
@@ -335,6 +399,8 @@ function PublicInvoicePayContent() {
           {invoice.customer_phone   && <div style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>{invoice.customer_phone}</div>}
           {invoice.customer_address && <div style={{ fontSize: 13, color: '#64748b' }}>{invoice.customer_address}</div>}
         </div>
+
+        {renderProjectCard(invoice)}
 
         {/* Line Items */}
         <div style={card}>
