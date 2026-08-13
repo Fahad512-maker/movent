@@ -58,6 +58,21 @@ const ACTIVITY_COLOR: Record<string, string> = {
   followup_completed: '#10b981', converted: '#059669', won: '#059669', lost: '#dc2626', reopened: '#d97706',
 };
 
+const mergeLeadDetail = (current: Lead | null, updated: Lead): Lead => {
+  if (!current) return updated;
+  return {
+    ...current,
+    ...updated,
+    follow_ups: updated.follow_ups ?? current.follow_ups,
+    activities: updated.activities ?? current.activities,
+  };
+};
+
+const errorMessage = (err: unknown, fallback: string) => {
+  const response = (err as { response?: { data?: { message?: unknown } } })?.response;
+  return typeof response?.data?.message === 'string' ? response.data.message : fallback;
+};
+
 export default function LeadDetailPage() {
   const router  = useRouter();
   const params  = useParams<{ id: string }>();
@@ -139,7 +154,10 @@ export default function LeadDetailPage() {
     svc.projectEligibility(lead.id).then(setDealEligibility).catch(() => {});
   };
 
-  useEffect(() => { loadEligibility(); }, [lead?.id, lead?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadEligibility();
+  }, [lead?.id, lead?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadChat = () => {
     if (!canUseSalesChat) return;
@@ -167,8 +185,8 @@ export default function LeadDetailPage() {
       setChatText('');
       setChatFile(null);
       loadChat();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to send message');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to send message'));
     } finally { setSendingChat(false); }
   };
 
@@ -186,7 +204,7 @@ export default function LeadDetailPage() {
       // to "{name} — Project" when not supplied, no confirmation modal
       // needed up front. Flow is Won -> Convert to Client -> Create Invoice.
       const updated = await svc.updateStatus(lead.id, newStatus);
-      setLead(updated);
+      setLead(current => mergeLeadDetail(current, updated));
     } catch (err: unknown) {
       const ex = err as { response?: { data?: { message?: string } } };
       setError(ex.response?.data?.message ?? 'Failed to update status');
@@ -264,7 +282,7 @@ export default function LeadDetailPage() {
     setTransferring(true); setTransferError('');
     try {
       const updated = await svc.transfer(lead.id, Number(transferToUserId), transferReason.trim() || undefined);
-      setLead(updated);
+      setLead(current => mergeLeadDetail(current, updated));
       toast.success('Lead transferred');
       setTransferModal(false);
       setTransferToUserId(''); setTransferReason('');

@@ -643,11 +643,39 @@ class ClientController extends Controller
     public function enablePortal(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'portal_email'    => 'required|email|max:255',
-            'portal_password' => 'required|string|min:6|max:100',
+            'portal_email'    => 'nullable|email|max:255',
+            'portal_password' => 'nullable|string|min:6|max:100',
         ]);
 
         $client = Client::whereIn('company_id', $this->companyIds())->findOrFail($id);
+        $existingUser = $client->user_id ? User::find($client->user_id) : null;
+
+        if ($existingUser && !$request->filled('portal_password')) {
+            if ($existingUser->role_type !== 'client') {
+                return ApiResponse::error('This linked login is not a client account.', 422);
+            }
+
+            if ($request->filled('portal_email') && $request->portal_email !== $existingUser->email) {
+                if ($this->emailBelongsToAnotherAccount($request->portal_email)) {
+                    return ApiResponse::error('This email is already registered as a staff or Company Admin account.', 422);
+                }
+                $existingUser->email = $request->portal_email;
+            }
+
+            $existingUser->is_active = true;
+            $existingUser->save();
+            $client->update(['portal_access' => true]);
+            $this->seedPermissions($client->id);
+
+            return ApiResponse::success([
+                'client_id'    => $client->id,
+                'portal_email' => $existingUser->email,
+            ], 'Portal access enabled');
+        }
+
+        if (!$request->filled('portal_email') || !$request->filled('portal_password')) {
+            return ApiResponse::error('Portal email and password are required for clients without an existing login.', 422);
+        }
 
         // A Company Admin or non-client staff email must never become a
         // portal-login User row — see the matching check in store().
