@@ -426,11 +426,6 @@ export default function DashboardPage() {
               <span style={{ fontSize: 12, color: pl.users_limit !== null && pl.users_used >= pl.users_limit ? '#dc2626' : '#94a3b8', fontWeight: 500 }}>
                 {pl.users_used ?? 1}/{pl.users_limit ?? '∞'} users
               </span>
-              {pl.can_add_company && (
-                <Link href="/admin/companies/create" style={{ fontSize: 11, padding: '5px 12px', background: '#2563eb', color: '#fff', borderRadius: 8, fontWeight: 600, textDecoration: 'none' }}>
-                  + Add Company
-                </Link>
-              )}
               <Link href="/admin/upgrade-modules" style={{ fontSize: 11, padding: '5px 12px', background: '#fff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, fontWeight: 600, textDecoration: 'none' }}>
                 Upgrade Modules
               </Link>

@@ -874,12 +874,12 @@ function generateStrongPassword(length = 14): string {
 
 const inputBase: CSSProperties = {
   width: '100%',
-  height: 40,
+  height: 48,
   border: '1px solid var(--bg-blue-light1)',
-  borderRadius: 4,
-  paddingLeft: 36,
-  paddingRight: 12,
-  fontSize: 14,
+  borderRadius: 8,
+  paddingLeft: 40,
+  paddingRight: 14,
+  fontSize: 15,
   color: '#111827',
   outline: 'none',
   boxSizing: 'border-box',
@@ -889,10 +889,10 @@ const inputBase: CSSProperties = {
 
 const labelBase: CSSProperties = {
   display: 'block',
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   color: '#374151',
-  marginBottom: 6,
+  marginBottom: 8,
 };
 
 type InputFieldProps = InputHTMLAttributes<HTMLInputElement> & {
@@ -905,7 +905,7 @@ type InputFieldProps = InputHTMLAttributes<HTMLInputElement> & {
 
 function InputField({ label, icon: Icon, required, error, type = 'text', rightEl, ...rest }: InputFieldProps) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 18 }}>
       {label && (
         <label style={labelBase}>
           {label} {required && <span style={{ color: '#ef4444' }}>*</span>}
@@ -913,8 +913,8 @@ function InputField({ label, icon: Icon, required, error, type = 'text', rightEl
       )}
       <div style={{ position: 'relative' }}>
         {Icon && (
-          <Icon size={15} style={{
-            position: 'absolute', left: 11, top: '50%',
+          <Icon size={16} style={{
+            position: 'absolute', left: 14, top: '50%',
             transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none',
           }} />
         )}
@@ -922,8 +922,8 @@ function InputField({ label, icon: Icon, required, error, type = 'text', rightEl
           type={type}
           style={{
             ...inputBase,
-            paddingLeft: Icon ? 36 : 12,
-            paddingRight: rightEl ? 40 : 12,
+            paddingLeft: Icon ? 40 : 14,
+            paddingRight: rightEl ? 44 : 14,
             borderColor: error ? 'var(--error-lable, #ef4444)' : 'var(--bg-blue-light1)',
           }}
           onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
@@ -1196,7 +1196,7 @@ function RegisterContent() {
       <LandingNavbar />
       <div className='AuthBackground'>
         <Container>
-          <div style={{ maxWidth: step === 2 ? 1100 : 640, margin: '0 auto', }}>
+          <div style={{ maxWidth: step === 2 ? 1100 : 720, margin: '0 auto', }}>
 
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 36 }}>
               {[1, 2].map(s => (
@@ -1235,18 +1235,18 @@ function RegisterContent() {
             {step === 1 && (
               <div style={{
                 background: 'var(--bg-white)',
-                borderRadius: 10,
+                borderRadius: 14,
                 border: '1px solid var(--border, #e5e7eb)',
-                padding: '40px 40px',
+                padding: '48px',
               }} className="RegisterForm shadow-sm">
-                <h2 style={{ fontSize: '1.8rem', fontWeight: 700, color: '#111827', margin: '0 0 4px' }}>
+                <h2 style={{ fontSize: '2rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
                   Create Account
                 </h2>
-                <p style={{ color: '#6b7280', fontSize: 14, margin: '0 0 28px' }}>
+                <p style={{ color: '#6b7280', fontSize: 15, margin: '0 0 32px' }}>
                   Fill in your details to get started with a 14-day free trial.
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <InputField
                     label="Company Name"
                     required
@@ -1279,7 +1279,7 @@ function RegisterContent() {
                   />
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 18 }}>
                   <label style={labelBase}>
                     Email Address <span style={{ color: '#ef4444' }}>*</span>
                   </label>
@@ -1291,8 +1291,8 @@ function RegisterContent() {
                       onChange={e => setEmail(e.target.value)}
                       style={{
                         ...inputBase,
-                        paddingLeft: 12,
-                        paddingRight: 12,
+                        paddingLeft: 14,
+                        paddingRight: 14,
                         borderColor: emailOk === false ? 'var(--error-lable, #ef4444)' : emailOk === true ? '#22c55e' : 'var(--bg-blue-light1)',
                       }}
                       onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
@@ -1313,8 +1313,8 @@ function RegisterContent() {
                   {emailOk === true && <div style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>Email is available</div>}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div style={{ marginBottom: 18 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <label style={labelBase}>Password <span style={{ color: '#ef4444' }}>*</span></label>
                       <button type="button" onClick={handleGeneratePassword} style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand-blue)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -1327,16 +1327,16 @@ function RegisterContent() {
                         placeholder="Min 8 characters"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
-                        style={{ ...inputBase, paddingLeft: 12, paddingRight: 30 }}
+                        style={{ ...inputBase, paddingLeft: 14, paddingRight: 36 }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
                       />
                       <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1} style={{
-                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                         background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af',
                         display: 'flex', alignItems: 'center', padding: 2,
                       }}>
-                        {showPassword ? <HiEyeSlash size={16} /> : <HiEye size={16} />}
+                        {showPassword ? <HiEyeSlash size={17} /> : <HiEye size={17} />}
                       </button>
                     </div>
                     {password && (
@@ -1349,7 +1349,7 @@ function RegisterContent() {
                     )}
                   </div>
 
-                  <div style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 18 }}>
                     <label style={labelBase}>Confirm Password <span style={{ color: '#ef4444' }}>*</span></label>
                     <div style={{ position: 'relative' }}>
                       <input
@@ -1358,18 +1358,18 @@ function RegisterContent() {
                         value={confirm}
                         onChange={e => setConfirm(e.target.value)}
                         style={{
-                          ...inputBase, paddingLeft: 12, paddingRight: 30,
+                          ...inputBase, paddingLeft: 14, paddingRight: 36,
                           borderColor: confirm && password !== confirm ? 'var(--error-lable, #ef4444)' : 'var(--bg-blue-light1)',
                         }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = confirm && password !== confirm ? 'var(--error-lable, #ef4444)' : 'var(--bg-blue-light1)')}
                       />
                       <button type="button" onClick={() => setShowConfirm(v => !v)} tabIndex={-1} style={{
-                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                         background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af',
                         display: 'flex', alignItems: 'center', padding: 2,
                       }}>
-                        {showConfirm ? <HiEyeSlash size={16} /> : <HiEye size={16} />}
+                        {showConfirm ? <HiEyeSlash size={17} /> : <HiEye size={17} />}
                       </button>
                     </div>
                     {confirm && password !== confirm && (
@@ -1378,20 +1378,20 @@ function RegisterContent() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
                   <InputField
                     label="Phone (Optional)"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder=""
                   />
-                  <div style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 18 }}>
                     <label style={labelBase}>Timezone</label>
                     <div style={{ position: 'relative' }}>
                       <select
                         value={timezone}
                         onChange={e => setTimezone(e.target.value)}
-                        style={{ ...inputBase, paddingLeft: 12, paddingRight: 12, appearance: 'none' }}
+                        style={{ ...inputBase, paddingLeft: 14, paddingRight: 14, appearance: 'none' }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
                       >
@@ -1405,11 +1405,11 @@ function RegisterContent() {
                   onClick={() => step1Valid && setStep(2)}
                   disabled={!step1Valid}
                   style={{
-                    width: '100%', height: 42,
-                    borderRadius: 4, border: 'none',
+                    width: '100%', height: 50,
+                    borderRadius: 8, border: 'none',
                     cursor: step1Valid ? 'pointer' : 'not-allowed',
                     background: step1Valid ? 'var(--brand-gradient)' : 'var(--bg-blue-light1)',
-                    color: '#fff', fontSize: 14, fontWeight: 600,
+                    color: '#fff', fontSize: 15, fontWeight: 600,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     transition: 'background 0.2s',
                     marginBottom: 16,
