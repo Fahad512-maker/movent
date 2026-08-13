@@ -379,8 +379,19 @@ class LeadController extends Controller
     {
         $lead = Lead::whereIn('company_id', $this->companyIds())->findOrFail($id);
 
+        if ($lead->status === 'won') {
+            return ApiResponse::error('Won leads cannot be transferred.', 422);
+        }
+
         $validated = $request->validate([
-            'to_user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $lead->company_id)],
+            'to_user_id' => [
+                'required',
+                'integer',
+                Rule::exists('users', 'id')
+                    ->where('company_id', $lead->company_id)
+                    ->where('is_active', true)
+                    ->where('role_type', 'seller'),
+            ],
             'reason'     => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -423,6 +434,7 @@ class LeadController extends Controller
 
         $users = User::where('company_id', $data['company_id'])
             ->where('is_active', true)
+            ->where('role_type', 'seller')
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
 

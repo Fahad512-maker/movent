@@ -112,8 +112,8 @@ export default function LeadDetailPage() {
   // "Assign Lead Owner" only covers giving an unowned lead its first owner —
   // reassigning a lead that already has an owner needs "Transfer Leads"
   // specifically, matching the backend's split in Api\User\LeadController::transfer().
-  const canTransferLead = isAdmin || can('sales', 'canTransferLeads')
-    || (!lead?.assigned_to && can('sales', 'canAssignLeadOwner'));
+  const canTransferLead = lead?.status !== 'won' && (isAdmin || can('sales', 'canTransferLeads')
+    || (!lead?.assigned_to && can('sales', 'canAssignLeadOwner')));
   const [loading, setLoading]         = useState(true);
   const [converting, setConverting]   = useState(false);
   const [deleting, setDeleting]       = useState(false);
