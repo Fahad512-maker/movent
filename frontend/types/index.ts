@@ -12,6 +12,9 @@ export interface Admin {
   modules?: string[];
   max_users_per_company?: number | null;
   max_companies?: number | null;
+  // Set in Settings → Company tab — authoritative for every invoice this
+  // admin issues, across any of their companies (see Company::invoicingProfile()).
+  currency?: string;
 }
 
 export type DataScope = 'own' | 'assigned' | 'all' | 'view_only' | 'no_access';
@@ -65,7 +68,11 @@ export interface Company {
   currency?: string;
   logo_path?: string;
   is_active?: boolean;
-  admin?: { id: number; name: string } | null;
+  // admin.currency is the tenant's Settings-configured currency —
+  // authoritative for invoice creation, unlike the sibling `currency` above
+  // (legacy, pre-tenant-refactor, per-Company column — see
+  // Company::invoicingProfile() on the backend).
+  admin?: { id: number; name: string; currency?: string } | null;
 }
 
 export interface Permission {

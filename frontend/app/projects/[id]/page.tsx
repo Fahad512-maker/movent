@@ -200,12 +200,19 @@ export default function UserProjectDetailPage() {
   const [newInvAmount, setNewInvAmount] = useState('');
   const [newInvDueDate, setNewInvDueDate] = useState('');
 
+  // A milestone invoice must always match whatever currency this project's
+  // existing invoices already use — never a hardcoded default (matches
+  // Api\User\ProjectController::createInvoice()'s own inheritance). Only a
+  // project with no prior invoice at all has nothing to inherit.
+  const projectInvoiceCurrency = (project?.invoices ?? []).find(inv => inv.project_id === project?.id)?.currency;
+
   const handleCreateProjectInvoice = async () => {
     if (!newInvDesc.trim() || !newInvAmount) { toast.error('Description and amount are required'); return; }
     setInvoiceBusy(true);
     try {
       await userProjectService.createInvoice(id, {
         due_date: newInvDueDate || null,
+        currency: projectInvoiceCurrency,
         items: [{ description: newInvDesc.trim(), quantity: 1, unit_price: Number(newInvAmount) }],
       });
       toast.success('Invoice created for project');
@@ -725,11 +732,16 @@ export default function UserProjectDetailPage() {
             {showCreateInvoice && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input value={newInvDesc} onChange={e => setNewInvDesc(e.target.value)} placeholder="Description (e.g. Milestone 2)" style={{ ...inp, flex: '1 1 220px' }} />
-                <input type="number" min={0} step="0.01" value={newInvAmount} onChange={e => setNewInvAmount(e.target.value)} placeholder="Amount" style={{ ...inp, width: 130 }} />
+                <input type="number" min={0} step="0.01" value={newInvAmount} onChange={e => setNewInvAmount(e.target.value)} placeholder={`Amount (${projectInvoiceCurrency ?? 'USD'})`} style={{ ...inp, width: 160 }} />
                 <input type="date" value={newInvDueDate} onChange={e => setNewInvDueDate(e.target.value)} style={{ ...inp, width: 160 }} />
                 <button onClick={handleCreateProjectInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
                   {invoiceBusy ? 'Creating…' : 'Create'}
                 </button>
+                {projectInvoiceCurrency && (
+                  <div style={{ width: '100%', fontSize: 11, color: '#94a3b8' }}>
+                    Matches this project's existing invoice currency ({projectInvoiceCurrency}) — new invoices for this project always inherit it.
+                  </div>
+                )}
               </div>
             )}
 

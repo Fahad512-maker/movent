@@ -8,7 +8,7 @@ import { userClientService } from '@/lib/services/userClientService';
 import { adminLeadService, userLeadService, Lead } from '@/lib/services/adminLeadService';
 import { adminProjectService, Project } from '@/lib/services/adminProjectService';
 import { userProjectService } from '@/lib/services/userProjectService';
-import { Client, User } from '@/types';
+import { Admin, Client, User } from '@/types';
 import { getAuthType, getAuthUser, can } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
@@ -135,7 +135,13 @@ function NewInvoiceForm() {
         setCompanies([c]);
         setCompanyId(c.id);
       }
+      // Company Admin's own Settings-configured currency — authoritative,
+      // unlike the legacy per-company `currency` above (see
+      // Company::invoicingProfile() on the backend).
+      if (user?.company?.admin?.currency) setCurrency(user.company.admin.currency);
     } else {
+      const admin = getAuthUser() as Admin | null;
+      if (admin?.currency) setCurrency(admin.currency);
       adminClientService.companies().then(cs => {
         setCompanies(cs);
         if (cs.length) setCompanyId(companyIdParam && cs.some(c => c.id === companyIdParam) ? companyIdParam : cs[0].id);

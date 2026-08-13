@@ -106,7 +106,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', currency: 'PKR', logo_url: null });
+  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', currency: 'USD', logo_url: null });
   const [invoice,  setInvoice]  = useState<InvoiceSettings>({ prefix: 'INV', tax_rate: 0, payment_terms: 30, notes: '' });
   const [bank,     setBank]     = useState<BankSettings>({ bank_name: '', account_name: '', account_number: '', iban: '', swift: '' });
   const [gateways, setGateways] = useState<GatewayAccount[]>([]);

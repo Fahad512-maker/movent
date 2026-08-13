@@ -49,7 +49,7 @@ export default function ClientDashboardPage() {
   );
 
   const s   = data?.stats   || {};
-  const cur = data?.currency || 'PKR';
+  const cur = data?.currency || 'USD';
   const hasProjects = (data?.modules || []).includes('projects');
   const recentInvoices: any[] = data?.recent_invoices || [];
   const recentProjects: any[] = data?.recent_projects || [];

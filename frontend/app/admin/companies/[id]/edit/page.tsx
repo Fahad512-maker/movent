@@ -40,7 +40,7 @@ export default function EditCompanyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
-    name: '', currency: 'PKR', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York',
+    name: '', currency: 'USD', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York',
   });
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function EditCompanyPage() {
       const c = res.data.data;
       setForm({
         name:     c.name ?? '',
-        currency: c.currency ?? 'PKR',
+        currency: c.currency ?? 'USD',
         industry: c.industry ?? '',
         email:    c.email ?? '',
         phone:    c.phone ?? '',

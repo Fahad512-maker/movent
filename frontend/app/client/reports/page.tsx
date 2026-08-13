@@ -85,9 +85,9 @@ export default function ClientReportsPage() {
           {/* Summary cards */}
           <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total Invoiced', val: `PKR ${Number(invData.summary?.total_invoiced || 0).toLocaleString()}` },
-              { label: 'Total Paid',     val: `PKR ${Number(invData.summary?.total_paid || 0).toLocaleString()}`,   color: '#10b981' },
-              { label: 'Pending',        val: `PKR ${Number(invData.summary?.total_pending || 0).toLocaleString()}`, color: '#dc2626' },
+              { label: 'Total Invoiced', val: `USD ${Number(invData.summary?.total_invoiced || 0).toLocaleString()}` },
+              { label: 'Total Paid',     val: `USD ${Number(invData.summary?.total_paid || 0).toLocaleString()}`,   color: '#10b981' },
+              { label: 'Pending',        val: `USD ${Number(invData.summary?.total_pending || 0).toLocaleString()}`, color: '#dc2626' },
             ].map(({ label, val, color }) => (
               <div key={label} style={{ background: '#fff', borderRadius: 10, padding: '18px 22px', border: '1px solid #e2e8f0', flex: 1 }}>
                 <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{label}</div>
@@ -106,7 +106,7 @@ export default function ClientReportsPage() {
                   const h = Math.round(((m.total || 0) / maxVal) * 80);
                   return (
                     <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: '100%', height: h, background: GREEN, borderRadius: '4px 4px 0 0', minHeight: 4 }} title={`PKR ${Number(m.total).toLocaleString()}`} />
+                      <div style={{ width: '100%', height: h, background: GREEN, borderRadius: '4px 4px 0 0', minHeight: 4 }} title={`USD ${Number(m.total).toLocaleString()}`} />
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.month?.slice(5)}</div>
                     </div>
                   );
