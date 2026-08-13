@@ -143,7 +143,11 @@ const USER_NAV_GROUPS = [
       { href: '/leads/follow-ups', icon: HiCalendarDays, label: 'Follow-ups',   module: 'leads', permAny: ['canViewLeads'] },
       // Visible only when Sales is purchased but full Client module is NOT
       { href: '/clients', icon: HiUsers, label: 'Clients', module: 'leads', hideIfModule: 'clients', permAny: ['canViewClients'] },
-      { href: '/invoices', icon: HiBanknotes, label: 'Sales Invoices', module: 'invoices', permAny: ['canViewInvoices'] },
+      // "Sales Invoices" used to be a second nav item here pointing at the
+      // exact same '/invoices' route as the Invoice group's "Invoices" below
+      // — same href, same module gate, same permission — so anyone with both
+      // (a Seller, most commonly) saw two identical tabs. Removed; "Invoices"
+      // in the Invoice group already covers it.
       { href: '/sales/targets', icon: HiCurrencyDollar, label: 'Targets', module: 'leads', permAny: ['canViewSalesTargets'] },
       { href: '/sales/reports', icon: HiChartBar, label: 'Sales Reports', module: 'leads', permAny: ['canViewSalesReports'] },
     ],
@@ -370,6 +374,22 @@ export default function Sidebar() {
     }, []),
   })).filter(group => group.items.length > 0);
 
+  // Exactly one nav item is ever "active" at a time. A naive per-item check
+  // (pathname === href || pathname.startsWith(href + '/')) lets a parent
+  // item (e.g. '/admin/projects') and a sibling whose own href happens to
+  // start with it (e.g. '/admin/projects/dashboard') both match at once —
+  // same issue recurs for HR Dashboard/Documents/Reports, Sales Dashboard/
+  // Targets/Reports, and Leads/Pipeline/Follow-ups. Resolve it by picking a
+  // single winner across every visible href: an exact match always wins
+  // outright; otherwise the longest (most specific) href whose pathname is
+  // one of its sub-paths wins.
+  const allHrefs = visibleGroups.flatMap(g => g.items.map(i => i.href));
+  const activeHref = allHrefs.includes(pathname)
+    ? pathname
+    : allHrefs
+        .filter(href => pathname.startsWith(href + '/'))
+        .sort((a, b) => b.length - a.length)[0];
+
   return (
     <div className="sidebar">
       {/* Logo */}
@@ -390,7 +410,7 @@ export default function Sidebar() {
             <span className="nav-section-label">{group.label}</span>
             {group.items.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isActive = item.href === activeHref;
               const badgeCount = item.badgeKey ? navBadges[item.badgeKey] : 0;
               return (
                 <Link key={item.href} href={item.href} className={`nav-item ${isActive ? 'active' : ''}`} style={{ position: 'relative' }}>

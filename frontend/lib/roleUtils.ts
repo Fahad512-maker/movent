@@ -102,7 +102,7 @@ export const ROLE_LABELS: Record<string, string> = {
 // backend validation (UserController::VALID_ROLES) is untouched.
 export const USER_ROLE_TYPE_OPTIONS: RoleOption[] = [
   { value: 'project_manager', label: ROLE_LABELS.project_manager },
-  { value: 'production',      label: ROLE_LABELS.production },
+  // { value: 'production',      label: ROLE_LABELS.production },
   { value: 'developer',       label: ROLE_LABELS.developer },
   { value: 'designer',        label: ROLE_LABELS.designer },
   { value: 'qa',              label: ROLE_LABELS.qa },
@@ -152,17 +152,17 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     account: ['canUseGeneralChat'],
   },
   // pm_view + pm_manage_tasks + pm_manage_production + pm_manage_deliverables + pm_manage_files + pm_manage_comments + pm_manage_chat
-  production: {
-    project_management: [
-      'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-      'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-      'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
-      'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
-      'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
-    ],
-  },
+  // production: {
+  //   project_management: [
+  //     'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
+  //     'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
+  //     'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
+  //     'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+  //     'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
+  //     'canAddClientFacingComment',
+  //     'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+  //   ],
+  // },
   developer: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
