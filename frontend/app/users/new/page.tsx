@@ -581,6 +581,7 @@ export default function NewUserPage() {
 
   // Load companies on mount so we know whether to skip step 2
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingCos(true);
     userService.listCompanyOptions()
       .then(data => {
@@ -589,14 +590,15 @@ export default function NewUserPage() {
         if (data.length === 1) setSelectedIds([data[0].id]);
       })
       .finally(() => setLoadingCos(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Set first company tab when entering step 3
   useEffect(() => {
     if (step === 3 && selectedIds.length > 0 && !activeCompanyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveCompanyId(selectedIds[0]);
     }
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, selectedIds, activeCompanyId]);
 
   // true when step 2 can be skipped (single company, already selected)
   const singleCompany = companies.length === 1;
@@ -865,7 +867,7 @@ export default function NewUserPage() {
                 {loadingCos ? (
                   <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading companies…</div>
                 ) : companies.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No active companies found.</div>
+                  <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No companies found.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
                     {companies.map(c => {
@@ -956,7 +958,7 @@ export default function NewUserPage() {
                       />
                       <div>
                         <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13.5 }}>User Management Permission</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>Lets this user create/invite other staff users for this company, from their own "User Management" page.</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>Lets this user create/invite other staff users for this company, from their own &quot;User Management&quot; page.</div>
                       </div>
                     </label>
                   );

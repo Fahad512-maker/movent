@@ -487,6 +487,10 @@ class LeadController extends Controller
         $lead = $this->visibleLeads()->findOrFail($id);
         $fromUserId = $lead->assigned_to;
 
+        if ($lead->status === 'won') {
+            return ApiResponse::error('Won leads cannot be transferred.', 422);
+        }
+
         // "Assign Lead Owner" only covers giving an UNOWNED lead its first
         // owner; moving a lead that already has an owner to someone else is
         // specifically "Transfer Leads" — holding only the former must never
