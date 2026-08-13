@@ -113,6 +113,9 @@ export default function ProfilePage() {
   const avatarUrl = resolveAvatarUrl(profile.avatar_url);
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const roleLabel = !isAdmin ? (ROLE_TYPE_LABEL[(profile as User).role_type] ?? (profile as User).role_type) : 'Company Admin';
+  const defaultCompany = isAdmin
+    ? [...((profile as Admin).companies ?? [])].sort((a, b) => a.id - b.id)[0]
+    : null;
 
   return (
     <DashboardLayout title="My Profile">
@@ -179,7 +182,7 @@ export default function ProfilePage() {
               <div style={{ marginBottom: 18 }}>
                 <label style={lbl}>Company</label>
                 <input
-                  value={(profile as Admin).companies?.map(c => c.name).join(', ') || '—'}
+                  value={defaultCompany?.name || '—'}
                   disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }}
                 />
               </div>

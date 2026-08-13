@@ -30,6 +30,9 @@ class SettingsController extends Controller
     public function show(): JsonResponse
     {
         $admin = $this->admin();
+        $companyName = $admin->business_name
+            ?: $admin->companies()->orderByDesc('updated_at')->orderByDesc('id')->value('name')
+            ?: $admin->name;
 
         // Flat list of gateway ACCOUNTS (a tenant can hold more than one of
         // the same gateway type, e.g. 2 Stripe accounts) rather than one
@@ -51,7 +54,7 @@ class SettingsController extends Controller
 
         return ApiResponse::success([
             'company' => [
-                'name'     => $admin->business_name,
+                'name'     => $companyName,
                 'industry' => $admin->industry,
                 'email'    => $admin->business_email,
                 'phone'    => $admin->business_phone,

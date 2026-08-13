@@ -121,7 +121,7 @@ const ADMIN_NAV_GROUPS = [
     label: 'Admin',
     items: [
       { href: '/admin/plan',             icon: HiSquares2X2, label: 'My Plan' },
-      { href: '/admin/companies/create', icon: HiBriefcase,  label: 'Add Company' },
+      { href: '/admin/companies',        icon: HiBriefcase,  label: 'Companies' },
     ],
   },
 ];
@@ -299,17 +299,22 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshModules();
     window.addEventListener('auth_refreshed', refreshModules);
     return () => window.removeEventListener('auth_refreshed', refreshModules);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Red dots on Tasks/Projects — mirrors Navbar's own 30s notification poll,
   // kept independent since the badge counts (per-category, uncapped) come
   // from a different endpoint than the bell's top-30 feed.
   useEffect(() => {
     const type = getAuthType() as 'user' | 'admin' | null;
-    if (!type) { setNavBadges({ tasks: 0, projects: 0 }); return; }
+    if (!type) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNavBadges({ tasks: 0, projects: 0 });
+      return;
+    }
 
     const loadBadges = () => {
       const svc = type === 'admin' ? adminNotificationService : notificationService;
