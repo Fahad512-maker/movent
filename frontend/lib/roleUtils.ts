@@ -263,6 +263,11 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canManageProjectInvoices',
       'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
       'canCreateProjects',
+      // Functional, not cosmetic — a draft project from a client's payment is
+      // most often the Seller's own handed-off deal; without this they could
+      // see it (seller_id match) but never activate it themselves. Granted by
+      // default alongside Admin per 2026-08-13 request.
+      'canActivateProjects',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
       'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddSellerToProjectChat',
@@ -326,6 +331,10 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canManageProjectInvoices',
       'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
       'canCreateProjects',
+      // Mirrors the 'seller' entry's own canActivateProjects grant — same
+      // "cosmetic unless also this project's seller/PM" caveat as the block
+      // comment above.
+      'canActivateProjects',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
       'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddSellerToProjectChat',
