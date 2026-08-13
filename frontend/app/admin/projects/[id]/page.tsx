@@ -106,15 +106,6 @@ export default function ProjectOverviewPage() {
     }
   };
 
-  const handleUnlinkInvoice = async (invoiceId: number) => {
-    if (!confirm('Unlink this invoice from the project?')) return;
-    try {
-      await adminProjectService.unlinkInvoice(Number(id), invoiceId);
-      toast.success('Invoice unlinked');
-      load();
-    } catch { toast.error('Failed to unlink invoice'); }
-  };
-
   const load = async () => {
     setLoading(true);
     try {
@@ -469,7 +460,6 @@ export default function ProjectOverviewPage() {
                       <td style={{ padding: '9px 10px', fontSize: 13, color: '#64748b' }}>{fmtDate(inv.due_date)}</td>
                       <td style={{ padding: '9px 10px', display: 'flex', gap: 10 }}>
                         <button onClick={() => router.push(`/invoices/${inv.id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 12.5, fontWeight: 600, padding: 0 }}>View</button>
-                        <button onClick={() => handleUnlinkInvoice(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12.5, fontWeight: 600 }}>Unlink</button>
                       </td>
                     </tr>
                   ))}

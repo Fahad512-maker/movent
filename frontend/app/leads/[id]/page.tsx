@@ -73,6 +73,16 @@ const errorMessage = (err: unknown, fallback: string) => {
   return typeof response?.data?.message === 'string' ? response.data.message : fallback;
 };
 
+const invoiceStatusLabel = (invoiceStatus?: string | null, fulfillmentStatus?: string | null) => {
+  if (fulfillmentStatus === 'awaiting_payment') return 'Awaiting Payment';
+  if (fulfillmentStatus === 'partially_paid') return 'Partially Paid';
+  if (invoiceStatus === 'draft') return 'Pending Invoice';
+  if (invoiceStatus === 'sent') return 'Awaiting Payment';
+  if (invoiceStatus === 'overdue') return 'Invoice Overdue';
+  if (invoiceStatus === 'paid') return 'Invoice Paid';
+  return 'Invoice Pending';
+};
+
 export default function LeadDetailPage() {
   const router  = useRouter();
   const params  = useParams<{ id: string }>();
@@ -202,7 +212,8 @@ export default function LeadDetailPage() {
       // Marking Won still creates a Deal server-side (deal_reference,
       // won_at, fulfillment_status) — proposed_project_title just defaults
       // to "{name} — Project" when not supplied, no confirmation modal
-      // needed up front. Flow is Won -> Convert to Client -> Create Invoice.
+      // needed up front. Flow is Won -> Create Invoice -> paid/eligible ->
+      // Convert to Client / project handoff.
       const updated = await svc.updateStatus(lead.id, newStatus);
       setLead(current => mergeLeadDetail(current, updated));
     } catch (err: unknown) {
@@ -317,6 +328,15 @@ export default function LeadDetailPage() {
   const activities  = lead.activities ?? [];
   const pendingFUs  = followUps.filter(f => f.status === 'pending');
   const leadsRoot   = isAdmin ? '/admin/leads' : '/leads';
+  const isWonDeal = lead.status === 'won';
+  const hasProject = !!dealEligibility?.has_project;
+  const projectCreationEligible = !!dealEligibility?.project_creation_eligible;
+  const latestInvoice = dealEligibility?.latest_invoice ?? null;
+  const hasLeadInvoice = (dealEligibility?.invoice_count ?? 0) > 0;
+  const awaitingProjectPayment = !hasProject && !projectCreationEligible;
+  const canShowCreateInvoice = hasInvoiceMod && canCreateInvoice && isWonDeal && !!dealEligibility && !hasLeadInvoice && awaitingProjectPayment;
+  const canShowInvoiceStatus = isWonDeal && !!latestInvoice && awaitingProjectPayment;
+  const canShowConvert = isWonDeal && !lead.client_id && projectCreationEligible && (isAdmin || canConvertLead);
 
   return (
     <DashboardLayout title={lead.name}>
@@ -347,15 +367,15 @@ export default function LeadDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {/* Convert to Client — only once the lead is Won (flow is Won ->
-                  Convert to Client -> Create Invoice). A basic Client record,
-                  same for everyone. Api\Admin\LeadController::convert() has
-                  never required the Client module (it just creates a plain
-                  Client row, same as the sub-user path's Sales-bundled
-                  canManagePipeline + canCreateClients access) — Admin gets it
-                  unconditionally, same as Admin's unrestricted access
-                  everywhere else. */}
-              {lead.status === 'won' && !lead.client_id && (isAdmin || canConvertLead) && (
+              {/* Convert to Client — only after the Deal has cleared its
+                  payment requirement. Before payment, the seller should raise
+                  the invoice first. A basic Client record, same for everyone.
+                  Api\Admin\LeadController::convert() has never required the
+                  Client module (it just creates a plain Client row, same as
+                  the sub-user path's Sales-bundled canManagePipeline +
+                  canCreateClients access) — Admin gets it unconditionally,
+                  same as Admin's unrestricted access everywhere else. */}
+              {canShowConvert && (
                 <button onClick={handleConvert} disabled={converting}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: converting ? '#a7f3d0' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: converting ? 'not-allowed' : 'pointer' }}>
                   <HiArrowPath size={15} /> {converting ? 'Converting…' : 'Convert to Client'}
@@ -370,7 +390,7 @@ export default function LeadDetailPage() {
                   user has permission, lead is won, AND the Deal has cleared
                   its kickoff-payment requirement (core rule: Won alone never
                   makes a project eligible). */}
-              {hasProjectMod && canCreateProject && lead.status === 'won' && (
+              {hasProjectMod && canCreateProject && isWonDeal && (
                 dealEligibility?.has_project ? (
                   <button onClick={() => dealEligibility.project_id && router.push(isAdmin ? `/admin/projects/${dealEligibility.project_id}` : `/projects/${dealEligibility.project_id}`)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #7c3aed, #a78bfa)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -383,14 +403,22 @@ export default function LeadDetailPage() {
                   </button>
                 ) : null
               )}
-              {/* Invoice handoff — only once converted to a Client (flow is
-                  Won -> Convert to Client -> Create Invoice), Invoice module
-                  active, and user has permission. */}
-              {hasInvoiceMod && canCreateInvoice && lead.status === 'won' && !!lead.client_id && (
+              {/* Invoice handoff — first action after Won. The invoice form
+                  supports lead-only/guest invoices, so conversion to Client is
+                  intentionally not required here. Once the Deal is paid enough
+                  to become project-eligible, this hides and Convert/Project
+                  actions take over. */}
+              {canShowCreateInvoice && (
                 <button onClick={handleCreateInvoice}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   <HiBanknotes size={15} /> Create Invoice
                 </button>
+              )}
+              {canShowInvoiceStatus && latestInvoice && (
+                <Link href={isAdmin ? `/admin/invoices/${latestInvoice.id}` : `/invoices/${latestInvoice.id}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, background: '#fff7ed', border: '1.5px solid #fed7aa', color: '#c2410c', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                  <HiClock size={15} /> {invoiceStatusLabel(latestInvoice.status, dealEligibility.fulfillment_status)}
+                </Link>
               )}
               {canTransferLead && (
                 <button onClick={openTransferModal}

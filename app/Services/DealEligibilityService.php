@@ -77,9 +77,13 @@ class DealEligibilityService
 
     public static function summary(Lead $lead): array
     {
+        $fulfillmentStatus = self::recomputeFulfillmentStatus($lead);
         $netPaid  = self::netPaidAmount($lead);
         $required = self::requiredAmount($lead);
         $project  = $lead->projects()->first();
+        $latestInvoice = $lead->invoices()->latest()->first([
+            'id', 'invoice_number', 'status', 'total_amount', 'paid_amount', 'due_date',
+        ]);
 
         return [
             'deal_reference'           => $lead->deal_reference,
@@ -87,8 +91,17 @@ class DealEligibilityService
             'required_kickoff_amount'  => $required,
             'net_paid_amount'          => $netPaid,
             'remaining_amount'         => max(0, round($required - $netPaid, 2)),
-            'fulfillment_status'       => $lead->fulfillment_status,
+            'fulfillment_status'       => $fulfillmentStatus,
             'project_creation_eligible' => self::isEligible($lead),
+            'invoice_count'            => $lead->invoices()->count(),
+            'latest_invoice'           => $latestInvoice ? [
+                'id'             => $latestInvoice->id,
+                'invoice_number' => $latestInvoice->invoice_number,
+                'status'         => $latestInvoice->status,
+                'total_amount'   => (float) $latestInvoice->total_amount,
+                'paid_amount'    => (float) $latestInvoice->paid_amount,
+                'due_date'       => $latestInvoice->due_date?->toDateString(),
+            ] : null,
             'has_project'              => (bool) $project,
             'project_id'               => $project?->id,
             'project_reference'        => $project?->reference,

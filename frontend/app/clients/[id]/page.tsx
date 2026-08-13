@@ -42,7 +42,7 @@ export default function ClientProfilePage() {
   const clientId = Number(params.id);
   const isSubUser = getAuthType() === 'user';
   const canEditClient = !isSubUser || can('client', 'canEditClients');
-  // Company Admin always sees Sales Chat, same as every other chat surface.
+  // Sales Chat is available only for portal-active clients.
   const canUseSalesChat = !isSubUser || can('sales', 'canUseSalesChat');
   const canViewClientProjects = !isSubUser
     || can('project_management', 'canViewProjects')
@@ -71,6 +71,7 @@ export default function ClientProfilePage() {
   // Defaults true while `client` hasn't loaded yet, to avoid a flash of
   // "no Portal tab" that then appears once the response comes back.
   const canManagePortal = canManagePortalPerm && (client?.has_portal_module ?? true);
+  const canUseClientSalesChat = canUseSalesChat && !!client?.portal_access;
   const [perms, setPerms]     = useState<Record<string, { label: string; is_enabled: boolean }>>({});
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [stats, setStats]     = useState<ClientInvoiceStats | null>(null);
@@ -113,7 +114,7 @@ export default function ClientProfilePage() {
       userClientService.getOne(clientId).then(c => {
         setClient(c);
         if (c.portal_permissions) setPerms(c.portal_permissions);
-        if (c.user?.email) setPortalEmail(c.user.email);
+        setPortalEmail(c.user?.email ?? c.email ?? '');
       }).catch(() => {}).finally(() => setLoading(false));
       return;
     }
@@ -124,7 +125,7 @@ export default function ClientProfilePage() {
       // canManagePortal reads client.has_portal_module for both paths.
       setClient({ ...c, has_portal_module });
       setPerms(p);
-      if (c.user?.email) setPortalEmail(c.user.email);
+      setPortalEmail(c.user?.email ?? c.email ?? '');
     }).catch(() => {}).finally(() => setLoading(false));
   }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -145,16 +146,16 @@ export default function ClientProfilePage() {
   }, [tab, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadChat = () => {
-    if (!canUseSalesChat) return;
+    if (!canUseClientSalesChat) return;
     chatSvc.clientMessages(clientId).then(setChat).catch(() => {});
   };
 
   useEffect(() => {
+    if (!canUseClientSalesChat) return;
     loadChat();
-    if (!canUseSalesChat) return;
     const interval = setInterval(loadChat, 8000);
     return () => clearInterval(interval);
-  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clientId, canUseClientSalesChat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,14 +342,14 @@ export default function ClientProfilePage() {
         { key: 'details', label: 'Details' },
         ...(canViewClientProjects ? [{ key: 'projects' as const, label: 'Projects' }] : []),
         ...(canManagePortal ? [{ key: 'portal' as const, label: 'Portal' }] : []),
-        ...(canUseSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
+        ...(canUseClientSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
       ]
     : [
         { key: 'details', label: 'Details' },
         { key: 'invoices', label: 'Invoices' },
         { key: 'projects', label: 'Projects' },
         ...(canManagePortal ? [{ key: 'portal' as const, label: 'Portal' }] : []),
-        ...(canUseSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
+        ...(canUseClientSalesChat ? [{ key: 'chat' as const, label: 'Sales Chat' }] : []),
       ];
 
   return (
@@ -582,7 +583,7 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Sales Chat Tab ── */}
-        {tab === 'chat' && canUseSalesChat && (
+        {tab === 'chat' && canUseClientSalesChat && (
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', padding: 28 }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Chat</h3>
             {chat.length === 0 ? (

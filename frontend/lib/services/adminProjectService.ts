@@ -19,6 +19,7 @@ export type RevisionStatus = 'open' | 'in_progress' | 'resolved';
 
 export interface ProjectInvoice {
   id: number;
+  project_id?: number | null;
   invoice_number: string;
   total_amount: number;
   paid_amount: number;
