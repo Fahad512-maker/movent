@@ -18,9 +18,24 @@ class NotificationController extends Controller
      * Scoping to users.company_id (set once at portal creation) would silently
      * hide every notification from the client's other companies.
      */
+    // Internal task/production notification types — never meant for a
+    // Client Portal login. Every writer already validates task/production
+    // assignment against role_type NOT IN ('seller','client'), but a row can
+    // still end up pointing at a Client if that user's role_type changed
+    // *after* the row was written (e.g. a staff member later converted to a
+    // Client login keeps their old users.id, and therefore their old
+    // notifications). Excluded here as defense-in-depth so the Client Portal
+    // bell can never surface task-lifecycle noise regardless of how a row
+    // got mis-targeted.
+    private const EXCLUDED_TYPES = [
+        'task_assigned', 'task_ready_for_qa', 'task_qa_failed',
+        'task_ready_for_production', 'task_completed', 'production_task_assigned',
+    ];
+
     private function scope(Request $request)
     {
         return Notification::where('user_id', $request->user()->id)
+            ->whereNotIn('type', self::EXCLUDED_TYPES)
             ->whereNull('cleared_at');
     }
 
