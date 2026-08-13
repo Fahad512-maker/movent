@@ -341,7 +341,7 @@ export default function LeadDetailPage() {
 
   return (
     <DashboardLayout title={lead.name}>
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.push(leadsRoot)} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to Leads
         </button>
@@ -350,7 +350,7 @@ export default function LeadDetailPage() {
 
         {/* Header card */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', padding: '22px 28px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
                 <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{lead.name}</h1>
@@ -500,7 +500,7 @@ export default function LeadDetailPage() {
                 {cap((dealEligibility.fulfillment_status ?? '').replace(/_/g, ' '))}
               </span>
             </div>
-            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
               <div>
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Required Kickoff</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{dealEligibility.required_kickoff_amount.toLocaleString()}</div>
@@ -538,7 +538,7 @@ export default function LeadDetailPage() {
 
         {/* Tab: Details */}
         {tab === 'details' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
             <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', padding: '20px 24px' }}>
               <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Contact Details</h3>
               {[
