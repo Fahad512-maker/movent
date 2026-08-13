@@ -1260,6 +1260,10 @@ class ProjectController extends Controller
             ]);
 
         $comments = ProjectComment::where('project_id', $id)
+            // Task-scoped comments belong on their own Task page only —
+            // mirrors ProjectCommentController::index()'s scoping so a task's
+            // comments don't leak into this project-level History feed.
+            ->whereNull('task_id')
             ->with(['authorAdmin:id,name', 'authorUser:id,name'])
             ->get()
             ->map(fn ($c) => [
