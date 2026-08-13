@@ -76,10 +76,6 @@ export default function ProjectOverviewPage() {
   const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(null);
   const [replySelectedMentions, setReplySelectedMentions] = useState<MentionableUser[]>([]);
 
-  // Invoices & billing — Company Admin always sees this, no permission gate.
-  const [linkInvoiceId, setLinkInvoiceId] = useState('');
-  const [invoiceBusy, setInvoiceBusy]     = useState(false);
-  const [showLinkInvoice, setShowLinkInvoice] = useState(false);
 
   // Assign/Switch Seller — Company Admin always sees this, no permission gate.
   const [sellers, setSellers] = useState<ProjectUserOption[]>([]);
@@ -108,20 +104,6 @@ export default function ProjectOverviewPage() {
     } finally {
       setSellerBusy(false);
     }
-  };
-
-  const handleLinkInvoice = async () => {
-    if (!linkInvoiceId.trim()) return;
-    setInvoiceBusy(true);
-    try {
-      await adminProjectService.linkInvoice(Number(id), Number(linkInvoiceId));
-      toast.success('Invoice linked to project');
-      setLinkInvoiceId(''); setShowLinkInvoice(false);
-      load();
-    } catch (err: unknown) {
-      const ex = err as { response?: { data?: { message?: string } } };
-      toast.error(ex.response?.data?.message ?? 'Failed to link invoice');
-    } finally { setInvoiceBusy(false); }
   };
 
   const handleUnlinkInvoice = async (invoiceId: number) => {
@@ -457,19 +439,7 @@ export default function ProjectOverviewPage() {
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>Invoices &amp; Billing</h3>
-              <button onClick={() => setShowLinkInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#2563eb', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                Link Existing Invoice
-              </button>
             </div>
-
-            {showLinkInvoice && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
-                <input value={linkInvoiceId} onChange={e => setLinkInvoiceId(e.target.value)} placeholder="Invoice ID" style={{ ...inp, width: 160 }} />
-                <button onClick={handleLinkInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
-                  {invoiceBusy ? 'Linking…' : 'Link'}
-                </button>
-              </div>
-            )}
 
             {project.billing_summary && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>

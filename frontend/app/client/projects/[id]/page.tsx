@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { clientService } from '@/lib/services/clientService';
-import clientApi from '@/lib/clientAxios';
 import toast from 'react-hot-toast';
 import { mentionQueryOf, matchMentionables, applyMention, renderWithMentions, roleLabel, Mentionable } from '@/lib/chatMentions';
 
@@ -21,22 +20,7 @@ const SC: Record<string, { bg: string; color: string }> = {
   in_progress:        { bg: '#ecfdf5', color: '#059669' },
 };
 
-const TASK_SC: Record<string, { bg: string; color: string }> = {
-  todo:                  { bg: '#f1f5f9', color: '#64748b' },
-  in_progress:           { bg: '#eff6ff', color: '#2563eb' },
-  blocked:               { bg: '#fef2f2', color: '#dc2626' },
-  ready_for_qa:          { bg: '#fffbeb', color: '#d97706' },
-  in_qa:                 { bg: '#fff7ed', color: '#ea580c' },
-  qa_failed:             { bg: '#fef2f2', color: '#dc2626' },
-  qa_passed:             { bg: '#ecfdf5', color: '#059669' },
-  ready_for_production:  { bg: '#eef2ff', color: '#4f46e5' },
-  in_production:         { bg: '#f0fdf9', color: '#0d9488' },
-  review:      { bg: '#fffbeb', color: '#d97706' },
-  completed:   { bg: '#f0fdf4', color: '#16a34a' },
-  cancelled:   { bg: '#fef2f2', color: '#dc2626' },
-};
-
-const TABS = ['tasks', 'deliverables', 'files', 'activity', 'chat'] as const;
+const TABS = ['deliverables', 'activity', 'chat'] as const;
 type Tab = typeof TABS[number];
 
 // Files a client may attach in project chat — mirrors the backend's
@@ -61,7 +45,7 @@ export default function ClientProjectDetailPage() {
   const { id } = useParams();
   const router  = useRouter();
   const [data, setData]       = useState<any>(null);
-  const [tab, setTab]         = useState<Tab>('tasks');
+  const [tab, setTab]         = useState<Tab>('deliverables');
   const [loading, setLoading] = useState(true);
 
   // Notification deep-links land here as ?tab=chat (see the `link` written by
@@ -91,21 +75,6 @@ export default function ClientProjectDetailPage() {
   const [revModal, setRevModal]     = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
   const [revNotes, setRevNotes]     = useState('');
   const [revSaving, setRevSaving]   = useState(false);
-  const [dlId, setDlId]             = useState<number | null>(null);
-
-  const downloadFile = async (id: number, fileName: string, source: string) => {
-    setDlId(id);
-    try {
-      const path = source === 'attachment' ? `/client/attachments/${id}/download` : `/client/documents/${id}/download`;
-      const res = await clientApi.get(path, { responseType: 'blob' });
-      const url = URL.createObjectURL(res.data);
-      const a   = document.createElement('a');
-      a.href = url; a.download = fileName;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
-    } catch { toast.error('Download failed'); }
-    finally { setDlId(null); }
-  };
 
   const load = () => {
     clientService.project(Number(id))
@@ -280,40 +249,6 @@ export default function ClientProjectDetailPage() {
         ))}
       </div>
 
-      {/* TASKS */}
-      {tab === 'tasks' && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          {(p.tasks || []).length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>No tasks yet.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ background: '#f8fafc' }}>
-                {['Task', 'Assigned To', 'Due Date', 'Status'].map(h => (
-                  <th key={h} style={{ padding: '10px 18px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {(p.tasks || []).map((t: any) => {
-                  const sc = TASK_SC[t.status] || { bg: '#f1f5f9', color: '#64748b' };
-                  return (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <td style={{ padding: '11px 18px', fontSize: 13, color: '#1e293b' }}>{t.title}</td>
-                      <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b' }}>{t.assigned_to?.name || '—'}</td>
-                      <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b' }}>{t.due_date || '—'}</td>
-                      <td style={{ padding: '11px 18px' }}>
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: sc.bg, color: sc.color, textTransform: 'capitalize' }}>
-                          {t.status?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
       {/* DELIVERABLES */}
       {tab === 'deliverables' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -353,49 +288,6 @@ export default function ClientProjectDetailPage() {
                 </div>
               );
             })
-          )}
-        </div>
-      )}
-
-      {/* FILES */}
-      {tab === 'files' && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          {(data.files || []).length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>No files shared with you yet.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ background: '#f8fafc' }}>
-                {['File Name', 'Type', 'Size', 'Uploaded By', 'Date'].map(h => (
-                  <th key={h} style={{ padding: '10px 18px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
-                ))}
-                <th style={{ padding: '10px 18px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Action</th>
-              </tr></thead>
-              <tbody>
-                {(data.files || []).map((f: any) => (
-                  <tr key={f.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ padding: '11px 18px', fontSize: 13, color: '#1e293b' }}>{f.title}</td>
-                    <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b', textTransform: 'uppercase' }}>{f.type || f.file_type || '—'}</td>
-                    <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b' }}>
-                      {f.file_size_bytes ? `${Math.round(f.file_size_bytes / 1024)} KB` : '—'}
-                    </td>
-                    <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b' }}>{f.uploaded_by?.name || '—'}</td>
-                    <td style={{ padding: '11px 18px', fontSize: 12, color: '#64748b' }}>{f.created_at?.split('T')[0] || '—'}</td>
-                    <td style={{ padding: '11px 18px', textAlign: 'right' }}>
-                      <button
-                        onClick={() => downloadFile(f.id, f.file_name || f.title, f.source)}
-                        disabled={dlId === f.id}
-                        style={{
-                          fontSize: 12, color: dlId === f.id ? '#94a3b8' : GREEN, fontWeight: 600,
-                          background: 'none', border: `1px solid ${dlId === f.id ? '#e2e8f0' : '#a7f3d0'}`,
-                          borderRadius: 6, padding: '4px 12px', cursor: dlId === f.id ? 'not-allowed' : 'pointer',
-                        }}>
-                        {dlId === f.id ? '…' : 'Download'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </div>
       )}

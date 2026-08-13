@@ -175,13 +175,30 @@ export default function ProfilePage() {
                 <input value={roleLabel} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }} />
               </div>
             </div>
-            {isAdmin && (
+            {isAdmin ? (
               <div style={{ marginBottom: 18 }}>
                 <label style={lbl}>Company</label>
                 <input
                   value={(profile as Admin).companies?.map(c => c.name).join(', ') || '—'}
                   disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }}
                 />
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 18 }}>
+                <div>
+                  <label style={lbl}>Company</label>
+                  <input
+                    value={(profile as User).company?.name || '—'}
+                    disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }}
+                  />
+                </div>
+                <div>
+                  <label style={lbl}>Company Admin</label>
+                  <input
+                    value={(profile as User).company?.admin?.name || '—'}
+                    disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }}
+                  />
+                </div>
               </div>
             )}
             <button type="submit" disabled={saving} style={{

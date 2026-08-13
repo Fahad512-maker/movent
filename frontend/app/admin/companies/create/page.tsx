@@ -37,7 +37,7 @@ export default function CreateCompanyPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
     name:     '',
-    currency: 'PKR',
+    currency: 'USD',
     industry: '',
     email:    '',
     phone:    '',
@@ -118,8 +118,8 @@ export default function CreateCompanyPage() {
               <div>
                 <label style={labelStyle}>Currency *</label>
                 <select value={form.currency} onChange={set('currency')} style={inputStyle}>
-                  <option value="PKR">PKR — Pakistani Rupee</option>
                   <option value="USD">USD — US Dollar</option>
+                  <option value="PKR">PKR — Pakistani Rupee</option>
                 </select>
               </div>
               <div>

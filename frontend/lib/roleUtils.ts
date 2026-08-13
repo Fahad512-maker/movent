@@ -132,6 +132,10 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     // pm_view + pm_manage_projects + pm_manage_tasks + pm_manage_team +
     // pm_manage_production + pm_manage_deliverables + pm_manage_timesheets +
     // pm_view_reports + pm_manage_files + pm_manage_comments + pm_manage_chat
+    // + every "advanced" (collapsed-by-default) bundle item — 2026-08-13:
+    // explicitly granted per Company Admin request, overriding the "NOT
+    // granted to any role by default" notes on canAssignProjectSeller/
+    // canActivateProjects in ModuleCatalog.php.
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
       'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
@@ -182,6 +186,8 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     ],
   },
   // pm_view + pm_manage_tasks + pm_manage_deliverables + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production)
+  // + every "advanced" (collapsed-by-default) bundle item — 2026-08-13:
+  // same explicit grant as project_manager above.
   qa: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
@@ -190,6 +196,11 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      // Advanced bundle additions.
+      'canAssignProjectSeller', 'canActivateProjects', 'canForceCloseProjects',
+      'canDeleteProjectAttachments', 'canDeleteTaskAttachments', 'canAddSellerToProjectChat',
+      'canViewAllCompanyProjects', 'canViewClosedProjects', 'canManageProjectChatParticipants',
+      'canDeleteAnyProjectChatMessage', 'canOverrideProjectCreationBeforePayment',
     ],
   },
   // pm_view + pm_manage_tasks + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production, no Deliverables/QA)
@@ -213,16 +224,29 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     // own leads only; transferring a lead to another Seller is a Lead
     // Manager/Company Admin action.
     sales: [
-      'canViewSalesDashboard', 'canViewLeads', 'canCreateLeads', 'canEditLeads',
-      'canManagePipeline', 'canAddLeadNotes', 'canViewSalesTargets', 'canViewSalesReports',
+      'canViewSalesDashboard', 'canViewLeads', 'canCreateLeads', 'canEditLeads', 'canDeleteLeads',
+      'canManagePipeline', 'canAddLeadNotes', 'canViewSalesTargets', 'canUpdateSalesTargets', 'canViewSalesReports',
       'canUseSalesChat',
       'canViewClients', 'canCreateClients', 'canEditClients',
     ],
     // canEnableClientPortal/canDisableClientPortal validate only against the
     // 'client' catalog module (moduleCatalog.ts), not 'sales' — see the
     // matching comment in App\Services\RoleDefaultPermissions.php.
-    client: ['canEnableClientPortal', 'canDisableClientPortal'],
-    invoice: ['canCreateInvoices', 'canSendInvoices', 'canViewInvoices'],
+    // canView/Create/EditClients are repeated here (already granted above
+    // under 'sales') so the "Clients" tab's own checkboxes show checked too
+    // — Add/Edit User's per-module UI only reads a key under the module
+    // bucket it's actually rendered in.
+    client: [
+      'canEnableClientPortal', 'canDisableClientPortal',
+      'canViewClients', 'canCreateClients', 'canEditClients',
+      'canResetClientPassword', 'canViewClientPayments', 'canViewClientInvoices',
+      'canManageClientDocuments', 'canViewClientDocuments',
+    ],
+    invoice: [
+      'canCreateInvoices', 'canSendInvoices', 'canViewInvoices', 'canEditInvoices',
+      'canDownloadOrExportInvoices', 'canViewPayments', 'canRecordPayments',
+      'canSendPaymentReminders', 'canManageBillingClients', 'canViewInvoiceReports',
+    ],
     // canCreateLinkedProjectTask is deliberately NOT granted — the Task
     // feature is retired for this role entirely (backend hard-blocks it
     // regardless of any permission held).
@@ -233,34 +257,81 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage',
       'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
-      // canManageProjectInvoices deliberately excluded — billing/invoice data
-      // is Company Admin/PM only, never Seller or any other team role.
+      // canManageProjectInvoices — explicitly re-included per 2026-08-13
+      // request; a Seller now gets project billing/invoice access too so the
+      // "Manage Projects" bundle checkbox shows fully checked.
+      'canManageProjectInvoices',
       'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
       'canCreateProjects',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
       'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
+      'canAddSellerToProjectChat',
+      // canManageProjectChatParticipants is cosmetic-only for this role —
+      // ProjectMessengerController::canManageParticipants() hard-blocks
+      // role_type='seller' before this permission is ever checked. Kept
+      // here only so the checkbox shows checked per explicit request.
+      'canManageProjectChatParticipants',
     ],
     account: ['canUseGeneralChat'],
   },
   // Lead Manager — manages leads and assigns/transfers them to Sellers,
   // company-wide (canViewAllCompanyLeads), but never gets full Company
-  // Admin access: no user/settings/payment-gateway management, no lead
-  // deletion, no invoice creation/sending, unless a Company Admin manually
-  // grants those on top. canManagePipeline already covers marking a lead
-  // Won/Lost, and canViewSalesDashboard + canViewAllCompanyLeads together
-  // already surface the per-seller performance breakdown — neither needs
-  // its own dedicated permission key. Mirrors
-  // App\Services\RoleDefaultPermissions::MAP's 'lead_manager' entry exactly.
+  // Admin access: no user/settings/payment-gateway management, unless a
+  // Company Admin manually grants those on top. canManagePipeline already
+  // covers marking a lead Won/Lost, and canViewSalesDashboard +
+  // canViewAllCompanyLeads together already surface the per-seller
+  // performance breakdown — neither needs its own dedicated permission key.
+  // Mirrors App\Services\RoleDefaultPermissions::MAP's 'lead_manager' entry
+  // exactly.
+  //
+  // 2026-08-13: given the same Client/Sales/Invoice/Project Management
+  // bundle as Seller (see the 'seller' entry above), PLUS the extra
+  // company-wide/lead-ownership keys (canViewAllCompanyLeads,
+  // canAssignLeadOwner, canTransferLeads, canDeleteLeads) a Seller
+  // deliberately doesn't get — Lead Manager sits a tier above Seller, not
+  // beside it. This supersedes the older "no lead deletion, no invoice
+  // creation/sending" restriction.
   lead_manager: {
     sales: [
       'canViewSalesDashboard', 'canViewLeads', 'canViewAllCompanyLeads',
-      'canCreateLeads', 'canEditLeads', 'canAssignLeadOwner', 'canTransferLeads',
-      'canManagePipeline', 'canAddLeadNotes', 'canViewSalesReports',
+      'canCreateLeads', 'canEditLeads', 'canDeleteLeads', 'canAssignLeadOwner', 'canTransferLeads',
+      'canManagePipeline', 'canAddLeadNotes', 'canViewSalesTargets', 'canUpdateSalesTargets', 'canViewSalesReports',
+      'canUseSalesChat',
+      'canViewClients', 'canCreateClients', 'canEditClients',
     ],
-    // Optional, and only actually granted if the company has purchased the
-    // invoice module — view-only, deliberately without canCreateInvoices/
-    // canSendInvoices.
-    invoice: ['canViewInvoices', 'canViewPayments'],
+    client: [
+      'canEnableClientPortal', 'canDisableClientPortal',
+      'canViewClients', 'canCreateClients', 'canEditClients',
+      'canResetClientPassword', 'canViewClientPayments', 'canViewClientInvoices',
+      'canManageClientDocuments', 'canViewClientDocuments',
+    ],
+    // Only actually granted if the company has purchased the invoice module.
+    invoice: [
+      'canCreateInvoices', 'canSendInvoices', 'canViewInvoices', 'canEditInvoices',
+      'canDownloadOrExportInvoices', 'canViewPayments', 'canRecordPayments',
+      'canSendPaymentReminders', 'canManageBillingClients', 'canViewInvoiceReports',
+    ],
+    // Same Seller-tier project bundle as the 'seller' entry above — see its
+    // comments for which of these are functional vs. cosmetic-only. Note
+    // several (canEditProjects/canCompleteProjects/etc.) key off a project's
+    // seller_id match, which Lead Manager won't normally have, so those are
+    // cosmetic here unless this Lead Manager is also set as a project's
+    // seller/PM.
+    project_management: [
+      'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
+      'canCreateProjectHandoff',
+      'canRequestPMAssignment',
+      'canAddClientFacingComment',
+      'canViewProjectChat', 'canSendProjectChatMessage',
+      'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      'canManageProjectInvoices',
+      'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
+      'canCreateProjects',
+      'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
+      'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
+      'canAddSellerToProjectChat',
+      'canManageProjectChatParticipants',
+    ],
     account: ['canUseGeneralChat'],
   },
   invoice_user: {

@@ -22,6 +22,14 @@ const STATUS_C: Record<string, { bg: string; color: string }> = {
   blocked:  { bg: '#fef2f2', color: '#dc2626' },
 };
 
+const errorMessage = (err: unknown, fallback: string) => {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const response = (err as { response?: { data?: { message?: unknown } } }).response;
+    if (typeof response?.data?.message === 'string') return response.data.message;
+  }
+  return fallback;
+};
+
 export default function AdminClientsPage() {
   // Every AdminClientController endpoint this page calls requires the real
   // Client module — 'client_portal' is the actual purchasable module_key
@@ -36,6 +44,7 @@ export default function AdminClientsPage() {
   const [search,    setSearch]    = useState('');
   const [portalF,   setPortalF]   = useState('');
   const [companyF,  setCompanyF]  = useState('');
+  const [enablingId, setEnablingId] = useState<number | null>(null);
 
   useEffect(() => {
     api.get('/admin/companies').then(r => {
@@ -59,7 +68,11 @@ export default function AdminClientsPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const disable = async (c: Client) => {
     if (!confirm(`Disable portal for ${c.name}?`)) return;
@@ -68,6 +81,19 @@ export default function AdminClientsPage() {
       toast.success('Portal disabled');
       load();
     } catch { toast.error('Failed'); }
+  };
+
+  const enable = async (c: Client) => {
+    setEnablingId(c.id);
+    try {
+      await api.post(`/admin/clients/${c.id}/enable-portal`);
+      toast.success('Portal enabled');
+      load();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to enable portal'));
+    } finally {
+      setEnablingId(null);
+    }
   };
 
   // Soft delete (Client uses SoftDeletes) — the client's invoices/projects
@@ -79,7 +105,7 @@ export default function AdminClientsPage() {
       await api.delete(`/admin/clients/${c.id}`);
       toast.success('Client deleted');
       load();
-    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to delete client'); }
+    } catch (err: unknown) { toast.error(errorMessage(err, 'Failed to delete client')); }
   };
 
   const seatPct = seat?.limit ? Math.round((seat.portal_used / seat.limit) * 100) : 0;
@@ -231,6 +257,13 @@ export default function AdminClientsPage() {
                             background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6,
                           }}>Disable</button>
                         )}
+                        {!c.portal_access && (
+                          <button onClick={() => enable(c)} disabled={enablingId === c.id} style={{
+                            padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: enablingId === c.id ? 'wait' : 'pointer',
+                            background: '#fff', color: '#059669', border: '1px solid #bbf7d0', borderRadius: 6,
+                            opacity: enablingId === c.id ? 0.65 : 1,
+                          }}>{enablingId === c.id ? 'Enabling...' : 'Enable'}</button>
+                        )}
                         <button onClick={() => del(c)} style={{
                           padding: '4px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                           background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6,
@@ -244,6 +277,7 @@ export default function AdminClientsPage() {
           </table>
         )}
       </div>
+
     </DashboardLayout>
   );
 }

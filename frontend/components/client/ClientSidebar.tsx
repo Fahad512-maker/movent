@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
 import {
   HiSquares2X2, HiFolder, HiDocumentText, HiCreditCard,
-  HiArrowDownTray, HiChatBubbleLeftRight, HiLifebuoy, HiChartBar,
+  HiArrowDownTray, HiLifebuoy, HiChartBar,
 } from 'react-icons/hi2';
 import clientApi from '@/lib/clientAxios';
 
@@ -16,7 +16,6 @@ const NAV = [
   { key: 'invoices',  label: 'Invoices',  icon: HiDocumentText,        path: '/client/invoices' },
   { key: 'payments',  label: 'Payments',  icon: HiCreditCard,          path: '/client/payments' },
   { key: 'documents', label: 'Documents', icon: HiArrowDownTray,       path: '/client/documents' },
-  { key: 'chat',      label: 'Chat',      icon: HiChatBubbleLeftRight, path: '/client/chat' },
   { key: 'support',   label: 'Support',   icon: HiLifebuoy,            path: '/client/support' },
   { key: 'reports',   label: 'Reports',   icon: HiChartBar,            path: '/client/reports' },
 ];

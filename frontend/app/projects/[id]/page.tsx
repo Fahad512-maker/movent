@@ -89,6 +89,7 @@ export default function UserProjectDetailPage() {
 
   const canEditProjects = can('project_management', 'canEditProjects');
   const canManageProjectInvoices = can('project_management', 'canManageProjectInvoices');
+  const canLinkExistingProjectInvoices = canManageProjectInvoices && me?.role_type !== 'project_manager';
   const canEditTasks   = can('project_management', 'canEditTasks');
   const canCreateTasks = can('project_management', 'canCreateTasks');
   const canAssignTasks = can('project_management', 'canAssignTasks');
@@ -737,16 +738,18 @@ export default function UserProjectDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={sectionTitle}>Invoices &amp; Billing</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setShowLinkInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#2563eb', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                  Link Existing Invoice
-                </button>
+                {canLinkExistingProjectInvoices && (
+                  <button onClick={() => setShowLinkInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#2563eb', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                    Link Existing Invoice
+                  </button>
+                )}
                 <button onClick={() => setShowCreateInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
                   + Create Invoice
                 </button>
               </div>
             </div>
 
-            {showLinkInvoice && (
+            {canLinkExistingProjectInvoices && showLinkInvoice && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
                 <input value={linkInvoiceId} onChange={e => setLinkInvoiceId(e.target.value)} placeholder="Invoice ID" style={{ ...inp, width: 160 }} />
                 <button onClick={handleLinkInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
