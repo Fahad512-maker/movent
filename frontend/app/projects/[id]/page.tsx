@@ -210,14 +210,16 @@ export default function UserProjectDetailPage() {
     if (!newInvDesc.trim() || !newInvAmount) { toast.error('Description and amount are required'); return; }
     setInvoiceBusy(true);
     try {
-      await userProjectService.createInvoice(id, {
+      const invoice = await userProjectService.createInvoice(id, {
         due_date: newInvDueDate || null,
         currency: projectInvoiceCurrency,
         items: [{ description: newInvDesc.trim(), quantity: 1, unit_price: Number(newInvAmount) }],
       });
       toast.success('Invoice created for project');
-      setNewInvDesc(''); setNewInvAmount(''); setNewInvDueDate(''); setShowCreateInvoice(false);
-      load();
+      // Land on the new invoice's own detail page — same as every other
+      // invoice-creation flow (frontend/app/invoices/new/page.tsx) — rather
+      // than staying here with no way to see what was just created.
+      router.push(`/invoices/${invoice.id}`);
     } catch (err: unknown) {
       const ex = err as { response?: { data?: { message?: string } } };
       toast.error(ex.response?.data?.message ?? 'Failed to create invoice');

@@ -71,7 +71,6 @@ function NewInvoiceForm() {
   const [discount, setDiscount]     = useState(0);
   const [notes, setNotes]           = useState('');
   const [invoicePurpose, setInvoicePurpose] = useState('');
-  const [paymentType, setPaymentType]       = useState('');
   const [items, setItems]           = useState<LineItem[]>([EMPTY_ITEM()]);
 
   // Customer type — starts as 'client'; useEffect corrects to 'guest' for sub-users
@@ -343,7 +342,6 @@ function NewInvoiceForm() {
       notes:           notes || null,
       due_date:        dueDate || null,
       invoice_purpose: invoicePurpose || undefined,
-      payment_type:    paymentType || undefined,
       items: effectiveItems.map(r => ({ description: r.description, quantity: r.quantity, unit_price: r.unit_price })),
       gateway_account_ids: selectedGatewayIds,
       ...(customerType === 'client'
@@ -550,14 +548,10 @@ function NewInvoiceForm() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 0 }}>
                     <div>
                       <label style={lbl}>Currency</label>
-                      <select style={inp} value={currency} onChange={e => setCurrency(e.target.value)}>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="AED">AED</option>
-                        <option value="SAR">SAR</option>
-                        <option value="PKR">PKR</option>
-                      </select>
+                      {/* Locked to whatever Company Admin configured in
+                          Settings (see Company::invoicingProfile() on the
+                          backend) — never picked per-invoice. */}
+                      <input style={{ ...inp, background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }} value={currency} disabled readOnly />
                     </div>
                     <div>
                       <label style={lbl}>Due Date</label>
@@ -569,26 +563,12 @@ function NewInvoiceForm() {
                     </div>
                   </div>
 
-                  {/* Invoice Purpose / Payment Type — what this invoice is
-                      FOR, shown prominently to the client (spec §5), even
-                      before any Project exists. */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-                    <div>
-                      <label style={lbl}>Invoice Purpose</label>
-                      <input style={inp} value={invoicePurpose} onChange={e => setInvoicePurpose(e.target.value)} placeholder="e.g. 50% Advance Payment" />
-                    </div>
-                    <div>
-                      <label style={lbl}>Payment Type</label>
-                      <select style={inp} value={paymentType} onChange={e => setPaymentType(e.target.value)}>
-                        <option value="">Select…</option>
-                        <option value="full_payment">Full Payment</option>
-                        <option value="advance_payment">Advance Payment</option>
-                        <option value="deposit">Deposit</option>
-                        <option value="milestone_payment">Milestone Payment</option>
-                        <option value="retainer">Retainer</option>
-                        <option value="final_payment">Final Payment</option>
-                      </select>
-                    </div>
+                  {/* Invoice Purpose — what this invoice is FOR, shown
+                      prominently to the client (spec §5), even before any
+                      Project exists. */}
+                  <div style={{ marginTop: 14 }}>
+                    <label style={lbl}>Invoice Purpose</label>
+                    <input style={inp} value={invoicePurpose} onChange={e => setInvoicePurpose(e.target.value)} placeholder="e.g. 50% Advance Payment" />
                   </div>
                 </div>
               </div>

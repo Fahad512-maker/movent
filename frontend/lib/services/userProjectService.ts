@@ -116,7 +116,7 @@ export const userProjectService = {
   createInvoice: async (id: number, payload: {
     due_date?: string | null; currency?: string; tax_rate?: number; discount_amount?: number;
     notes?: string | null; items: { description: string; quantity: number; unit_price: number }[];
-  }): Promise<unknown> => {
+  }): Promise<{ id: number }> => {
     const res = await api.post(`/user/projects/${id}/invoices`, payload);
     return res.data.data;
   },
