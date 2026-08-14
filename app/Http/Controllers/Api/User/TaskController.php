@@ -105,10 +105,22 @@ class TaskController extends Controller
     // still sees everything.
     private function isTaskManager(?Project $project = null): bool
     {
+        if ($this->user()->role_type === 'project_manager') {
+            return true;
+        }
         if ($this->can('canViewAllCompanyProjects')) {
             return true;
         }
         return $project && $project->project_manager_id === $this->user()->id;
+    }
+
+    private function managesAnyProject(): bool
+    {
+        $user = $this->user();
+
+        return Project::where('company_id', $user->company_id)
+            ->where('project_manager_id', $user->id)
+            ->exists();
     }
 
     public function index(Request $request, int $projectId): JsonResponse
@@ -123,7 +135,7 @@ class TaskController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
-        $canViewAll = $this->can('canViewTasks');
+        $canViewAll = $this->user()->role_type === 'project_manager' || $this->managesAnyProject() || $this->can('canViewTasks');
         $canViewOwnRequests = $this->can('canCreateLinkedProjectTask');
         if (!$canViewAll && !$canViewOwnRequests) {
             return ApiResponse::error('Permission denied', 403);
@@ -272,7 +284,7 @@ class TaskController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
-        $canViewAll = $this->can('canViewTasks');
+        $canViewAll = $this->user()->role_type === 'project_manager' || $this->managesAnyProject() || $this->can('canViewTasks');
         $canViewOwnRequests = $this->can('canCreateLinkedProjectTask');
         if (!$canViewAll && !$canViewOwnRequests) {
             return ApiResponse::error('Permission denied', 403);
@@ -289,7 +301,13 @@ class TaskController extends Controller
             $q->where('created_by', $user->id);
         } elseif (!$this->isTaskManager()) {
             $q->where(function ($w) use ($user) {
-                $w->where('assigned_to', $user->id)->orWhere('production_assigned_to', $user->id);
+                // A Project Manager should see every task on projects they
+                // manage, no matter who the task is assigned to. They may
+                // still also see their own handoff/assigned tasks on other
+                // visible projects.
+                $w->whereHas('project', fn ($p) => $p->where('project_manager_id', $user->id))
+                  ->orWhere('assigned_to', $user->id)
+                  ->orWhere('production_assigned_to', $user->id);
                 if ($user->role_type === 'qa') {
                     $w->orWhere(fn ($qa) => $qa->where('qa_assigned_to', $user->id)->whereIn('status', ['ready_for_qa', 'in_qa']))
                       ->orWhere(fn ($qa) => $qa->whereIn('status', ['ready_for_qa', 'in_qa'])->whereNull('qa_assigned_to'));
@@ -492,6 +510,7 @@ class TaskController extends Controller
                 'body'       => "You were assigned task {$task->task_number} - \"{$task->title}\" on \"{$project->name}\".",
                 'data'       => ['project_id' => $project->id, 'task_id' => $task->id, 'link' => "/projects/{$project->id}/tasks/{$task->id}"],
             ]);
+            \App\Services\ProjectChatService::addTaskAssignee($project, $task->assigned_to);
         }
 
         $this->logActivity($project->company_id, 'task_created', 'Task', $task->id, $validated);
@@ -526,8 +545,9 @@ class TaskController extends Controller
         }
 
         $isOwnTask = $task->assigned_to === $this->user()->id;
-        $canEdit   = $this->can('canEditTasks');
-        $canAssign = $this->can('canAssignTasks');
+        $isPmTier  = $this->isTaskManager($project);
+        $canEdit   = $isPmTier || $this->can('canEditTasks');
+        $canAssign = $isPmTier || $this->can('canAssignTasks');
         // A QA/reviewer-tier user is neither the assignee nor granted
         // canEditTasks/canAssignTasks, but must still be able to reach the
         // status-only path below (Ready for QA -> In QA -> QA
@@ -536,7 +556,7 @@ class TaskController extends Controller
         // only adds title/assigned_to when $canEdit/$canAssign are true, so
         // this broadened gate still can't let a QA-only user touch anything
         // but status/comment.
-        $hasTaskStatusPerm = $this->can('canMarkTaskBlocked') || $this->can('canVerifyDeliverables')
+        $hasTaskStatusPerm = $isPmTier || $this->can('canMarkTaskBlocked') || $this->can('canVerifyDeliverables')
             || $this->can('canAssignProductionTasks') || $this->can('canCompleteTasks')
             || $this->can('canReopenTasks') || $this->can('canOverrideTaskStatus');
         if (!$isOwnTask && !$canEdit && !$canAssign && !$hasTaskStatusPerm) {
@@ -621,10 +641,11 @@ class TaskController extends Controller
                 'type'        => 'user',
                 'id'          => $this->user()->id,
                 'name'        => $this->userName(),
-                'is_pm'       => $project->project_manager_id === $this->user()->id,
+                'is_pm'       => $isPmTier,
                 'is_assignee' => $isOwnTask,
                 'role_type'   => $this->user()->role_type,
                 'perms'       => array_values(array_filter([
+                    $isPmTier ? 'canOverrideTaskStatus' : null,
                     $canEdit ? 'canEditTasks' : null,
                     $this->can('canMarkTaskBlocked') ? 'canMarkTaskBlocked' : null,
                     $this->can('canVerifyDeliverables') ? 'canVerifyDeliverables' : null,
@@ -669,6 +690,12 @@ class TaskController extends Controller
                     'body'       => "You were assigned task {$task->task_number} - \"{$task->title}\" on \"{$project->name}\".",
                     'data'       => ['project_id' => $project->id, 'task_id' => $task->id, 'link' => "/projects/{$project->id}/tasks/{$task->id}"],
                 ]);
+            }
+            if ($validated['assigned_to']) {
+                \App\Services\ProjectChatService::addTaskAssignee($project, $validated['assigned_to']);
+            }
+            if ($wasAssignee) {
+                \App\Services\ProjectChatService::removeParticipantIfNoLongerEligible($project, $wasAssignee);
             }
         }
 

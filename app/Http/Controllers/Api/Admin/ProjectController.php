@@ -539,7 +539,17 @@ class ProjectController extends Controller
                 // assigned_by FKs to `users`; Company Admin actor isn't a User row
                 ['role_in_project' => $member['role_in_project'], 'assigned_by' => null]
             );
-            $memberName = User::find($member['user_id'])?->name ?? 'Unknown';
+            $memberUser = User::find($member['user_id']);
+            $memberName = $memberUser?->name ?? 'Unknown';
+
+            // Being formally added to the team is itself the authorization
+            // to chat — see ProjectChatService::addTeamMember(). Never for a
+            // Seller: mirrors syncFormalTeamParticipants()'s hard "Seller
+            // can never be auto-added" rule (added instead only via the
+            // explicit Manage Participants path).
+            if ($memberUser && $memberUser->role_type !== 'seller') {
+                ProjectChatService::addTeamMember($project, $memberUser->id);
+            }
 
             if (!$existingMember) {
                 $project->logActivity('team_assigned', "{$this->adminName()} added {$memberName} to the project team as " . str_replace('_', ' ', $member['role_in_project']) . '.', $this->adminName(), [

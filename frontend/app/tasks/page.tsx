@@ -7,7 +7,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService } from '@/lib/services/userProjectService';
 import { Task, TaskStatus } from '@/lib/services/adminProjectService';
 import { notificationService } from '@/lib/services/notificationService';
-import { can, getAuthUser, getUserModulePermissions } from '@/lib/auth';
+import { can, getAuthType, getAuthUser, getUserModulePermissions } from '@/lib/auth';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
 import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses, taskStatusRequiresComment } from '@/lib/taskStatusFlow';
 import toast from 'react-hot-toast';
@@ -55,9 +55,13 @@ export default function UserTasksPage() {
   // which endpoint is called (indexAll already scopes itself correctly for
   // a non-manager server-side, and unlike myTasks() also supports the
   // search box, so it stays the one always called).
-  const isTaskManagerTier = can('project_management', 'canViewAllCompanyProjects');
+  const isTaskManagerTier = me?.role_type === 'project_manager' || can('project_management', 'canViewAllCompanyProjects');
 
   useEffect(() => {
+    if (getAuthType() === 'admin') {
+      router.replace('/admin/tasks');
+      return;
+    }
     // The Task feature is retired for Seller entirely (backend hard-blocks
     // it regardless of any permission held) — send them away immediately
     // rather than rendering a page that'll just 403 on load().
@@ -65,7 +69,7 @@ export default function UserTasksPage() {
       router.replace('/dashboard');
       return;
     }
-    const canAll = can('project_management', 'canViewTasks');
+    const canAll = me?.role_type === 'project_manager' || getAuthType() === 'admin' || can('project_management', 'canViewTasks');
     if (!canAll && getUserModulePermissions('project_management').length === 0) {
       router.replace('/dashboard');
       return;
@@ -92,9 +96,10 @@ export default function UserTasksPage() {
 
   useEffect(() => { if (ready) load(); }, [statusF, search, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const canEditTasks = can('project_management', 'canEditTasks');
-  const canAssignTasks = can('project_management', 'canAssignTasks');
+  const canEditTasks = isTaskManagerTier || can('project_management', 'canEditTasks');
+  const canAssignTasks = isTaskManagerTier || can('project_management', 'canAssignTasks');
   const taskStatusPerms = [
+    isTaskManagerTier && 'canOverrideTaskStatus',
     can('project_management', 'canEditTasks') && 'canEditTasks',
     can('project_management', 'canMarkTaskBlocked') && 'canMarkTaskBlocked',
     can('project_management', 'canVerifyDeliverables') && 'canVerifyDeliverables',
@@ -228,7 +233,7 @@ export default function UserTasksPage() {
                       <select value={t.status} onChange={e => updateStatus(t, e.target.value as TaskStatus)}
                         style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                         <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                        {getAllowedNextTaskStatuses(t.status, { isAssignee: (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id, isPm: false, isAdmin: false, perms: taskStatusPerms, isDevOrTeamAssignee: isDevOrTeamRole && (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id }).map(s => (
+                        {getAllowedNextTaskStatuses(t.status, { isAssignee: (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id, isPm: isTaskManagerTier, isAdmin: false, perms: taskStatusPerms, isDevOrTeamAssignee: isDevOrTeamRole && (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id }).map(s => (
                           <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
                         ))}
                       </select>

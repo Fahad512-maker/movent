@@ -123,8 +123,11 @@ export default function UserProjectDetailPage() {
   // Member/Designer/QA/Production user never gets it just because that
   // permission was left checked in their role's bundle. A Seller keeps their
   // separate, deliberate upload-on-own-project allowance untouched.
-  const canUploadAttachments = (isSeller || project?.project_manager?.id === me?.id)
-    && can('project_management', 'canUploadProjectAttachments');
+  const isProjectPmTier = project?.project_manager?.id === me?.id
+    || (me?.role_type === 'project_manager' && can('project_management', 'canViewAllCompanyProjects'));
+  const canUploadAttachments = isSeller
+    ? can('project_management', 'canUploadProjectAttachments')
+    : isProjectPmTier && (canEditProjects || can('project_management', 'canUploadProjectAttachments'));
   const canDownloadAttachments = isSeller || can('project_management', 'canDownloadProjectAttachments');
   const canDeleteAttachments = !isSeller && can('project_management', 'canDeleteProjectAttachments');
   // Same permAny set the sidebar's "Production Queue" nav item already uses —
@@ -151,7 +154,7 @@ export default function UserProjectDetailPage() {
     can('project_management', 'canReopenTasks') && 'canReopenTasks',
     can('project_management', 'canOverrideTaskStatus') && 'canOverrideTaskStatus',
   ].filter(Boolean) as string[];
-  const isProjectPm = project?.project_manager?.id === me?.id;
+  const isProjectPm = isProjectPmTier;
 
   // Edit Project (inline form, toggled from the header)
   const [editingProject, setEditingProject] = useState(false);
@@ -592,6 +595,7 @@ export default function UserProjectDetailPage() {
   const projectTotalInvoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
   const projectTotalPaid = projectInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
   const projectOutstanding = Math.max(0, projectTotalInvoiced - projectTotalPaid);
+  const showInvoicesBilling = isSeller && canManageProjectInvoices;
 
   return (
     <DashboardLayout title={project.name}>
@@ -644,11 +648,11 @@ export default function UserProjectDetailPage() {
               onUpdated={updated => setProject(updated)}
             />
             {canEditProjects && project.status !== 'closed' && (
-              <button onClick={() => setEditingProject(v => !v)} style={{
+              <button onClick={() => router.push(`/projects/${id}/edit`)} style={{
                 padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
                 color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
               }}>
-                {editingProject ? 'Cancel Edit' : 'Edit Project'}
+                Edit Project
               </button>
             )}
           </div>
@@ -688,6 +692,44 @@ export default function UserProjectDetailPage() {
               <label style={lbl}>Description</label>
               <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...inp, resize: 'vertical' }} />
             </div>
+            {canUploadAttachments && (
+              <div style={{ marginBottom: 16, padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Attachments</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                      {attachments.length} file{attachments.length === 1 ? '' : 's'} uploaded
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {!isSeller && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox" checked={attachmentVisibleToClient}
+                          onChange={e => setAttachmentVisibleToClient(e.target.checked)}
+                        />
+                        Visible to client
+                      </label>
+                    )}
+                    <label
+                      title={isDraft ? DRAFT_HINT : undefined}
+                      style={{
+                        padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
+                        background: uploading || isDraft ? '#f1f5f9' : '#fff', color: '#475569',
+                        fontSize: 12, fontWeight: 500, cursor: uploading || isDraft ? 'not-allowed' : 'pointer',
+                        opacity: isDraft ? 0.6 : 1,
+                      }}>
+                      {uploading ? 'Uploading...' : '+ Add Files'}
+                      <input
+                        type="file" multiple disabled={uploading || isDraft} style={{ display: 'none' }}
+                        accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
+                        onChange={e => { uploadAttachments(e.target.files); e.target.value = ''; }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="submit" disabled={savingProject} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: savingProject ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: savingProject ? 'not-allowed' : 'pointer' }}>
                 {savingProject ? 'Saving…' : 'Save Changes'}
@@ -718,7 +760,7 @@ export default function UserProjectDetailPage() {
         {/* ── Invoices & Billing — deposit/milestone/final/change-request
              invoices billed under this project, plus a running summary.
              Hidden entirely for anyone without canManageProjectInvoices. ── */}
-        {canManageProjectInvoices && (
+        {showInvoicesBilling && (
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={sectionTitle}>Invoices &amp; Billing</div>

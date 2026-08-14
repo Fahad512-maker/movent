@@ -194,6 +194,7 @@ class TaskController extends Controller
                 'body'       => "You were assigned task {$task->task_number} - \"{$task->title}\" on \"{$project->name}\".",
                 'data'       => ['project_id' => $project->id, 'task_id' => $task->id, 'link' => "/projects/{$project->id}/tasks/{$task->id}"],
             ]);
+            \App\Services\ProjectChatService::addTaskAssignee($project, $task->assigned_to);
         }
 
         SystemAuditLog::create([
@@ -305,6 +306,13 @@ class TaskController extends Controller
                 ? ($oldName ? "Task reassigned from {$oldName} to {$newName}" : "Task assigned to {$newName}")
                 : "Task unassigned from {$oldName}";
             $task->logActivity('assigned', $description, $this->adminName(), ['from' => $wasAssignee, 'to' => $validated['assigned_to']]);
+
+            if ($validated['assigned_to']) {
+                \App\Services\ProjectChatService::addTaskAssignee($project, $validated['assigned_to']);
+            }
+            if ($wasAssignee) {
+                \App\Services\ProjectChatService::removeParticipantIfNoLongerEligible($project, $wasAssignee);
+            }
         }
 
         // Status-change activity logging + notifications (PM/QA/assignee/

@@ -952,6 +952,42 @@ class ProjectController extends Controller
             }
         }
 
+        // A Seller may only ever hand this project to a Project Manager or
+        // bring in another Seller — never a Production/Developer/Designer/
+        // QA/Team Member directly, that's PM/Admin territory. Mirrors the
+        // frontend gate in frontend/app/projects/team/page.tsx (Seller actor
+        // narrowed to eligibleRoles = ['project_manager'], plus 'seller' via
+        // the isLiteralPm branch).
+        if ($actor->role_type === 'seller') {
+            $disallowedIds = User::where('company_id', $actor->company_id)
+                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+                ->whereNotIn('role_type', ['project_manager', 'seller'])
+                ->pluck('id');
+            if ($disallowedIds->isNotEmpty()) {
+                return ApiResponse::error('As a Seller, you can only add a Project Manager or another Seller to the project team.', 403);
+            }
+        }
+
+        // A project may only ever have ONE Project Manager and ONE Seller on
+        // its team — mirrors the frontend picker in
+        // frontend/app/projects/team/page.tsx, which already drops a role
+        // out of the list once one is present. Checked against the union of
+        // already-existing members and this request's payload, so
+        // re-submitting the SAME existing PM/Seller (e.g. a role change
+        // save) never trips it, but adding a second, different one does.
+        $allUserIds = $project->teamMembers()->pluck('user_id')
+            ->merge(collect($validated['members'])->pluck('user_id'))
+            ->unique();
+        foreach (['project_manager' => 'Project Manager', 'seller' => 'Seller'] as $roleType => $label) {
+            $count = User::where('company_id', $actor->company_id)
+                ->where('role_type', $roleType)
+                ->whereIn('id', $allUserIds)
+                ->count();
+            if ($count > 1) {
+                return ApiResponse::error("A project can only have one {$label} on its team.", 422);
+            }
+        }
+
         foreach ($validated['members'] as $member) {
             $existingMember = ProjectTeamMember::where('project_id', $project->id)
                 ->where('user_id', $member['user_id'])
@@ -961,7 +997,17 @@ class ProjectController extends Controller
                 ['project_id' => $project->id, 'user_id' => $member['user_id']],
                 ['role_in_project' => $member['role_in_project'], 'assigned_by' => $actor->id]
             );
-            $memberName = User::find($member['user_id'])?->name ?? 'Unknown';
+            $memberUser = User::find($member['user_id']);
+            $memberName = $memberUser?->name ?? 'Unknown';
+
+            // Being formally added to the team is itself the authorization
+            // to chat — see ProjectChatService::addTeamMember(). Never for a
+            // Seller: mirrors syncFormalTeamParticipants()'s hard "Seller
+            // can never be auto-added" rule (added instead only via the
+            // explicit Manage Participants path).
+            if ($memberUser && $memberUser->role_type !== 'seller') {
+                ProjectChatService::addTeamMember($project, $memberUser->id);
+            }
 
             if (!$existingMember) {
                 $project->logActivity('team_assigned', "{$actor->name} added {$memberName} to the project team as " . str_replace('_', ' ', $member['role_in_project']) . '.', $actor->name, [

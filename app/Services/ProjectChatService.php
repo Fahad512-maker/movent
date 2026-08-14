@@ -95,22 +95,16 @@ class ProjectChatService
         }
     }
 
-    // Call right after a project's seller_id is set (handoff creation in
-    // Api\User\ProjectController::store(), or ProjectSellerAssignmentService::
-    // assign()) — NOT a violation of syncFormalTeamParticipants()'s "Seller
-    // can be added only by Company Admin or Project Manager" rule: assigning
-    // seller_id IS that authorized act (Admin's own "Assign Seller" action,
-    // or a Seller's own sanctioned self-handoff), it just never also dropped
-    // them into chat_participants. Idempotent; creates the thread if needed
-    // (a fresh handoff/assignment has no thread yet) and only notifies on a
-    // genuinely new add (wasRecentlyCreated), same convention as
-    // syncFormalTeamParticipants().
-    public static function addSeller(Project $project, int $sellerId): void
+    // Shared by addSeller()/addTaskAssignee()/addTeamMember() — every "this
+    // specific act of assignment is itself the authorization" call site.
+    // Idempotent; creates the thread if needed and only notifies on a
+    // genuinely new add (wasRecentlyCreated).
+    private static function addParticipant(Project $project, int $userId): void
     {
         $thread = static::threadFor($project);
 
         $participant = ChatParticipant::firstOrCreate(
-            ['thread_id' => $thread->id, 'user_id' => $sellerId],
+            ['thread_id' => $thread->id, 'user_id' => $userId],
             ['role' => 'member', 'joined_at' => now()]
         );
 
@@ -119,13 +113,51 @@ class ProjectChatService
         }
 
         Notification::create([
-            'user_id'    => $sellerId,
+            'user_id'    => $userId,
             'company_id' => $project->company_id,
             'type'       => 'project_chat_added',
             'title'      => "Added to project chat — {$project->name}",
             'body'       => "You were added to project chat for '{$project->name}'.",
             'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => "/projects/{$project->id}/chat"],
         ]);
+    }
+
+    // Call right after a project's seller_id is set (handoff creation in
+    // Api\User\ProjectController::store(), or ProjectSellerAssignmentService::
+    // assign()) — NOT a violation of syncFormalTeamParticipants()'s "Seller
+    // can be added only by Company Admin or Project Manager" rule: assigning
+    // seller_id IS that authorized act (Admin's own "Assign Seller" action,
+    // or a Seller's own sanctioned self-handoff), it just never also dropped
+    // them into chat_participants.
+    public static function addSeller(Project $project, int $sellerId): void
+    {
+        static::addParticipant($project, $sellerId);
+    }
+
+    // Call right after a task's assigned_to is set (TaskController::store()/
+    // update(), both Admin and User guards) — same convention as addSeller():
+    // the assignment itself is the authorized act, so the new assignee
+    // shouldn't have to wait for a PM to next open the chat page
+    // (syncFormalTeamParticipants()) before they can see/send in it. Never
+    // called with a Seller's id — assignedToRule() already keeps a Seller
+    // from ever being a task's assigned_to.
+    public static function addTaskAssignee(Project $project, int $userId): void
+    {
+        static::addParticipant($project, $userId);
+    }
+
+    // Call right after a user is added/updated as a formal team member
+    // (assignTeam()'s per-member loop, both Admin and User guards) — same
+    // convention as addTaskAssignee(): being formally added to the team IS
+    // the authorized act, so e.g. a Seller handing the project off to a new
+    // Project Manager via the Team page shouldn't leave that PM stuck
+    // waiting for someone else to next open the chat page before they can
+    // see/send in it. Callers must NEVER invoke this for a Seller being
+    // added to the team — mirrors syncFormalTeamParticipants()'s hard
+    // "Seller can never be auto-added" rule.
+    public static function addTeamMember(Project $project, int $userId): void
+    {
+        static::addParticipant($project, $userId);
     }
 
     // Call after a user stops being formally tied to a project (e.g.

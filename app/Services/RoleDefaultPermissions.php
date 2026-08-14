@@ -31,6 +31,7 @@ class RoleDefaultPermissions
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
                 'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
                 'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
+                'canCompleteTasks', 'canReopenTasks', 'canOverrideTaskStatus',
                 'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',
                 'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
                 'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
