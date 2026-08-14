@@ -175,7 +175,10 @@ class ProductionController extends Controller
         }
 
         $item = $this->ownQueueItem($id);
-        $item->update(['status' => 'in_progress', 'started_at' => $item->started_at ?? now()]);
+        // Starting an unclaimed item claims it — otherwise it stays
+        // assigned_to null forever (nothing else ever sets it) and every
+        // later action on it would hit the very same "nobody owns this" gap.
+        $item->update(['status' => 'in_progress', 'started_at' => $item->started_at ?? now(), 'assigned_to' => $item->assigned_to ?? $this->user()->id]);
         Task::where('id', $item->task_id)->update(['progress' => $this->progressForStatus('in_progress')]);
 
         $this->logActivity($item->task->project->company_id, 'task_started', 'Task', $item->task_id);
@@ -192,7 +195,10 @@ class ProductionController extends Controller
         }
 
         $item = $this->ownQueueItem($id);
-        $item->update(['status' => 'submitted', 'submitted_at' => now()]);
+        // Same defensive claim as start() — covers an item that reached
+        // 'in_progress' still unassigned (e.g. an Admin moved it there
+        // directly via updateQueueItem() without picking a specific owner).
+        $item->update(['status' => 'submitted', 'submitted_at' => now(), 'assigned_to' => $item->assigned_to ?? $this->user()->id]);
         Task::where('id', $item->task_id)->update(['progress' => $this->progressForStatus('submitted')]);
 
         $this->logActivity($item->task->project->company_id, 'task_submitted_for_review', 'Task', $item->task_id);
@@ -509,11 +515,18 @@ class ProductionController extends Controller
         return ApiResponse::success($deliverable->revisions()->with('requestedBy:id,name')->orderByDesc('id')->get());
     }
 
+    // A queue item reaches here either already claimed by this exact user, or
+    // still unclaimed (assigned_to null — e.g. TaskStatusService::
+    // applyTransition() created it with no specific handoff target, so it
+    // broadcast to every production_user team member instead of one person).
+    // Requiring an exact assigned_to match unconditionally meant Start/Submit
+    // 404'd for every production teammate on an unclaimed item — nobody could
+    // ever pick it up, since assigned_to never equals anybody's id.
     private function ownQueueItem(int $id): ProductionQueue
     {
         $user = $this->user();
 
-        return ProductionQueue::where('assigned_to', $user->id)
+        return ProductionQueue::where(fn ($q) => $q->where('assigned_to', $user->id)->orWhereNull('assigned_to'))
             ->whereHas('task.project', fn($p) => $p->where('company_id', $user->company_id))
             ->findOrFail($id);
     }

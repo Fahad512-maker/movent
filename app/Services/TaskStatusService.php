@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ProductionQueue;
 use App\Models\ProjectTeamMember;
 use App\Models\Task;
 
@@ -108,6 +109,24 @@ class TaskStatusService
         if ($to === 'completed')            $update['completed_at'] = $task->completed_at ?? $now;
 
         $task->update($update);
+
+        // Nothing else in the app ever creates a production_queue row —
+        // Api\{Admin,User}\ProductionController's start()/submit()/approve()/
+        // reject() only ever read or update an existing one (ownQueueItem()
+        // on the User guard requires one to already exist), so without this
+        // a task reaching "Ready for Production" never actually showed up in
+        // anyone's Production Queue. updateOrCreate (not firstOrCreate) so a
+        // SECOND handoff — e.g. after a revision cycle sends it back through
+        // QA and it reaches this status again — resets the row to a fresh
+        // 'queued' state and picks up the (possibly reassigned) handoff
+        // target, instead of leaving it stuck on a stale approved/rejected
+        // status from the first pass.
+        if ($to === 'ready_for_production') {
+            ProductionQueue::updateOrCreate(
+                ['task_id' => $task->id],
+                ['assigned_to' => $productionAssignedTo, 'status' => 'queued']
+            );
+        }
 
         $actorName = $actor['name'] ?? ($actor['type'] === 'admin' ? 'Admin' : 'User');
         $logType = in_array($to, self::QA_PIPELINE_STATUSES, true) ? 'qa_status_changed' : ($to === 'completed' ? 'completed' : 'status_changed');

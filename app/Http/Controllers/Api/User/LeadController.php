@@ -8,6 +8,7 @@ use App\Models\Client;
 use App\Models\Lead;
 use App\Models\LeadTransfer;
 use App\Models\Notification;
+use App\Models\Project;
 use App\Models\SystemAuditLog;
 use App\Models\User;
 use App\Models\CompanyUserAssignment;
@@ -501,6 +502,15 @@ class LeadController extends Controller
         $lead->logActivity('converted', "Lead converted to client \"{$client->name}\"", $this->userName(),
             ['client_id' => $client->id]);
         $this->auditLog($lead, 'lead_converted', "Lead \"{$lead->name}\" converted to client \"{$client->name}\"");
+
+        // Any project auto-created from this lead's paid invoice while it was
+        // still a lead (PaymentProjectStartService::createDraftProject()) was
+        // stamped with lead_id only — client_id was null since no Client
+        // existed yet. Without this, the Client Portal's project list
+        // (Api\Client\ProjectController, filtered strictly on client_id)
+        // would never surface that project, even once activated and even
+        // after portal access is granted.
+        Project::where('lead_id', $lead->id)->whereNull('client_id')->update(['client_id' => $client->id]);
 
         return ApiResponse::success(['client_id' => $client->id], 'Lead converted to client', 201);
     }
