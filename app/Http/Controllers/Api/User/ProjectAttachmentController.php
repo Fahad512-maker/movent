@@ -113,10 +113,6 @@ class ProjectAttachmentController extends Controller
     // POST /user/projects/{projectId}/attachments (multipart/form-data, one file per request)
     public function store(Request $request, int $projectId): JsonResponse
     {
-        if (!$this->can('canUploadProjectAttachments')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
-
         $project = $this->visibleProject($projectId);
 
         if ($project->isDraft()) {
@@ -127,10 +123,17 @@ class ProjectAttachmentController extends Controller
         // territory — hard-restricted to this project's actual assigned PM,
         // regardless of who else was left holding canUploadProjectAttachments
         // in their role bundle. A Seller keeps their separate, deliberate
-        // upload-on-own-project allowance (mirrors the frontend gate in
-        // frontend/app/projects/[id]/page.tsx's canUploadAttachments).
+        // upload-on-own-project allowance. A real Project Manager with
+        // company-wide project access is also PM-tier for project files.
         $isSeller = $this->user()->role_type === 'seller';
-        if (!$isSeller && (int) $project->project_manager_id !== (int) $this->user()->id) {
+        $isPmTier = (int) $project->project_manager_id === (int) $this->user()->id
+            || ($this->user()->role_type === 'project_manager' && $this->can('canViewAllCompanyProjects'));
+        $canUploadFiles = $this->can('canUploadProjectAttachments')
+            || (!$isSeller && $isPmTier && $this->can('canEditProjects'));
+        if (!$canUploadFiles) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+        if (!$isSeller && !$isPmTier) {
             return ApiResponse::error('Permission denied', 403);
         }
 

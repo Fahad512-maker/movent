@@ -106,7 +106,26 @@ function UserTeamPageInner() {
   // literal PM only; every other caller, including a Seller who isn't this
   // project's PM, would just get a 403 back).
   const isLiteralPm = !!selected && !!me && selected.project_manager_id === me.id;
-  const addableUsers = users.filter(u => TEAM_ELIGIBLE_ROLES.includes(u.role_type) || (isLiteralPm && u.role_type === 'seller'));
+  // A Seller adding team members may only ever hand the project to a Project
+  // Manager or bring in another Seller — never a Production/Developer/
+  // Designer/QA/Team Member directly, that's PM/Admin territory. Mirrors the
+  // server-side gate in Api\User\ProjectController::assignTeam().
+  const isSellerActor = me?.role_type === 'seller';
+  const eligibleRoles = isSellerActor ? ['project_manager'] : TEAM_ELIGIBLE_ROLES;
+  // A project can only ever have ONE Project Manager and ONE Seller on its
+  // team — once either role is already represented among the current
+  // members, that role drops out of the picker entirely so a second one
+  // can't be added alongside them (mirrors the server-side gate in
+  // Api\User\ProjectController::assignTeam()).
+  const memberUserIds = new Set(members.map(m => m.user_id));
+  const hasPmMember = members.some(m => m.user?.role_type === 'project_manager');
+  const hasSellerMember = members.some(m => m.user?.role_type === 'seller');
+  const addableUsers = users.filter(u => {
+    if (memberUserIds.has(u.id)) return false;
+    if (u.role_type === 'project_manager' && hasPmMember) return false;
+    if (u.role_type === 'seller' && hasSellerMember) return false;
+    return eligibleRoles.includes(u.role_type) || (isLiteralPm && u.role_type === 'seller');
+  });
   const selectedCandidate = addableUsers.find(u => String(u.id) === userId) ?? null;
 
   const addMember = async (e: React.FormEvent) => {
