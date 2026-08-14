@@ -195,6 +195,15 @@ class RoleDefaultPermissions
                 // this path regardless (see above), so it grants nothing beyond
                 // what canCreateProjectHandoff already does.
                 'canCreateProjects',
+                // canActivateProjects — functional, not cosmetic: a draft
+                // project auto-created from a client's payment
+                // (PaymentProjectStartService) is most often the Seller's OWN
+                // handed-off deal, and visibleProjects()'s seller_id match
+                // already lets them see it — without this permission they
+                // could see the draft but never activate it themselves,
+                // needing Company Admin every time. Granted by default
+                // alongside Admin per 2026-08-13 request.
+                'canActivateProjects',
                 // "Manage Project Files" bundle. canUploadProjectAttachments IS
                 // functional (ProjectAttachmentController::visibleProject() now
                 // includes a seller_id match). canViewProjectAttachments/
@@ -278,6 +287,10 @@ class RoleDefaultPermissions
                 'canManageProjectInvoices',
                 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
                 'canCreateProjects',
+                // Mirrors the 'seller' entry's own canActivateProjects grant —
+                // same "cosmetic unless also this project's seller/PM" caveat
+                // as the block comment above.
+                'canActivateProjects',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments',
                 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddSellerToProjectChat',
