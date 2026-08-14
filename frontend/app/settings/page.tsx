@@ -109,7 +109,7 @@ export default function SettingsPage() {
   const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', currency: 'USD', logo_url: null });
   const [invoice,  setInvoice]  = useState<InvoiceSettings>({ prefix: 'INV', tax_rate: 0, payment_terms: 30, notes: '' });
   const [bank,     setBank]     = useState<BankSettings>({ bank_name: '', account_name: '', account_number: '', iban: '', swift: '' });
-  const [gateways,u setGateways] = useState<GatewayAccount[]>([]);
+  const [gateways, setGateways] = useState<GatewayAccount[]>([]);
   const [gatewayTypes, setGatewayTypes] = useState<Record<string, string>>({});
   const [moduleCatalog, setModuleCatalog] = useState<ModuleCatalog | null>(null);
   const [dealSettings, setDealSettings] = useState<DealWorkflowSettings | null>(null);
