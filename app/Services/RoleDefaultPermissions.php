@@ -281,7 +281,13 @@ class RoleDefaultPermissions
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
                 'canCreateProjectHandoff',
-                'canRequestPMAssignment',
+                // canViewTeamResources/canAssignTeamResources — 2026-08-14
+                // request: Lead Manager needs the "assign project"
+                // (Team/Resources page's Add Team Member) option, same as
+                // Seller already has above. Without these, canRequestPMAssignment
+                // only ever let them name a PM at handoff-creation time —
+                // nothing let them staff/reassign a project's team afterward.
+                'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage',
                 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',

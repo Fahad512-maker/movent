@@ -84,18 +84,21 @@ class LeadController extends Controller
         return $base->where('assigned_to', $user->id);
     }
 
-    // The one target a lead can ever be assigned/transferred TO via
-    // transfer()/companyUsers() below: an ACTIVE Seller of the SAME company
-    // — never cross-company, never a Developer/PM/Production/HR/Finance
-    // user, even if a Lead Manager holds canTransferLeads/canAssignLeadOwner
-    // themselves. Company Admin's own LeadController is intentionally left
-    // unrestricted ("Company Admin can still assign leads as before") —
-    // this check only ever applies to this User guard.
+    // The only targets a lead can ever be assigned/transferred TO via
+    // transfer()/companyUsers() below: an ACTIVE Seller or Lead Manager of
+    // the SAME company — never cross-company, never a Developer/PM/
+    // Production/HR/Finance user. A Lead Manager IS a valid target (unlike
+    // the old rule here) since RoleDefaultPermissions grants that role
+    // canTransferLeads/canAssignLeadOwner precisely so they can own/
+    // redistribute leads directly, not just oversee them. Company Admin's
+    // own LeadController is intentionally left unrestricted ("Company Admin
+    // can still assign leads as before") — this check only ever applies to
+    // this User guard.
     private function assignableSeller(int $userId, int $companyId): ?User
     {
         return User::where('users.id', $userId)
             ->where('is_active', true)
-            ->where('role_type', 'seller')
+            ->whereIn('role_type', ['seller', 'lead_manager'])
             ->whereHas('companyAssignments', fn ($q) => $q
                 ->where('company_id', $companyId)
                 ->where('status', 'active'))
@@ -609,10 +612,10 @@ class LeadController extends Controller
     }
 
     // GET /user/leads/company-users — picker list for the Transfer Lead
-    // modal. Only active Sellers of this same company — never a Developer/
-    // PM/Production/HR/Finance user, and never another company's — matching
-    // assignableSeller()'s rule exactly so this picker can never offer a
-    // choice transfer() would then reject.
+    // modal. Only active Sellers and Lead Managers of this same company —
+    // never a Developer/PM/Production/HR/Finance user, and never another
+    // company's — matching assignableSeller()'s rule exactly so this picker
+    // can never offer a choice transfer() would then reject.
     public function companyUsers(): JsonResponse
     {
         if (!$this->can('canTransferLeads') && !$this->can('canAssignLeadOwner')) {
@@ -625,7 +628,7 @@ class LeadController extends Controller
                 ->where('company_id', $companyId)
                 ->where('status', 'active'))
             ->where('is_active', true)
-            ->where('role_type', 'seller')
+            ->whereIn('role_type', ['seller', 'lead_manager'])
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
 

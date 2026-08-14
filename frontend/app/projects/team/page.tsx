@@ -111,7 +111,13 @@ function UserTeamPageInner() {
   // Designer/QA/Team Member directly, that's PM/Admin territory. Mirrors the
   // server-side gate in Api\User\ProjectController::assignTeam().
   const isSellerActor = me?.role_type === 'seller';
-  const eligibleRoles = isSellerActor ? ['project_manager'] : TEAM_ELIGIBLE_ROLES;
+  // A Lead Manager may only ever hand the project to a Project Manager —
+  // never a Seller either (unlike the Seller-actor rule above), and never
+  // Production/Developer/Designer/QA/Team Member. Staffing the rest of the
+  // team is PM/Admin territory. Mirrors the server-side gate in
+  // Api\User\ProjectController::assignTeam().
+  const isLeadManagerActor = me?.role_type === 'lead_manager';
+  const eligibleRoles = (isSellerActor || isLeadManagerActor) ? ['project_manager'] : TEAM_ELIGIBLE_ROLES;
   // A project can only ever have ONE Project Manager and ONE Seller on its
   // team — once either role is already represented among the current
   // members, that role drops out of the picker entirely so a second one
@@ -124,6 +130,7 @@ function UserTeamPageInner() {
     if (memberUserIds.has(u.id)) return false;
     if (u.role_type === 'project_manager' && hasPmMember) return false;
     if (u.role_type === 'seller' && hasSellerMember) return false;
+    if (isLeadManagerActor) return eligibleRoles.includes(u.role_type);
     return eligibleRoles.includes(u.role_type) || (isLiteralPm && u.role_type === 'seller');
   });
   const selectedCandidate = addableUsers.find(u => String(u.id) === userId) ?? null;

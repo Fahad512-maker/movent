@@ -397,10 +397,16 @@ class LeadController extends Controller
             'to_user_id' => [
                 'required',
                 'integer',
+                // A lead can be transferred to a Seller (the normal case) or a
+                // Lead Manager (who owns/redistributes leads directly per
+                // RoleDefaultPermissions — canTransferLeads/canAssignLeadOwner
+                // are granted to that role by default) — never any other
+                // internal role. Mirrors companyUsers() below exactly, so
+                // this picker can never offer a choice transfer() then rejects.
                 Rule::exists('users', 'id')
                     ->where('company_id', $lead->company_id)
                     ->where('is_active', true)
-                    ->where('role_type', 'seller'),
+                    ->whereIn('role_type', ['seller', 'lead_manager']),
             ],
             'reason'     => ['nullable', 'string', 'max:1000'],
         ]);
@@ -435,7 +441,8 @@ class LeadController extends Controller
 
     // GET /admin/leads/company-users?company_id= — picker list for the
     // Transfer Lead modal (Admin manages multiple companies, so the target
-    // company must be specified).
+    // company must be specified). Sellers and Lead Managers only — mirrors
+    // transfer()'s validation exactly.
     public function companyUsers(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -444,7 +451,7 @@ class LeadController extends Controller
 
         $users = User::where('company_id', $data['company_id'])
             ->where('is_active', true)
-            ->where('role_type', 'seller')
+            ->whereIn('role_type', ['seller', 'lead_manager'])
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
 

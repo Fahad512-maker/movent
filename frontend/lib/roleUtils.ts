@@ -330,7 +330,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
       'canCreateProjectHandoff',
-      'canRequestPMAssignment',
+      'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage',
       'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',

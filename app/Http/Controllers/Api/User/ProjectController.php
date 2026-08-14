@@ -1069,6 +1069,23 @@ class ProjectController extends Controller
             }
         }
 
+        // A Lead Manager may only ever hand this project to a Project
+        // Manager — never a Seller/Production/Developer/Designer/QA/Team
+        // Member, not even a Seller (unlike the Seller-actor rule above).
+        // Staffing the rest of the team beyond that is PM/Admin territory.
+        // Mirrors the frontend gate in frontend/app/projects/team/page.tsx
+        // (Lead Manager actor narrowed to eligibleRoles = ['project_manager'],
+        // with no isLiteralPm/'seller' exception).
+        if ($actor->role_type === 'lead_manager') {
+            $disallowedIds = User::where('company_id', $actor->company_id)
+                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+                ->where('role_type', '!=', 'project_manager')
+                ->pluck('id');
+            if ($disallowedIds->isNotEmpty()) {
+                return ApiResponse::error('As a Lead Manager, you can only add a Project Manager to the project team.', 403);
+            }
+        }
+
         // A project may only ever have ONE Project Manager and ONE Seller on
         // its team — mirrors the frontend picker in
         // frontend/app/projects/team/page.tsx, which already drops a role
