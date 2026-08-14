@@ -106,7 +106,6 @@ class ProjectClientChatController extends Controller
         $me      = $this->participant($thread);
 
         $messages = ChatMessage::where('thread_id', $thread->id)
-            ->where('is_deleted', false)
             // An invited PM limited to "chat from now" never receives the
             // earlier messages at all — they aren't returned redacted, they
             // simply aren't in the response. Compared on id, not sent_at, so
@@ -118,7 +117,8 @@ class ProjectClientChatController extends Controller
             )
             ->with(['sender:id,name,role_type', 'senderAdmin:id,name'])
             ->orderBy('sent_at')
-            ->get();
+            ->get()
+            ->each(fn ($m) => $this->applyDeletedTombstone($m));
 
         ChatParticipant::where('thread_id', $thread->id)
             ->where('user_id', $this->user()->id)
@@ -350,6 +350,72 @@ class ProjectClientChatController extends Controller
         );
 
         return ApiResponse::success($message->load('sender:id,name,role_type'), 'Message sent', 201);
+    }
+
+    // A deleted message stays in the list (so everyone keeps seeing it in
+    // place, WhatsApp-style) but its content/attachment are wiped — only the
+    // `is_deleted` flag survives for the frontend to render the "This message
+    // was deleted" placeholder from. Matches Api\User\ProjectMessengerController.
+    private function applyDeletedTombstone(ChatMessage $m): void
+    {
+        if (!$m->is_deleted) return;
+        $m->content = null;
+        $m->attachment_path = null;
+        $m->attachment_name = null;
+        $m->mentions = null;
+    }
+
+    // DELETE /user/projects/{projectId}/client-chat/{messageId} — own message
+    // only, for both the Seller and an invited PM. Company Admin's
+    // unrestricted "delete any message" authority lives exclusively in
+    // Api\Admin\ProjectClientChatController::deleteMessage().
+    public function deleteMessage(int $projectId, int $messageId): JsonResponse
+    {
+        [$project] = $this->project($projectId);
+        $thread  = ProjectClientChatService::threadFor($project);
+        $user    = $this->user();
+
+        $message = ChatMessage::where('thread_id', $thread->id)->where('is_deleted', false)->findOrFail($messageId);
+
+        if ($message->sender_id !== $user->id) {
+            return ApiResponse::error('You can only delete your own messages.', 403);
+        }
+
+        $message->update(['is_deleted' => true]);
+
+        return ApiResponse::success(null, 'Message deleted');
+    }
+
+    // POST /user/projects/{projectId}/client-chat/{messageId}/toggle-hide —
+    // the Seller/invited PM may hide/unhide their own message or the client's,
+    // never another staff member's (that mirrors "own + the opposing side",
+    // not "own + everyone"). Company Admin's unconditional authority over
+    // every message lives in Api\Admin\ProjectClientChatController::toggleHide().
+    // Purely a staff-side view toggle — the client's own chat view
+    // (Api\Client\ProjectChatController) never reads this column, so hiding
+    // is invisible to them. Shared across every staff viewer of the thread.
+    public function toggleHide(int $projectId, int $messageId): JsonResponse
+    {
+        [$project] = $this->project($projectId);
+        $thread  = ProjectClientChatService::threadFor($project);
+        $user    = $this->user();
+
+        $message = ChatMessage::where('thread_id', $thread->id)->where('is_deleted', false)->findOrFail($messageId);
+
+        $isMine = $message->sender_id === $user->id;
+        $isClientMessage = $message->sender_id !== null
+            && $message->sender_id === ProjectClientChatService::clientUserId($project);
+
+        if (!$isMine && !$isClientMessage) {
+            return ApiResponse::error('You can only hide your own messages or the client\'s messages.', 403);
+        }
+
+        $message->update(['hidden_for_staff' => !$message->hidden_for_staff]);
+
+        return ApiResponse::success(
+            ['hidden_for_staff' => $message->hidden_for_staff],
+            $message->hidden_for_staff ? 'Message hidden' : 'Message unhidden'
+        );
     }
 
     // GET /user/projects/{projectId}/client-chat/{messageId}/attachment

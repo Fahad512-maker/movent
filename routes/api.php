@@ -484,6 +484,8 @@ Route::prefix('admin')->group(function () {
             // messenger above, which the client never sees.
             Route::get('projects/{projectId}/client-chat',                              [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'index']);
             Route::post('projects/{projectId}/client-chat',                             [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'store']);
+            Route::delete('projects/{projectId}/client-chat/{messageId}',               [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'deleteMessage']);
+            Route::post('projects/{projectId}/client-chat/{messageId}/toggle-hide',     [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'toggleHide']);
             Route::get('projects/{projectId}/client-chat/{messageId}/attachment',       [\App\Http\Controllers\Api\Admin\ProjectClientChatController::class, 'downloadAttachment']);
 
             Route::get('projects/{id}/deliverables',                [AdminProductionController::class, 'deliverables']);
@@ -829,6 +831,8 @@ Route::prefix('user')->group(function () {
             // always be able to answer their own client.
             Route::get('projects/{projectId}/client-chat',                        [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'index']);
             Route::post('projects/{projectId}/client-chat',                       [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'store']);
+            Route::delete('projects/{projectId}/client-chat/{messageId}',         [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'deleteMessage']);
+            Route::post('projects/{projectId}/client-chat/{messageId}/toggle-hide', [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'toggleHide']);
             Route::get('projects/{projectId}/client-chat/{messageId}/attachment', [\App\Http\Controllers\Api\User\ProjectClientChatController::class, 'downloadAttachment']);
             // Seller pulls this project's PM into the client conversation
             // (full history or from-now-only), and pings Company Admin to
@@ -997,6 +1001,7 @@ Route::prefix('client')->group(function () {
         // the internal team messenger stays invisible to them.
         Route::get('projects/{id}/chat',                     [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'index']);
         Route::post('projects/{id}/chat',                    [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'store']);
+        Route::delete('projects/{id}/chat/{messageId}',      [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'deleteMessage']);
         Route::get('projects/{id}/chat/{messageId}/attachment', [\App\Http\Controllers\Api\Client\ProjectChatController::class, 'downloadAttachment']);
 
         Route::get('invoices',                  [\App\Http\Controllers\Api\Client\InvoiceController::class, 'index']);

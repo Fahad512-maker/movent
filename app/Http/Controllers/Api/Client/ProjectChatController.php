@@ -53,10 +53,15 @@ class ProjectChatController extends Controller
         $thread  = ProjectClientChatService::threadFor($project);
 
         $messages = ChatMessage::where('thread_id', $thread->id)
-            ->where('is_deleted', false)
             ->with(['sender:id,name,role_type', 'senderAdmin:id,name'])
             ->orderBy('sent_at')
-            ->get();
+            ->get()
+            ->each(fn ($m) => $this->applyDeletedTombstone($m))
+            // Staff-only "hide" (Api\Admin\ProjectClientChatController and
+            // Api\User\ProjectClientChatController's toggleHide()) must stay
+            // completely invisible to the client — never expose the column,
+            // and never let it affect what they see.
+            ->each(fn ($m) => $m->makeHidden('hidden_for_staff'));
 
         ChatParticipant::where('thread_id', $thread->id)
             ->where('user_id', $request->user()->id)
@@ -149,6 +154,39 @@ class ProjectChatController extends Controller
         );
 
         return ApiResponse::success($message->load('sender:id,name,role_type'), 'Message sent', 201);
+    }
+
+    // A deleted message stays in the list (so everyone keeps seeing it in
+    // place, WhatsApp-style) but its content/attachment are wiped — only the
+    // `is_deleted` flag survives for the frontend to render the "This message
+    // was deleted" placeholder from. Matches Api\User\ProjectMessengerController.
+    private function applyDeletedTombstone(ChatMessage $m): void
+    {
+        if (!$m->is_deleted) return;
+        $m->content = null;
+        $m->attachment_path = null;
+        $m->attachment_name = null;
+        $m->mentions = null;
+    }
+
+    // DELETE /client/projects/{id}/chat/{messageId} — the client may only
+    // delete their own message, same as every other non-Admin side of this
+    // conversation. Company Admin's unrestricted "delete any message"
+    // authority lives exclusively in Api\Admin\ProjectClientChatController.
+    public function deleteMessage(Request $request, int $projectId, int $messageId): JsonResponse
+    {
+        $project = $this->project($request, $projectId);
+        $thread  = ProjectClientChatService::threadFor($project);
+
+        $message = ChatMessage::where('thread_id', $thread->id)->where('is_deleted', false)->findOrFail($messageId);
+
+        if ($message->sender_id !== $request->user()->id) {
+            return ApiResponse::error('You can only delete your own messages.', 403);
+        }
+
+        $message->update(['is_deleted' => true]);
+
+        return ApiResponse::success(null, 'Message deleted');
     }
 
     // GET /client/projects/{id}/chat/{messageId}/attachment

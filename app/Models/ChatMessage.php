@@ -11,13 +11,14 @@ class ChatMessage extends Model
 
     protected $fillable = [
         'thread_id', 'sender_id', 'sender_admin_id', 'content', 'mentions', 'hidden_from_user_ids', 'message_type', 'visibility', 'attachment_path',
-        'attachment_name', 'forwarded_from_id', 'is_deleted', 'sent_at', 'edited_at',
+        'attachment_name', 'forwarded_from_id', 'is_deleted', 'hidden_for_staff', 'sent_at', 'edited_at',
     ];
 
     protected $casts = [
         'mentions'             => 'array',
         'hidden_from_user_ids' => 'array',
         'is_deleted'           => 'boolean',
+        'hidden_for_staff'     => 'boolean',
         'sent_at'              => 'datetime',
         'edited_at'            => 'datetime',
     ];

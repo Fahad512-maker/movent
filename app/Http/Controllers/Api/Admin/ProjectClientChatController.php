@@ -45,10 +45,10 @@ class ProjectClientChatController extends Controller
         $thread  = ProjectClientChatService::threadFor($project);
 
         $messages = ChatMessage::where('thread_id', $thread->id)
-            ->where('is_deleted', false)
             ->with(['sender:id,name,role_type', 'senderAdmin:id,name'])
             ->orderBy('sent_at')
-            ->get();
+            ->get()
+            ->each(fn ($m) => $this->applyDeletedTombstone($m));
 
         $thread->load('participants.user:id,name,role_type');
 
@@ -137,6 +137,56 @@ class ProjectClientChatController extends Controller
         );
 
         return ApiResponse::success($message->load('senderAdmin:id,name'), 'Message sent', 201);
+    }
+
+    // A deleted message stays in the list (so everyone keeps seeing it in
+    // place, WhatsApp-style) but its content/attachment are wiped — only the
+    // `is_deleted` flag survives for the frontend to render the "This message
+    // was deleted" placeholder from. Matches Api\Admin\ProjectMessengerController.
+    private function applyDeletedTombstone(ChatMessage $m): void
+    {
+        if (!$m->is_deleted) return;
+        $m->content = null;
+        $m->attachment_path = null;
+        $m->attachment_name = null;
+        $m->mentions = null;
+    }
+
+    // DELETE /admin/projects/{projectId}/client-chat/{messageId} — Admin can
+    // delete ANY message in the client conversation (its own, staff's, or the
+    // client's), matching Api\Admin\ProjectMessengerController's unrestricted
+    // authority. Every other side of this conversation may only delete their
+    // own message — see the User and Client controllers.
+    public function deleteMessage(int $projectId, int $messageId): JsonResponse
+    {
+        $project = $this->project($projectId);
+        $thread  = ProjectClientChatService::threadFor($project);
+
+        $message = ChatMessage::where('thread_id', $thread->id)->where('is_deleted', false)->findOrFail($messageId);
+        $message->update(['is_deleted' => true]);
+
+        return ApiResponse::success(null, 'Message deleted');
+    }
+
+    // POST /admin/projects/{projectId}/client-chat/{messageId}/toggle-hide —
+    // Admin may hide/unhide ANY message (own, Seller's/PM's, or the client's).
+    // Purely a staff-side view toggle: the client's own chat view
+    // (Api\Client\ProjectChatController) never reads this column and always
+    // shows the message untouched — hiding is invisible to them. Shared
+    // across every staff viewer of the thread, not personal: this flips it
+    // for the Seller/PM's view too, not just Admin's own.
+    public function toggleHide(int $projectId, int $messageId): JsonResponse
+    {
+        $project = $this->project($projectId);
+        $thread  = ProjectClientChatService::threadFor($project);
+
+        $message = ChatMessage::where('thread_id', $thread->id)->where('is_deleted', false)->findOrFail($messageId);
+        $message->update(['hidden_for_staff' => !$message->hidden_for_staff]);
+
+        return ApiResponse::success(
+            ['hidden_for_staff' => $message->hidden_for_staff],
+            $message->hidden_for_staff ? 'Message hidden' : 'Message unhidden'
+        );
     }
 
     // GET /admin/projects/{projectId}/client-chat/{messageId}/attachment

@@ -296,6 +296,18 @@ class RoleDefaultPermissions
                 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddSellerToProjectChat',
                 'canManageProjectChatParticipants',
+                // Company-wide project oversight — 2026-08-14 request: Lead
+                // Manager already gets canViewAllCompanyLeads (company-wide,
+                // not scoped to specific sellers — there's no "which sellers
+                // does this Lead Manager manage" relationship in the data
+                // model), so mirroring that with company-wide PROJECT
+                // visibility is what actually lets them see and manage every
+                // Seller's assigned/created projects, not just their own.
+                // Same grant project_manager/qa already got per the
+                // 2026-08-13 entries above. Doesn't expose budget — index()
+                // hides that field unconditionally regardless of this
+                // permission.
+                'canViewAllCompanyProjects', 'canViewClosedProjects',
             ],
             'account' => ['canUseGeneralChat'],
         ],

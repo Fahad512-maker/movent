@@ -291,6 +291,18 @@ class ProjectController extends Controller
                     return ApiResponse::error('A project can only be handed off from a Won lead.', 422);
                 }
 
+                // A Won lead has usually already been converted to a Client by
+                // this point (Api\User\LeadController::convert()) — without
+                // this, the resulting project would carry lead_id but a null
+                // client_id, making it permanently invisible to the Client
+                // Portal (Api\Client\ProjectController filters strictly on
+                // client_id, no lead_id fallback). Only fills it in when the
+                // request didn't already send one.
+                if (!$clientId && $lead->client) {
+                    $clientId = $lead->client->id;
+                    $request->merge(['client_id' => $clientId]);
+                }
+
                 // Duplicate-project prevention — a Deal gets at most one
                 // handoff project. A second attempt (double-click, retry)
                 // returns the existing project instead of erroring the

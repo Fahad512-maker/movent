@@ -248,6 +248,16 @@ class ProjectController extends Controller
         // admin/user actor-tracking convention).
         $validated['created_by_admin_id'] = $this->admin()->id;
 
+        // A lead named here without an explicit client_id has usually already
+        // been converted to a Client (Api\Admin\LeadController::convert()) —
+        // without this, the project would carry lead_id but a null
+        // client_id, making it permanently invisible to the Client Portal
+        // (Api\Client\ProjectController filters strictly on client_id, no
+        // lead_id fallback).
+        if (empty($validated['client_id']) && !empty($validated['lead_id'])) {
+            $validated['client_id'] = \App\Models\Lead::find($validated['lead_id'])?->client?->id;
+        }
+
         $project = DB::transaction(function () use ($validated) {
             $project = Project::create($validated);
             $this->createProjectFolders($project);
