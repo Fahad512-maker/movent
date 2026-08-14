@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
@@ -776,6 +777,21 @@ class ProjectController extends Controller
         $this->notifyLifecycle($project, 'project_completed', 'Project completed', "\"{$project->name}\" was marked as completed by {$this->adminName()}.");
 
         return ApiResponse::success($project->fresh(), 'Project marked as completed');
+    }
+
+    public function downloadDelivery(int $id): StreamedResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        if (!$project->delivery_file_path) {
+            abort(404, 'Project delivery is not available yet.');
+        }
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            abort(404, 'Project delivery file not found.');
+        }
+
+        return Storage::download($project->delivery_file_path, $project->delivery_file_name ?? "{$project->name}-delivery.zip");
     }
 
     public function approveDelivery(int $id): JsonResponse

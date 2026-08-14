@@ -427,6 +427,18 @@ class ProjectController extends Controller
         $project->logActivity('created', "Project \"{$project->name}\" created by {$user->name}.", $user->name, [
             'created_by' => $user->id,
         ]);
+
+        NotificationService::notifyCompanyAdmins($project->company_id, null, [
+            'actor_user_id' => $user->id,
+            'module'        => 'project_management',
+            'type'          => 'project_created_by_pm',
+            'title'         => 'New project created',
+            'message'       => "{$user->name} created project \"{$project->name}\".",
+            'entity_type'   => 'Project',
+            'entity_id'     => $project->id,
+            'url'           => "/admin/projects/{$project->id}",
+        ]);
+
         if ($project->project_manager_id) {
             $managerName = User::find($project->project_manager_id)?->name ?? 'Unknown';
             $project->logActivity('manager_assigned', "{$user->name} assigned {$managerName} as project manager.", $user->name, [

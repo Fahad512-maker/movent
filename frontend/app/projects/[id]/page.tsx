@@ -651,7 +651,6 @@ export default function UserProjectDetailPage() {
               canReopen={canReopenProjects}
               canForceClose={canForceCloseProjects}
               canActivate={canActivateProjects}
-              canSubmitDelivery={canSubmitProjectDelivery}
               deliveryStatus={project.delivery_status}
               deliveryFileName={project.delivery_file_name}
               onUpdated={updated => setProject(updated)}

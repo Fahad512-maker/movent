@@ -506,6 +506,18 @@ export const adminProjectService = {
     return res.data.data;
   },
 
+  downloadDelivery: async (id: number, fileName: string): Promise<void> => {
+    const res = await api.get(`/admin/projects/${id}/delivery/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
   close: async (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }): Promise<Project> => {
     const res = await api.post(`/admin/projects/${id}/close`, payload ?? {});
     return res.data.data;

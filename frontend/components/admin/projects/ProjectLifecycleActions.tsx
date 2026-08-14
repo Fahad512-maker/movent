@@ -9,6 +9,7 @@ interface LifecycleService {
   complete: (id: number) => Promise<Project>;
   submitDelivery?: (id: number, file: File) => Promise<Project>;
   approveDelivery?: (id: number) => Promise<Project>;
+  downloadDelivery?: (id: number, fileName: string) => Promise<void>;
   close: (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }) => Promise<Project>;
   reopen: (id: number, reason: string) => Promise<Project>;
 }
@@ -175,6 +176,15 @@ export default function ProjectLifecycleActions({
     } finally { setSubmitting(false); }
   };
 
+  const downloadDelivery = async () => {
+    if (!service.downloadDelivery || !deliveryFileName) { toast.error('Delivery file is not available'); return; }
+    try {
+      await service.downloadDelivery(projectId, deliveryFileName);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Download failed');
+    }
+  };
+
   const submitClose = async () => {
     if (closeForce && !closeReason.trim()) { toast.error('A reason is required to force-close.'); return; }
     setSubmitting(true);
@@ -240,6 +250,9 @@ export default function ProjectLifecycleActions({
         <button onClick={openSubmitDelivery} style={btn(deliveryStatus === 'pending_admin_review' ? '#7c3aed' : '#0d9488', '#fff')}>
           {deliveryStatus === 'pending_admin_review' ? 'Resubmit Delivery' : 'Submit for Admin Review'}
         </button>
+      )}
+      {status === 'completed' && canApproveDelivery && service.downloadDelivery && deliveryStatus === 'pending_admin_review' && deliveryFileName && (
+        <button onClick={downloadDelivery} style={secondaryBtn}>Download PM Package</button>
       )}
       {status === 'completed' && canApproveDelivery && service.approveDelivery && deliveryStatus === 'pending_admin_review' && (
         <button onClick={approveDelivery} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#0d9488', '#fff')}>
