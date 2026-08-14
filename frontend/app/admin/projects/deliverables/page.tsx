@@ -22,9 +22,10 @@ export default function DeliverablesPage() {
   const [uploadTaskId, setUploadTaskId] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [approvingDelivery, setApprovingDelivery] = useState(false);
 
   useEffect(() => {
-    adminProjectService.list().then(list => {
+    adminProjectService.list({ status: 'completed' }).then(list => {
       setProjects(list);
       if (list.length > 0) setProjectId(String(list[0].id));
     }).catch(() => toast.error('Failed to load projects'));
@@ -88,6 +89,20 @@ export default function DeliverablesPage() {
   };
 
   const filtered = statusF ? deliverables.filter(d => d.status === statusF) : deliverables;
+  const selectedProject = projects.find(p => String(p.id) === projectId);
+
+  const approveProjectDelivery = async () => {
+    if (!selectedProject) return;
+    if (!confirm('Approve this delivery and make it available to the client?')) return;
+    setApprovingDelivery(true);
+    try {
+      const updated = await adminProjectService.approveDelivery(selectedProject.id);
+      setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+      toast.success('Project delivered to client');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to deliver project');
+    } finally { setApprovingDelivery(false); }
+  };
 
   return (
     <DashboardLayout title="Deliverables">
@@ -111,6 +126,29 @@ export default function DeliverablesPage() {
             {Object.keys(DELIVERABLE_SC).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
         </div>
+
+        {selectedProject && (
+          <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Client Delivery</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                {selectedProject.delivery_status === 'pending_admin_review'
+                  ? `Pending admin review${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                  : selectedProject.delivery_status === 'delivered_to_client'
+                    ? `Delivered to client${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                    : 'PM has not submitted final project delivery yet.'}
+              </div>
+            </div>
+            {selectedProject.delivery_status === 'pending_admin_review' && (
+              <button onClick={approveProjectDelivery} disabled={approvingDelivery} style={{
+                padding: '9px 18px', background: approvingDelivery ? '#93c5fd' : '#0d9488', color: '#fff',
+                border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: approvingDelivery ? 'not-allowed' : 'pointer',
+              }}>
+                {approvingDelivery ? 'Delivering…' : 'Approve & Deliver to Client'}
+              </button>
+            )}
+          </div>
+        )}
 
         {projectId && (
           <form onSubmit={upload} style={{ ...card, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>

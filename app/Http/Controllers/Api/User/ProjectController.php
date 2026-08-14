@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\UserCompanyPermission;
 use App\Services\ProjectChatService;
 use App\Services\ProjectCompletionService;
+use App\Services\NotificationService;
 use App\Services\ProjectSellerAssignmentService;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,9 @@ use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
+    private const DELIVERY_MIMES = 'zip,pdf,doc,docx,xls,xlsx,png,jpg,jpeg';
+    private const DELIVERY_MAX_KB = 51200;
+
     // Mirrors Api\Admin\ProjectController::SYSTEM_FOLDERS — every project gets
     // the same starter folder set regardless of who created it.
     private const SYSTEM_FOLDERS = [
@@ -722,6 +726,8 @@ class ProjectController extends Controller
                 'seller:id,name,email',
                 'createdBy:id,name',
                 'createdByAdmin:id,name',
+                'deliverySubmittedBy:id,name',
+                'deliveryApprovedByAdmin:id,name',
                 'teamMembers.user:id,name,role_type',
                 'folders' => fn($q) => $q->whereNull('parent_folder_id'),
             ])
@@ -762,6 +768,77 @@ class ProjectController extends Controller
         }
 
         return ApiResponse::success($project);
+    }
+
+    public function submitDelivery(Request $request, int $id): JsonResponse
+    {
+        if (!$this->can('canCompleteProjects')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $project = $this->visibleProjects()->with('teamMembers.user:id,name,role_type', 'company')->findOrFail($id);
+        $user = $this->user();
+
+        $isActualPm = $project->project_manager_id === $user->id && $user->role_type === 'project_manager';
+        $isTeamPm = $project->teamMembers
+            ->contains(fn ($member) => (int) $member->user_id === (int) $user->id && $member->user?->role_type === 'project_manager');
+
+        if (!$isActualPm && !$isTeamPm) {
+            return ApiResponse::error('Only the assigned Project Manager can submit this project for admin delivery review.', 403);
+        }
+
+        if ($project->status !== 'completed') {
+            return ApiResponse::error('Mark the project as completed before submitting it for admin review.', 422);
+        }
+
+        if ($project->status === 'closed') {
+            return ApiResponse::error('This project is closed and read-only. Reopen it first to submit delivery.', 422);
+        }
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:' . self::DELIVERY_MIMES, 'max:' . self::DELIVERY_MAX_KB],
+        ]);
+
+        $file = $validated['file'];
+        if ($project->delivery_file_path) {
+            Storage::delete($project->delivery_file_path);
+        }
+
+        $path = $file->store("project-deliveries/{$project->id}");
+        $project->update([
+            'delivery_status'               => 'pending_admin_review',
+            'delivery_file_path'            => $path,
+            'delivery_file_name'            => $file->getClientOriginalName(),
+            'delivery_file_type'            => $file->getClientMimeType(),
+            'delivery_file_size'            => $file->getSize(),
+            'delivery_submitted_at'         => now(),
+            'delivery_submitted_by'         => $user->id,
+            'delivery_approved_at'          => null,
+            'delivery_approved_by_admin_id' => null,
+        ]);
+
+        $project->logActivity('project_delivery_submitted', "{$user->name} submitted the final project package for admin review.", $user->name, [
+            'file_name' => $project->delivery_file_name,
+        ]);
+        $this->logActivity($project->company_id, 'project_delivery_submitted', 'Project', $project->id, [
+            'file_name' => $project->delivery_file_name,
+        ]);
+
+        NotificationService::notifyCompanyAdmins($project->company_id, null, [
+            'actor_user_id' => $user->id,
+            'module'        => 'project_management',
+            'type'          => 'project_delivery_submitted',
+            'title'         => 'Project ready for delivery review',
+            'message'       => "{$user->name} submitted \"{$project->name}\" for admin approval.",
+            'entity_type'   => 'Project',
+            'entity_id'     => $project->id,
+            'url'           => "/admin/projects/{$project->id}",
+        ]);
+
+        return ApiResponse::success(
+            $project->fresh(['client:id,name,email', 'projectManager:id,name,role_type', 'seller:id,name,email', 'deliverySubmittedBy:id,name', 'deliveryApprovedByAdmin:id,name']),
+            'Project submitted for admin review'
+        );
     }
 
     public function update(Request $request, int $id): JsonResponse

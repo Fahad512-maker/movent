@@ -434,6 +434,7 @@ Route::prefix('admin')->group(function () {
             Route::get('projects/{id}/completion-status',           [AdminProjectController::class, 'completionStatus']);
             Route::post('projects/{id}/activate',                   [AdminProjectController::class, 'activate']);
             Route::post('projects/{id}/complete',                   [AdminProjectController::class, 'complete']);
+            Route::post('projects/{id}/approve-delivery',           [AdminProjectController::class, 'approveDelivery']);
             Route::post('projects/{id}/close',                      [AdminProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                     [AdminProjectController::class, 'reopen']);
             Route::post('projects/{id}/invoices/link',              [AdminProjectController::class, 'linkInvoice']);
@@ -796,6 +797,7 @@ Route::prefix('user')->group(function () {
             Route::get('projects/{id}/activity',                [UserProjectController::class, 'activity']);
             Route::post('projects/{id}/activate',               [UserProjectController::class, 'activate']);
             Route::post('projects/{id}/complete',               [UserProjectController::class, 'complete']);
+            Route::post('projects/{id}/submit-delivery',         [UserProjectController::class, 'submitDelivery']);
             Route::post('projects/{id}/close',                  [UserProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                 [UserProjectController::class, 'reopen']);
             Route::post('projects/{id}/invoices',               [UserProjectController::class, 'createInvoice']);
@@ -976,6 +978,7 @@ Route::prefix('client')->group(function () {
 
         Route::get('projects',                               [\App\Http\Controllers\Api\Client\ProjectController::class, 'index']);
         Route::get('projects/{id}',                          [\App\Http\Controllers\Api\Client\ProjectController::class, 'show']);
+        Route::get('projects/{id}/delivery/download',         [\App\Http\Controllers\Api\Client\ProjectController::class, 'downloadDelivery']);
         Route::post('deliverables/{id}/approve',             [\App\Http\Controllers\Api\Client\ProjectController::class, 'approveDeliverable']);
         Route::post('deliverables/{id}/revision',            [\App\Http\Controllers\Api\Client\ProjectController::class, 'requestRevision']);
 

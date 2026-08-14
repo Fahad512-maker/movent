@@ -29,7 +29,7 @@ export default function UserDeliverablesPage() {
       router.replace('/dashboard');
       return;
     }
-    userProjectService.list().then(setProjects).catch(() => {});
+    userProjectService.list({ status: 'completed' }).then(setProjects).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDeliverables = async (pid: string) => {

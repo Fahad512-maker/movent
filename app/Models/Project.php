@@ -24,6 +24,8 @@ class Project extends Model
         'completed_by', 'completed_by_admin_id',
         'closed_at', 'closed_by', 'closed_by_admin_id', 'close_reason',
         'reopened_at', 'reopened_by', 'reopened_by_admin_id', 'reopen_reason',
+        'delivery_status', 'delivery_file_path', 'delivery_file_name', 'delivery_file_type', 'delivery_file_size',
+        'delivery_submitted_at', 'delivery_submitted_by', 'delivery_approved_at', 'delivery_approved_by_admin_id',
     ];
 
     protected $casts = [
@@ -34,6 +36,8 @@ class Project extends Model
         'closed_at'    => 'datetime',
         'reopened_at'  => 'datetime',
         'seller_assigned_at' => 'datetime',
+        'delivery_submitted_at' => 'datetime',
+        'delivery_approved_at' => 'datetime',
     ];
 
     // A 'draft' project is the name-only stub auto-created when a client's
@@ -153,6 +157,16 @@ class Project extends Model
     public function reopenedByAdmin(): BelongsTo
     {
         return $this->belongsTo(CompanyAdmin::class, 'reopened_by_admin_id');
+    }
+
+    public function deliverySubmittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'delivery_submitted_by');
+    }
+
+    public function deliveryApprovedByAdmin(): BelongsTo
+    {
+        return $this->belongsTo(CompanyAdmin::class, 'delivery_approved_by_admin_id');
     }
 
     public function tasks(): HasMany

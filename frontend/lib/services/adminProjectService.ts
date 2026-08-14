@@ -62,6 +62,14 @@ export interface Project {
   close_reason?: string | null;
   reopened_at?: string | null;
   reopen_reason?: string | null;
+  delivery_status?: 'pending_admin_review' | 'delivered_to_client' | null;
+  delivery_file_name?: string | null;
+  delivery_file_type?: string | null;
+  delivery_file_size?: number | null;
+  delivery_submitted_at?: string | null;
+  delivery_approved_at?: string | null;
+  delivery_submitted_by?: { id: number; name: string } | null;
+  delivery_approved_by_admin?: { id: number; name: string } | null;
   progress?: number;
   is_overdue?: boolean;
   // The logged-in staff member's own relationship to this project (Project
@@ -490,6 +498,11 @@ export const adminProjectService = {
 
   complete: async (id: number): Promise<Project> => {
     const res = await api.post(`/admin/projects/${id}/complete`);
+    return res.data.data;
+  },
+
+  approveDelivery: async (id: number): Promise<Project> => {
+    const res = await api.post(`/admin/projects/${id}/approve-delivery`);
     return res.data.data;
   },
 

@@ -7,6 +7,8 @@ interface LifecycleService {
   completionStatus: (id: number) => Promise<CompletionStatus>;
   activate: (id: number) => Promise<Project>;
   complete: (id: number) => Promise<Project>;
+  submitDelivery?: (id: number, file: File) => Promise<Project>;
+  approveDelivery?: (id: number) => Promise<Project>;
   close: (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }) => Promise<Project>;
   reopen: (id: number, reason: string) => Promise<Project>;
 }
@@ -25,6 +27,10 @@ interface Props {
   // canActivateProjects — gates the draft → active transition. A sub-user
   // without it never even sees a draft project (see visibleProjects()).
   canActivate: boolean;
+  canSubmitDelivery?: boolean;
+  canApproveDelivery?: boolean;
+  deliveryStatus?: Project['delivery_status'];
+  deliveryFileName?: string | null;
   onUpdated: (project: Project) => void;
 }
 
@@ -65,8 +71,11 @@ function BlockerGroup({ title, items, render }: { title: string; items: { id: nu
   );
 }
 
-export default function ProjectLifecycleActions({ projectId, status, service, canComplete, canClose, canReopen, canForceClose, canActivate, onUpdated }: Props) {
-  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | null>(null);
+export default function ProjectLifecycleActions({
+  projectId, status, service, canComplete, canClose, canReopen, canForceClose, canActivate,
+  canSubmitDelivery = false, canApproveDelivery = false, deliveryStatus, deliveryFileName, onUpdated,
+}: Props) {
+  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | 'submitDelivery' | null>(null);
   const [loadingCheck, setLoadingCheck] = useState(false);
   const [checklist, setChecklist] = useState<CompletionStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -75,6 +84,7 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
   const [confirmUnpaid, setConfirmUnpaid] = useState(false);
   const [unpaidWarning, setUnpaidWarning] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
+  const [deliveryFile, setDeliveryFile] = useState<File | null>(null);
 
   const isTerminal = status === 'completed' || status === 'closed';
 
@@ -130,6 +140,38 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
       close();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to complete project');
+    } finally { setSubmitting(false); }
+  };
+
+  const openSubmitDelivery = () => {
+    setDeliveryFile(null);
+    setMode('submitDelivery');
+  };
+
+  const submitDelivery = async () => {
+    if (!service.submitDelivery) { toast.error('Delivery submission is not available'); return; }
+    if (!deliveryFile) { toast.error('Please choose the final project file'); return; }
+    setSubmitting(true);
+    try {
+      const updated = await service.submitDelivery(projectId, deliveryFile);
+      toast.success('Project submitted for admin review');
+      onUpdated(updated);
+      close();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to submit project delivery');
+    } finally { setSubmitting(false); }
+  };
+
+  const approveDelivery = async () => {
+    if (!service.approveDelivery) { toast.error('Delivery approval is not available'); return; }
+    if (!confirm('Approve this delivery and make it available to the client?')) return;
+    setSubmitting(true);
+    try {
+      const updated = await service.approveDelivery(projectId);
+      toast.success('Project delivered to client');
+      onUpdated(updated);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to approve project delivery');
     } finally { setSubmitting(false); }
   };
 
@@ -193,6 +235,16 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
       )}
       {isTerminal && canReopen && (
         <button onClick={openReopen} style={btn('#2563eb', '#fff')}>Reopen Project</button>
+      )}
+      {status === 'completed' && canSubmitDelivery && service.submitDelivery && deliveryStatus !== 'delivered_to_client' && (
+        <button onClick={openSubmitDelivery} style={btn(deliveryStatus === 'pending_admin_review' ? '#7c3aed' : '#0d9488', '#fff')}>
+          {deliveryStatus === 'pending_admin_review' ? 'Resubmit Delivery' : 'Submit for Admin Review'}
+        </button>
+      )}
+      {status === 'completed' && canApproveDelivery && service.approveDelivery && deliveryStatus === 'pending_admin_review' && (
+        <button onClick={approveDelivery} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#0d9488', '#fff')}>
+          {submitting ? 'Approving…' : 'Approve & Deliver to Client'}
+        </button>
       )}
       </>
       )}
@@ -260,6 +312,32 @@ export default function ProjectLifecycleActions({ projectId, status, service, ca
                 opacity: (submitting || (status !== 'completed' && !closeForce)) ? 0.5 : 1,
                 cursor: (submitting || (status !== 'completed' && !closeForce)) ? 'not-allowed' : 'pointer',
               }}>{submitting ? 'Closing…' : 'Confirm Close'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'submitDelivery' && (
+        <div style={overlay} onClick={close}>
+          <div style={modalCard} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Submit Project Delivery</h3>
+            {deliveryStatus === 'pending_admin_review' && (
+              <div style={{ fontSize: 12, color: '#5b21b6', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+                A delivery is already waiting for admin review{deliveryFileName ? `: ${deliveryFileName}` : ''}. Uploading again will replace it.
+              </div>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Final project file <span style={{ color: '#dc2626' }}>*</span></label>
+              <input type="file" onChange={e => setDeliveryFile(e.target.files?.[0] ?? null)} style={inp} />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>Allowed: zip, pdf, doc, docx, xls, xlsx, png, jpg, jpeg. Max 50MB.</div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={close} style={secondaryBtn}>Cancel</button>
+              <button onClick={submitDelivery} disabled={submitting || !deliveryFile} style={{
+                ...btn('#0d9488', '#fff'),
+                opacity: (submitting || !deliveryFile) ? 0.5 : 1,
+                cursor: (submitting || !deliveryFile) ? 'not-allowed' : 'pointer',
+              }}>{submitting ? 'Submitting…' : 'Submit to Admin'}</button>
             </div>
           </div>
         </div>
