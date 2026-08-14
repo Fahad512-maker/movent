@@ -446,6 +446,10 @@ class TaskController extends Controller
             return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
         }
 
+        if ($project->status === 'completed') {
+            return ApiResponse::error('This project is completed. Reopen it before adding new tasks.', 422);
+        }
+
         $isLinkedOnly = !$canFullCreate;
 
         $validated = $request->validate([

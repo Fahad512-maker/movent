@@ -14,6 +14,11 @@ import api from '@/lib/axios';
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, inp, lbl } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
+const assignedToName = (project: Project): string => {
+  const assignedProjectManager = project.team_members?.find(member => member.user?.role_type === 'project_manager')?.user;
+  return assignedProjectManager?.name ?? project.project_manager?.name ?? '—';
+};
+
 function UserProjectsList() {
   useAdminGuard();
   const router = useRouter();
@@ -179,7 +184,7 @@ function UserProjectsList() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                  {['Project', 'Client', 'Role', 'Status', 'Priority', 'Progress', 'Deadline', ''].map(h => (
+                  {['Project', 'Client', 'Assigned To', 'Role', 'Status', 'Priority', 'Progress', 'Deadline', ''].map(h => (
                     <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                   ))}
                 </tr>
@@ -189,6 +194,7 @@ function UserProjectsList() {
                   <tr key={p.id} style={{ borderBottom: i < projects.length - 1 ? '1px solid #f8fafc' : 'none', cursor: 'pointer' }} onClick={() => router.push(`/projects/${p.id}`)}>
                     <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{p.name}</td>
                     <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{p.client?.name ?? '—'}</td>
+                    <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{assignedToName(p)}</td>
                     <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{p.my_role ?? '—'}</td>
                     <td style={{ padding: '13px 14px' }}><Badge label={p.status} sc={STATUS_SC[p.status]} /></td>
                     <td style={{ padding: '13px 14px' }}><Badge label={p.priority} sc={PRIORITY_SC[p.priority]} /></td>

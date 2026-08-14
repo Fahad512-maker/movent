@@ -151,6 +151,10 @@ class TaskController extends Controller
             return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
         }
 
+        if ($project->status === 'completed') {
+            return ApiResponse::error('This project is completed. Reopen it before adding new tasks.', 422);
+        }
+
         $validated = $request->validate([
             'parent_task_id'   => ['nullable', 'integer', 'exists:tasks,id'],
             'assigned_to'      => ['nullable', 'integer', $this->assignedToRule()],
