@@ -10,6 +10,9 @@ export interface ClientPayload {
   address?: string | null;
   notes?: string | null;
   status?: 'active' | 'inactive' | 'blocked';
+  enable_portal?: boolean;
+  portal_email?: string | null;
+  portal_password?: string | null;
 }
 
 export interface ClientCompany { id: number; name: string; currency: string; }

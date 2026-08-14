@@ -4,6 +4,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, Deliverable, Project, Task } from '@/lib/services/adminProjectService';
+import { adminClientService } from '@/lib/services/adminClientService';
+import { Client } from '@/types';
 import { inp, lbl, card, Badge, DELIVERABLE_SC, fmtDate } from '@/components/admin/projects/shared';
 
 export default function DeliverablesPage() {
@@ -23,12 +25,18 @@ export default function DeliverablesPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [approvingDelivery, setApprovingDelivery] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientSelections, setClientSelections] = useState<Record<number, string>>({});
+  const [attachingClientId, setAttachingClientId] = useState<number | null>(null);
+  const [clientForms, setClientForms] = useState<Record<number, { open: boolean; name: string; email: string; password: string; enablePortal: boolean }>>({});
+  const [creatingClientId, setCreatingClientId] = useState<number | null>(null);
 
   useEffect(() => {
     adminProjectService.list({ status: 'completed' }).then(list => {
       setProjects(list);
       if (list.length > 0) setProjectId(String(list[0].id));
     }).catch(() => toast.error('Failed to load projects'));
+    adminClientService.list().then(res => setClients(res.clients)).catch(() => {});
   }, []);
 
   const load = async (pid: string) => {
@@ -115,6 +123,66 @@ export default function DeliverablesPage() {
     }
   };
 
+  const attachClient = async (project: Project) => {
+    const clientId = Number(clientSelections[project.id] || 0);
+    if (!clientId) { toast.error('Select a client first'); return; }
+    setAttachingClientId(project.id);
+    try {
+      const updated = await adminProjectService.update(project.id, { client_id: clientId });
+      setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+      toast.success('Client attached');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to attach client');
+    } finally {
+      setAttachingClientId(null);
+    }
+  };
+
+  const createAndAttachClient = async (project: Project) => {
+    const form = clientForms[project.id] ?? { open: false, name: '', email: '', password: '', enablePortal: true };
+    if (!form.name.trim()) { toast.error('Client name is required'); return; }
+    if (form.enablePortal && !form.email.trim()) { toast.error('Client email is required for portal access'); return; }
+    if (form.enablePortal && form.password.length < 6) { toast.error('Portal password must be at least 6 characters'); return; }
+
+    const email = form.email.trim().toLowerCase();
+    const name = form.name.trim().toLowerCase();
+    const existingClient = clients.find(client =>
+      client.company_id === project.company_id
+      && (
+        (!!email && (client.email ?? '').trim().toLowerCase() === email)
+        || (!email && client.name.trim().toLowerCase() === name)
+      )
+    );
+
+    if (existingClient) {
+      setClientSelections(prev => ({ ...prev, [project.id]: String(existingClient.id) }));
+      toast.error('Client already exists. Select it from the dropdown and attach it.');
+      return;
+    }
+
+    setCreatingClientId(project.id);
+    try {
+      const client = await adminClientService.create({
+        company_id: project.company_id,
+        name: form.name.trim(),
+        email: form.email.trim() || null,
+        status: 'active',
+        enable_portal: form.enablePortal,
+        portal_email: form.enablePortal ? form.email.trim() : null,
+        portal_password: form.enablePortal ? form.password : null,
+      });
+      setClients(prev => [client, ...prev]);
+      const updated = await adminProjectService.update(project.id, { client_id: client.id });
+      setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+      setClientForms(prev => ({ ...prev, [project.id]: { open: false, name: '', email: '', password: '', enablePortal: true } }));
+      toast.success(form.enablePortal ? 'Client created with portal access and attached' : 'Client created and attached');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to create client');
+    } finally {
+      setCreatingClientId(null);
+    }
+  };
+
   return (
     <DashboardLayout title="Deliverables">
       <div style={{ maxWidth: 1200 }}>
@@ -143,12 +211,109 @@ export default function DeliverablesPage() {
                   <div style={{ minWidth: 240 }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{project.name}</div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
-                      {project.delivery_file_name || 'Final project package'} {project.client?.name ? `- ${project.client.name}` : ''}
+                      {project.delivery_file_name || 'Final project package'} {project.client?.name ? `- ${project.client.name}` : '- No client linked'}
                     </div>
                     <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
                       Submitted {fmtDate(project.delivery_submitted_at || project.updated_at)}
                     </div>
                   </div>
+                  {!project.client_id && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 300 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select
+                          value={clientSelections[project.id] ?? ''}
+                          onChange={e => setClientSelections(prev => ({ ...prev, [project.id]: e.target.value }))}
+                          style={{ ...inp, width: 210, padding: '8px 10px', fontSize: 12 }}
+                        >
+                          <option value="">Select client...</option>
+                          {clients.filter(c => c.company_id === project.company_id && c.status === 'active').map(client => (
+                            <option key={client.id} value={client.id}>{client.name}{client.email ? ` (${client.email})` : ''}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => attachClient(project)}
+                          disabled={attachingClientId === project.id}
+                          style={{
+                            padding: '8px 12px', background: '#fff', color: '#0d9488',
+                            border: '1px solid #99f6e4', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                            cursor: attachingClientId === project.id ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {attachingClientId === project.id ? 'Attaching...' : 'Attach Client'}
+                        </button>
+                        <button
+                          onClick={() => setClientForms(prev => ({
+                            ...prev,
+                            [project.id]: {
+                              open: !(prev[project.id]?.open ?? false),
+                              name: prev[project.id]?.name ?? '',
+                              email: prev[project.id]?.email ?? '',
+                              password: prev[project.id]?.password ?? '',
+                              enablePortal: prev[project.id]?.enablePortal ?? true,
+                            },
+                          }))}
+                          style={{
+                            padding: '8px 12px', background: '#fff', color: '#2563eb',
+                            border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          }}
+                        >
+                          Add New Client
+                        </button>
+                      </div>
+                      {clientForms[project.id]?.open && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                          <input
+                            value={clientForms[project.id]?.name ?? ''}
+                            onChange={e => setClientForms(prev => ({ ...prev, [project.id]: { open: true, name: e.target.value, email: prev[project.id]?.email ?? '', password: prev[project.id]?.password ?? '', enablePortal: prev[project.id]?.enablePortal ?? true } }))}
+                            placeholder="Client name"
+                            style={{ ...inp, width: 160, padding: '8px 10px', fontSize: 12 }}
+                          />
+                          <input
+                            value={clientForms[project.id]?.email ?? ''}
+                            onChange={e => setClientForms(prev => ({ ...prev, [project.id]: { open: true, name: prev[project.id]?.name ?? '', email: e.target.value, password: prev[project.id]?.password ?? '', enablePortal: prev[project.id]?.enablePortal ?? true } }))}
+                            placeholder="Client email"
+                            style={{ ...inp, width: 190, padding: '8px 10px', fontSize: 12 }}
+                          />
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155', fontWeight: 700 }}>
+                            <input
+                              type="checkbox"
+                              checked={clientForms[project.id]?.enablePortal ?? true}
+                              onChange={e => setClientForms(prev => ({ ...prev, [project.id]: { open: true, name: prev[project.id]?.name ?? '', email: prev[project.id]?.email ?? '', password: prev[project.id]?.password ?? '', enablePortal: e.target.checked } }))}
+                            />
+                            Activate portal
+                          </label>
+                          {(clientForms[project.id]?.enablePortal ?? true) && (
+                            <input
+                              type="password"
+                              value={clientForms[project.id]?.password ?? ''}
+                              onChange={e => setClientForms(prev => ({ ...prev, [project.id]: { open: true, name: prev[project.id]?.name ?? '', email: prev[project.id]?.email ?? '', password: e.target.value, enablePortal: prev[project.id]?.enablePortal ?? true } }))}
+                              placeholder="Portal password"
+                              style={{ ...inp, width: 150, padding: '8px 10px', fontSize: 12 }}
+                            />
+                          )}
+                          {!(clientForms[project.id]?.enablePortal ?? true) && (
+                            <div style={{ fontSize: 11, color: '#b45309', flexBasis: '100%' }}>Client will be attached as contact only. Enable portal later before sending the delivery.</div>
+                          )}
+                          <button
+                            onClick={() => createAndAttachClient(project)}
+                            disabled={creatingClientId === project.id}
+                            style={{
+                              padding: '8px 12px', background: creatingClientId === project.id ? '#93c5fd' : '#2563eb',
+                              color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                              cursor: creatingClientId === project.id ? 'wait' : 'pointer',
+                            }}
+                          >
+                            {creatingClientId === project.id ? 'Creating...' : 'Create & Attach'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {project.client_id && (!project.client?.portal_access || !project.client?.user_id) && (
+                    <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+                      Enable portal access for this client before sending.
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {project.delivery_file_name && (
                       <button onClick={() => downloadProjectDelivery(project)} style={{
@@ -158,12 +323,14 @@ export default function DeliverablesPage() {
                         Download PM Package
                       </button>
                     )}
-                    <button onClick={() => approveProjectDelivery(project)} disabled={approvingDelivery} style={{
-                      padding: '8px 14px', background: approvingDelivery ? '#93c5fd' : '#0d9488', color: '#fff',
-                      border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: approvingDelivery ? 'not-allowed' : 'pointer',
-                    }}>
-                      {approvingDelivery ? 'Delivering...' : 'Approve & Send to Client'}
-                    </button>
+                    {project.client_id && project.client?.portal_access && project.client?.user_id && (
+                      <button onClick={() => approveProjectDelivery(project)} disabled={approvingDelivery} style={{
+                        padding: '8px 14px', background: approvingDelivery ? '#93c5fd' : '#0d9488', color: '#fff',
+                        border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: approvingDelivery ? 'not-allowed' : 'pointer',
+                      }}>
+                        {approvingDelivery ? 'Delivering...' : 'Approve & Send to Client'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

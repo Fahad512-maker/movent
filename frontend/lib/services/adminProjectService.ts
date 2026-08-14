@@ -77,7 +77,7 @@ export interface Project {
   // Api\User\ProjectController::index(), not the Admin-side listing.
   my_role?: string;
   company?: { id: number; name: string } | null;
-  client?: { id: number; name: string; email?: string } | null;
+  client?: { id: number; name: string; email?: string; portal_access?: boolean; user_id?: number | null } | null;
   invoice?: { id: number; invoice_number: string; total_amount: number; status: string } | null;
   // Every invoice billed under this project (deposit/milestone/final/change
   // request) — distinct from the single `invoice` above (this project's

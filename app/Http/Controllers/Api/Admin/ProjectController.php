@@ -149,7 +149,7 @@ class ProjectController extends Controller
         $companyIds = $this->companyIds();
 
         $q = Project::whereIn('company_id', $companyIds)
-            ->with(['company:id,name', 'client:id,name', 'projectManager:id,name,role_type', 'teamMembers.user:id,name,role_type', 'createdBy:id,name', 'createdByAdmin:id,name']);
+            ->with(['company:id,name', 'client:id,name,email,portal_access,user_id', 'projectManager:id,name,role_type', 'teamMembers.user:id,name,role_type', 'createdBy:id,name', 'createdByAdmin:id,name']);
 
         // Aggregates every company this admin owns by default (matches
         // ClientController::index() — the list itself is never restricted to
@@ -807,7 +807,7 @@ class ProjectController extends Controller
     public function approveDelivery(int $id): JsonResponse
     {
         $project = Project::whereIn('company_id', $this->companyIds())
-            ->with(['client:id,name,user_id', 'deliverySubmittedBy:id,name'])
+            ->with(['client:id,name,user_id,portal_access', 'deliverySubmittedBy:id,name'])
             ->findOrFail($id);
 
         if ($project->status !== 'completed') {
@@ -816,6 +816,14 @@ class ProjectController extends Controller
 
         if ($project->delivery_status !== 'pending_admin_review' || !$project->delivery_file_path) {
             return ApiResponse::error('No project delivery is pending admin review.', 422);
+        }
+
+        if (!$project->client_id) {
+            return ApiResponse::error('Attach a client to this project before sending the delivery.', 422);
+        }
+
+        if (!$project->client?->portal_access || !$project->client?->user_id) {
+            return ApiResponse::error('Enable client portal access before sending this delivery.', 422);
         }
 
         if (!Storage::exists($project->delivery_file_path)) {
