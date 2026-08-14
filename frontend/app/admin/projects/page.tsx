@@ -9,6 +9,11 @@ import { adminNotificationService } from '@/lib/services/adminNotificationServic
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
+const assignedToName = (project: Project): string => {
+  const assignedProjectManager = project.team_members?.find(member => member.user?.role_type === 'project_manager')?.user;
+  return assignedProjectManager?.name ?? project.project_manager?.name ?? '—';
+};
+
 export default function ProjectsPage() {
   useModuleGuard('projects');
   const router = useRouter();
@@ -92,7 +97,7 @@ export default function ProjectsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Project', 'Company', 'Client', 'Status', 'Priority', 'Progress', 'Deadline', 'Actions'].map(h => (
+                {['Project', 'Company', 'Client', 'Assigned To', 'Status', 'Priority', 'Progress', 'Deadline', 'Actions'].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: 'left', fontSize: 11,
                     fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap',
@@ -115,6 +120,7 @@ export default function ProjectsPage() {
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.company?.name ?? '—'}</td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.client?.name ?? '—'}</td>
+                  <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{assignedToName(p)}</td>
                   <td style={{ padding: '12px 16px' }}><Badge label={p.status} sc={STATUS_SC[p.status]} /></td>
                   <td style={{ padding: '12px 16px' }}><Badge label={p.priority} sc={PRIORITY_SC[p.priority]} /></td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{p.progress ?? 0}%</td>

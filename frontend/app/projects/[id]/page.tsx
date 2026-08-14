@@ -626,7 +626,7 @@ export default function UserProjectDetailPage() {
             {/* The Seller side has no tab strip — this button is its Chat
                 tab, so it locks on a draft like the Admin tabs do. */}
             <button
-              onClick={() => !isDraft && router.push(`/projects/${id}/chat`)}
+              onClick={() => !isDraft && router.push(isSeller ? `/projects/${id}/client-chat` : `/projects/${id}/chat`)}
               disabled={isDraft}
               title={isDraft ? DRAFT_HINT : undefined}
               style={{
@@ -634,7 +634,7 @@ export default function UserProjectDetailPage() {
                 color: isDraft ? '#cbd5e1' : '#2563eb', fontSize: 13, fontWeight: 600,
                 cursor: isDraft ? 'not-allowed' : 'pointer',
               }}>
-              💬 Chat
+              {isSeller ? 'Chat with Client' : 'Chat'}
             </button>
             <ProjectLifecycleActions
               projectId={id}
@@ -928,7 +928,7 @@ export default function UserProjectDetailPage() {
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>All Tasks ({tasks.length})</span>
-            {canCreateAnyTask && project.status !== 'closed' && (
+            {canCreateAnyTask && !['closed', 'completed'].includes(project.status) && (
               <button
                 onClick={() => !isDraft && router.push(`/projects/${id}/tasks/create`)}
                 disabled={isDraft}

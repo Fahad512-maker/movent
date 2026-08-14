@@ -65,7 +65,7 @@ export default function ProjectTasksPage() {
   useEffect(() => {
     load();
     adminProjectService.getOne(projectId).then(p => {
-      setProjectClosed(p.status === 'closed');
+      setProjectClosed(['closed', 'completed'].includes(p.status));
       setProjectDraft(p.status === 'draft');
       // Only this project's own team members are assignable — not every
       // active user of the company (same fix already applied to the

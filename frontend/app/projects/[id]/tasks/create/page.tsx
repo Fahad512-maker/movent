@@ -66,6 +66,11 @@ export default function CreateTaskPage() {
           router.replace(`/projects/${projectId}`);
           return;
         }
+        if (p.status === 'completed') {
+          toast.error('This project is completed. Reopen it before adding new tasks.');
+          router.replace(`/projects/${projectId}`);
+          return;
+        }
         // Same rule the server enforces (TaskController::store()'s isDraft()
         // guard) — a draft has no tasks until someone activates it. Reached
         // only by a typed URL; the button that leads here is disabled.
