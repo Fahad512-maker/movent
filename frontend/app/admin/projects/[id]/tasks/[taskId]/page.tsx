@@ -313,7 +313,7 @@ export default function AdminTaskDetailPage() {
 
   return (
     <DashboardLayout title="Task">
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%', maxWidth: 1240 }}>
         <button onClick={() => router.push(`/admin/projects/${projectId}/tasks`)} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
           padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#64748b', marginBottom: 16,
@@ -358,7 +358,7 @@ export default function AdminTaskDetailPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, margin: '20px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, margin: '20px 0' }}>
             <Field label="Assigned To" value={assignedTo ? `${assignedTo.name}${assignedTo.email ? ` (${assignedTo.email})` : ''}` : 'Unassigned'} />
             <Field label="Assigned By" value={assignedByLabel} />
             <Field label="Project" value={task.project?.name} />

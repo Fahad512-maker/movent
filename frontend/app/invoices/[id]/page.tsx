@@ -163,14 +163,14 @@ export default function InvoiceDetailPage() {
 
   return (
     <DashboardLayout title={invoice.invoice_number}>
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.push('/invoices')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to Invoices
         </button>
 
         {/* Header card */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', padding: '24px 28px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{invoice.invoice_number}</h1>
@@ -195,7 +195,7 @@ export default function InvoiceDetailPage() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {!isSubUser && canEdit && (
                 <button onClick={() => router.push(`/invoices/${invoiceId}/edit`)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   <HiPencilSquare size={14} /> Edit
@@ -265,7 +265,7 @@ export default function InvoiceDetailPage() {
           {actionMsg && <div style={{ marginTop: 14, padding: '9px 14px', background: '#f0fdf4', borderRadius: 7, color: '#16a34a', fontSize: 13 }}>{actionMsg}</div>}
           {actionErr && <div style={{ marginTop: 14, padding: '9px 14px', background: '#fef2f2', borderRadius: 7, color: '#dc2626', fontSize: 13 }}>{actionErr}</div>}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 22, paddingTop: 18, borderTop: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginTop: 22, paddingTop: 18, borderTop: '1px solid #f1f5f9' }}>
             {[
               { label: 'Total', value: fmt(invoice.total_amount), color: '#0f172a' },
               { label: 'Paid', value: fmt(invoice.paid_amount), color: '#059669' },
@@ -349,7 +349,7 @@ export default function InvoiceDetailPage() {
             <h4 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700, color: '#14532d' }}>Record Payment — Outstanding: {fmt(outstanding)}</h4>
             {payError && <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fef2f2', borderRadius: 7, color: '#dc2626', fontSize: 13 }}>{payError}</div>}
             <form onSubmit={handleRecordPayment}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
                 <div>
                   <label style={{ ...lbl, color: '#166534' }}>Amount *</label>
                   <input type="number" min={0.01} max={outstanding} step="0.01" required style={{ ...({ ...{}, ...{ border: '1.5px solid #86efac' }, background: '#fff' } as React.CSSProperties), width: '100%', padding: '9px 12px', borderRadius: 7, fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }} value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder={`Max ${outstanding}`} />
@@ -366,7 +366,7 @@ export default function InvoiceDetailPage() {
                 </div>
               </div>
               {payMethod === 'gateway' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label style={{ ...lbl, color: '#166534' }}>Gateway</label>
                     <input style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #86efac', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff', boxSizing: 'border-box' }} value={payGateway} onChange={e => setPayGateway(e.target.value)} placeholder="Stripe / PayPal…" />
@@ -391,7 +391,7 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(340px, 420px)', gap: 16, alignItems: 'start' }}>
           {/* Line items */}
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
             <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>

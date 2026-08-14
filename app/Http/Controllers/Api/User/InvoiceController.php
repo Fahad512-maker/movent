@@ -247,6 +247,11 @@ class InvoiceController extends Controller
 
         $user      = $this->user();
         $companyId = $user->company_id;
+        $company   = Company::find($companyId);
+
+        if (!$company || CompanyPaymentGateway::resolveActiveGateways($company)->isEmpty()) {
+            return ApiResponse::error('Please activate a payment gateway before creating an invoice.', 422);
+        }
 
         $data = $request->validate([
             'client_id'           => 'nullable|exists:clients,id',

@@ -102,7 +102,7 @@ function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
 export default function SettingsPage() {
   useAdminGuard();
   const router = useRouter();
-  const [tab, setTab] = useState<'company' | 'invoice' | 'bank' | 'gateways' | 'dealWorkflow' | 'subscription'>('company');
+  const [tab, setTab] = useState<'company' | 'invoice' | 'bank' | 'gateways' | 'dealWorkflow' | 'subscription'>('invoice');
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
@@ -373,7 +373,7 @@ export default function SettingsPage() {
 
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: '#f8fafc', padding: 6, borderRadius: 12, width: 'fit-content', border: '1px solid #f1f5f9' }}>
-          {([['company','Company'], ['invoice','Invoice'], ['bank','Bank / Payment'], ['gateways','Gateways'], ['dealWorkflow','Deal Workflow'], ['subscription','Subscription']] as const).map(([k, l]) => (
+          {([['invoice','Invoice'], ['bank','Bank / Payment'], ['gateways','Gateways'], ['dealWorkflow','Deal Workflow'], ['subscription','Subscription']] as const).map(([k, l]) => (
             <Tab key={k} label={l} active={tab === k} onClick={() => setTab(k)} />
           ))}
         </div>

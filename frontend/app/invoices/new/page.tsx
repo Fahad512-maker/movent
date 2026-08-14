@@ -322,6 +322,7 @@ function NewInvoiceForm() {
   // the error state) if the form isn't ready to submit.
   const buildPayload = (): InvoicePayload | null => {
     if (!companyId) { setError('Select a company'); return null; }
+    if (noGatewayConfigured) { setError('Please activate a payment gateway before creating an invoice.'); return null; }
     if (customerType === 'client' && !clientId) { setError('Select a client, or switch to Guest for an external customer'); return null; }
     if (customerType === 'guest' && !guestName.trim()) { setError('Customer name is required for guest invoices'); return null; }
     if (projectMode === 'existing' && !projectId) { setError('Select an existing project, or switch to New Project'); return null; }
@@ -867,8 +868,9 @@ function NewInvoiceForm() {
 
               <button
                 type="submit"
-                disabled={saving || sending || linking}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking) ? 'not-allowed' : 'pointer', marginBottom: 10 }}
+                disabled={saving || sending || linking || noGatewayConfigured}
+                title={noGatewayConfigured ? 'Configure a payment gateway before creating invoice' : undefined}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
                 {saving ? 'Creating…' : 'Save as Draft'}
               </button>

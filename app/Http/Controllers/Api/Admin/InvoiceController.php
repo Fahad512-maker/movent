@@ -70,6 +70,15 @@ class InvoiceController extends Controller
             ->toArray();
     }
 
+    private function hasActivePaymentGateway(int $companyId): bool
+    {
+        $company = Company::find($companyId);
+
+        return $company
+            ? CompanyPaymentGateway::resolveActiveGateways($company)->isNotEmpty()
+            : false;
+    }
+
     private function computeTotals(array &$items, float $taxRate, float $discount): array
     {
         $subtotal = 0;
@@ -143,6 +152,10 @@ class InvoiceController extends Controller
             'required_payment_amount'          => 'nullable|numeric|min:0',
             'counts_toward_project_activation' => 'nullable|boolean',
         ]);
+
+        if (!$this->hasActivePaymentGateway((int) $data['company_id'])) {
+            return ApiResponse::error('Please activate a payment gateway before creating an invoice.', 422);
+        }
 
         // Ensure client belongs to the company (only when a client is specified)
         if (!empty($data['client_id'])) {
