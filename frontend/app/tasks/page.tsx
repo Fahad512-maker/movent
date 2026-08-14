@@ -5,7 +5,7 @@ import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService } from '@/lib/services/userProjectService';
-import { Task, TaskStatus } from '@/lib/services/adminProjectService';
+import { Project, Task, TaskStatus } from '@/lib/services/adminProjectService';
 import { notificationService } from '@/lib/services/notificationService';
 import { can, getAuthType, getAuthUser, getUserModulePermissions } from '@/lib/auth';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
@@ -56,6 +56,26 @@ export default function UserTasksPage() {
   // a non-manager server-side, and unlike myTasks() also supports the
   // search box, so it stays the one always called).
   const isTaskManagerTier = me?.role_type === 'project_manager' || can('project_management', 'canViewAllCompanyProjects');
+  // Mirrors frontend/app/projects/[id]/page.tsx's own "+ Create Task" gate —
+  // a task always belongs to a project, so creating one from this
+  // cross-project list first needs the caller to pick which project.
+  const canCreateTasks = can('project_management', 'canCreateTasks');
+  const canCreateLinkedTask = can('project_management', 'canCreateLinkedProjectTask');
+  const canCreateAnyTask = canCreateTasks || canCreateLinkedTask;
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [pickerProjects, setPickerProjects] = useState<Project[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickedProjectId, setPickedProjectId] = useState('');
+
+  const openProjectPicker = () => {
+    setShowProjectPicker(true);
+    setPickedProjectId('');
+    setPickerLoading(true);
+    userProjectService.list()
+      .then(list => setPickerProjects(list.filter(p => !['draft', 'closed', 'completed'].includes(p.status))))
+      .catch(() => toast.error('Failed to load projects'))
+      .finally(() => setPickerLoading(false));
+  };
 
   useEffect(() => {
     if (getAuthType() === 'admin') {
@@ -173,8 +193,48 @@ export default function UserTasksPage() {
               <option value="">All Statuses</option>
               {Object.entries(TASK_STATUS_LABELS).map(([s, label]) => <option key={s} value={s}>{label}</option>)}
             </select>
+            {canCreateAnyTask && (
+              <button onClick={openProjectPicker} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                + Create Task
+              </button>
+            )}
           </div>
         </div>
+
+        {showProjectPicker && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.12)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Create Task</h3>
+                <button onClick={() => setShowProjectPicker(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: '#94a3b8', cursor: 'pointer' }}>×</button>
+              </div>
+              <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 16px' }}>
+                A task always belongs to a project — pick which one this task is for.
+              </p>
+              {pickerLoading ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading projects…</div>
+              ) : pickerProjects.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No active projects available to add a task to.</div>
+              ) : (
+                <>
+                  <select value={pickedProjectId} onChange={e => setPickedProjectId(e.target.value)} style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', marginBottom: 16, boxSizing: 'border-box' }}>
+                    <option value="">Select a project…</option>
+                    {pickerProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      onClick={() => pickedProjectId && router.push(`/projects/${pickedProjectId}/tasks/create`)}
+                      disabled={!pickedProjectId}
+                      style={{ flex: 1, padding: '10px', background: pickedProjectId ? '#2563eb' : '#93c5fd', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: pickedProjectId ? 'pointer' : 'not-allowed' }}>
+                      Continue
+                    </button>
+                    <button onClick={() => setShowProjectPicker(false)} style={{ padding: '10px 18px', background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
           {loading ? (

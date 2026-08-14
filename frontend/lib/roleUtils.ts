@@ -345,6 +345,11 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddSellerToProjectChat',
       'canManageProjectChatParticipants',
+      // Company-wide project oversight — 2026-08-14 request: mirrors the
+      // already-granted canViewAllCompanyLeads (company-wide, not scoped to
+      // specific sellers) so Lead Manager can actually see and manage every
+      // Seller's assigned/created projects, not just their own.
+      'canViewAllCompanyProjects', 'canViewClosedProjects',
     ],
     account: ['canUseGeneralChat'],
   },
