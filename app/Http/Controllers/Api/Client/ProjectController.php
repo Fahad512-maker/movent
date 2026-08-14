@@ -13,6 +13,8 @@ use App\Models\Revision;
 use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
@@ -74,6 +76,8 @@ class ProjectController extends Controller
             ->notDraft()
             ->with([
                 'projectManager:id,name',
+                'deliverySubmittedBy:id,name',
+                'deliveryApprovedByAdmin:id,name',
                 'deliverables' => fn($q) => $q->whereIn('status', ['delivered', 'approved', 'revision_requested'])
                                               ->with(['uploadedBy:id,name']),
             ])
@@ -123,11 +127,35 @@ class ProjectController extends Controller
             $activity->push(['date' => $project->completed_at, 'icon' => '✅', 'text' => 'Project completed', 'by' => null]);
         }
 
+        if ($project->delivery_status === 'delivered_to_client' && $project->delivery_approved_at) {
+            $activity->push(['date' => $project->delivery_approved_at, 'icon' => '📦', 'text' => 'Final project package delivered', 'by' => $project->deliveryApprovedByAdmin?->name]);
+        }
+
         return ApiResponse::success([
             'project'  => $project,
             'files'    => $files,
             'activity' => $activity->sortByDesc('date')->values(),
         ]);
+    }
+
+    public function downloadDelivery(Request $request, int $id): StreamedResponse
+    {
+        $clientIds = $this->clientIds($request);
+
+        $project = Project::where('id', $id)
+            ->whereIn('client_id', $clientIds)
+            ->notDraft()
+            ->firstOrFail();
+
+        if ($project->delivery_status !== 'delivered_to_client' || !$project->delivery_file_path) {
+            abort(404, 'Project delivery is not available yet.');
+        }
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            abort(404, 'Project delivery file not found.');
+        }
+
+        return Storage::download($project->delivery_file_path, $project->delivery_file_name ?? "{$project->name}-delivery.zip");
     }
 
     public function approveDeliverable(Request $request, int $id): JsonResponse

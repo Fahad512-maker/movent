@@ -95,6 +95,15 @@ export const userProjectService = {
     return res.data.data;
   },
 
+  submitDelivery: async (id: number, file: File): Promise<Project> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await api.post(`/user/projects/${id}/submit-delivery`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  },
+
   close: async (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }): Promise<Project> => {
     const res = await api.post(`/user/projects/${id}/close`, payload ?? {});
     return res.data.data;

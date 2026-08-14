@@ -22,9 +22,10 @@ export default function DeliverablesPage() {
   const [uploadTaskId, setUploadTaskId] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [approvingDelivery, setApprovingDelivery] = useState(false);
 
   useEffect(() => {
-    adminProjectService.list().then(list => {
+    adminProjectService.list({ status: 'completed' }).then(list => {
       setProjects(list);
       if (list.length > 0) setProjectId(String(list[0].id));
     }).catch(() => toast.error('Failed to load projects'));
@@ -88,13 +89,86 @@ export default function DeliverablesPage() {
   };
 
   const filtered = statusF ? deliverables.filter(d => d.status === statusF) : deliverables;
+  const selectedProject = projects.find(p => String(p.id) === projectId);
+  const pendingProjectDeliveries = projects.filter(p => p.delivery_status === 'pending_admin_review');
+
+  const approveProjectDelivery = async (project = selectedProject) => {
+    if (!project) return;
+    if (!confirm('Approve this project delivery and send it to the client?')) return;
+    setApprovingDelivery(true);
+    try {
+      const updated = await adminProjectService.approveDelivery(project.id);
+      setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+      if (String(project.id) === projectId) setProjectId(String(updated.id));
+      toast.success('Project delivered to client');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to deliver project');
+    } finally { setApprovingDelivery(false); }
+  };
+
+  const downloadProjectDelivery = async (project = selectedProject) => {
+    if (!project?.delivery_file_name) { toast.error('Delivery file is not available'); return; }
+    try {
+      await adminProjectService.downloadDelivery(project.id, project.delivery_file_name);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Download failed');
+    }
+  };
 
   return (
     <DashboardLayout title="Deliverables">
       <div style={{ maxWidth: 1200 }}>
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Deliverables</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>Upload, review and approve project deliverables</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Project Delivery Review</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>Review final project packages submitted by PMs, then approve and send them to clients</p>
+        </div>
+
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>Pending Project Deliveries</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>PM-submitted final project packages waiting for admin approval</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#0d9488', background: '#ccfbf1', borderRadius: 999, padding: '5px 10px' }}>
+              {pendingProjectDeliveries.length} pending
+            </span>
+          </div>
+
+          {pendingProjectDeliveries.length === 0 ? (
+            <div style={{ padding: '22px 0', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No project deliveries are waiting for approval.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {pendingProjectDeliveries.map(project => (
+                <div key={project.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 8, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 240 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{project.name}</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                      {project.delivery_file_name || 'Final project package'} {project.client?.name ? `- ${project.client.name}` : ''}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                      Submitted {fmtDate(project.delivery_submitted_at || project.updated_at)}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {project.delivery_file_name && (
+                      <button onClick={() => downloadProjectDelivery(project)} style={{
+                        padding: '8px 14px', background: '#fff', color: '#2563eb',
+                        border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      }}>
+                        Download PM Package
+                      </button>
+                    )}
+                    <button onClick={() => approveProjectDelivery(project)} disabled={approvingDelivery} style={{
+                      padding: '8px 14px', background: approvingDelivery ? '#93c5fd' : '#0d9488', color: '#fff',
+                      border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: approvingDelivery ? 'not-allowed' : 'pointer',
+                    }}>
+                      {approvingDelivery ? 'Delivering...' : 'Approve & Send to Client'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{
@@ -111,6 +185,37 @@ export default function DeliverablesPage() {
             {Object.keys(DELIVERABLE_SC).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
         </div>
+
+        {selectedProject && (
+          <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Client Delivery</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                {selectedProject.delivery_status === 'pending_admin_review'
+                  ? `Pending admin review${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                  : selectedProject.delivery_status === 'delivered_to_client'
+                    ? `Delivered to client${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                    : 'PM has not submitted final project delivery yet.'}
+              </div>
+            </div>
+            {selectedProject.delivery_status === 'pending_admin_review' && selectedProject.delivery_file_name && (
+              <button onClick={() => downloadProjectDelivery()} style={{
+                padding: '9px 18px', background: '#fff', color: '#2563eb',
+                border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>
+                Download PM Package
+              </button>
+            )}
+            {selectedProject.delivery_status === 'pending_admin_review' && (
+              <button onClick={() => approveProjectDelivery()} disabled={approvingDelivery} style={{
+                padding: '9px 18px', background: approvingDelivery ? '#93c5fd' : '#0d9488', color: '#fff',
+                border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: approvingDelivery ? 'not-allowed' : 'pointer',
+              }}>
+                {approvingDelivery ? 'Delivering…' : 'Approve & Deliver to Client'}
+              </button>
+            )}
+          </div>
+        )}
 
         {projectId && (
           <form onSubmit={upload} style={{ ...card, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>

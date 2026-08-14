@@ -194,6 +194,14 @@ export default function ClientProjectDetailPage() {
     finally { setRevSaving(false); }
   };
 
+  const downloadProjectDelivery = async () => {
+    try {
+      await clientService.downloadProjectDelivery(Number(id), p.delivery_file_name || `${p.name}-delivery.zip`);
+    } catch {
+      toast.error('Download failed');
+    }
+  };
+
   if (loading) return <div style={{ padding: 40, color: '#94a3b8' }}>Loading…</div>;
   if (!data)   return null;
 
@@ -230,6 +238,20 @@ export default function ClientProjectDetailPage() {
         </div>
         <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? '#16a34a' : GREEN, minWidth: 36, textAlign: 'right' }}>{pct}%</span>
       </div>
+
+      {p.delivery_status === 'delivered_to_client' && (
+        <div style={{ background: '#ecfdf5', borderRadius: 10, border: '1px solid #bbf7d0', padding: '14px 18px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#065f46' }}>Project delivery is ready</div>
+            <div style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>{p.delivery_file_name || 'Final project package'}</div>
+          </div>
+          <button
+            onClick={downloadProjectDelivery}
+            style={{ padding: '8px 16px', background: GREEN, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            Download Project
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 18, borderBottom: '1px solid #e2e8f0' }}>

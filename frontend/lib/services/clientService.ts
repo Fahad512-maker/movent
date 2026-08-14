@@ -24,6 +24,17 @@ export const clientService = {
     const res = await clientApi.get(`/client/projects/${id}`);
     return res.data.data;
   },
+  downloadProjectDelivery: async (id: number, fileName: string) => {
+    const res = await clientApi.get(`/client/projects/${id}/delivery/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
   approveDeliverable: async (id: number) => {
     const res = await clientApi.post(`/client/deliverables/${id}/approve`);
     return res.data;

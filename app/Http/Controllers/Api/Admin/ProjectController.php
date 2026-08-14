@@ -15,12 +15,14 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\ProjectChatService;
 use App\Services\ProjectCompletionService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
@@ -319,6 +321,8 @@ class ProjectController extends Controller
                 'seller:id,name,email',
                 'createdBy:id,name',
                 'createdByAdmin:id,name',
+                'deliverySubmittedBy:id,name',
+                'deliveryApprovedByAdmin:id,name',
                 'tasks' => fn($q) => $q->with('assignedTo:id,name'),
                 'teamMembers.user:id,name,role_type',
                 'folders' => fn($q) => $q->whereNull('parent_folder_id')->orderBy('sort_order'),
@@ -773,6 +777,101 @@ class ProjectController extends Controller
         $this->notifyLifecycle($project, 'project_completed', 'Project completed', "\"{$project->name}\" was marked as completed by {$this->adminName()}.");
 
         return ApiResponse::success($project->fresh(), 'Project marked as completed');
+    }
+
+    public function downloadDelivery(int $id): StreamedResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        if (!$project->delivery_file_path) {
+            abort(404, 'Project delivery is not available yet.');
+        }
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            abort(404, 'Project delivery file not found.');
+        }
+
+        return Storage::download($project->delivery_file_path, $project->delivery_file_name ?? "{$project->name}-delivery.zip");
+    }
+
+    public function approveDelivery(int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())
+            ->with(['client:id,name,user_id', 'deliverySubmittedBy:id,name'])
+            ->findOrFail($id);
+
+        if ($project->status !== 'completed') {
+            return ApiResponse::error('Only a completed project can be delivered to the client.', 422);
+        }
+
+        if ($project->delivery_status !== 'pending_admin_review' || !$project->delivery_file_path) {
+            return ApiResponse::error('No project delivery is pending admin review.', 422);
+        }
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            return ApiResponse::error('The submitted delivery file is missing from storage.', 422);
+        }
+
+        $project->update([
+            'delivery_status'               => 'delivered_to_client',
+            'delivery_approved_at'          => now(),
+            'delivery_approved_by_admin_id' => $this->admin()->id,
+        ]);
+
+        $project->logActivity('project_delivery_approved', "{$this->adminName()} approved the final project package and delivered it to the client.", $this->adminName(), [
+            'file_name' => $project->delivery_file_name,
+        ]);
+
+        SystemAuditLog::create([
+            'company_id' => $project->company_id, 'user_id' => null,
+            'action' => 'project_delivery_approved', 'module_key' => 'project_management',
+            'entity_type' => 'Project', 'entity_id' => $project->id,
+            'new_values' => ['file_name' => $project->delivery_file_name],
+        ]);
+
+        if ($project->delivery_submitted_by) {
+            NotificationService::send([
+                'company_id'         => $project->company_id,
+                'recipient_user_id'  => $project->delivery_submitted_by,
+                'actor_admin_id'     => $this->admin()->id,
+                'module'             => 'project_management',
+                'type'               => 'project_delivery_approved',
+                'title'              => 'Project delivered to client',
+                'message'            => "\"{$project->name}\" was approved and delivered to the client.",
+                'entity_type'        => 'Project',
+                'entity_id'          => $project->id,
+                'url'                => "/projects/{$project->id}",
+            ]);
+        }
+
+        if ($project->client?->user_id) {
+            Notification::create([
+                'user_id'        => $project->client->user_id,
+                'actor_admin_id' => $this->admin()->id,
+                'company_id'     => $project->company_id,
+                'module'         => 'client_portal',
+                'type'           => 'project_delivered',
+                'title'          => 'Project delivered',
+                'body'           => "\"{$project->name}\" is ready to download.",
+                'entity_type'    => 'Project',
+                'entity_id'      => $project->id,
+                'url'            => "/client/projects/{$project->id}",
+                'data'           => ['project_id' => $project->id, 'link' => "/client/projects/{$project->id}"],
+            ]);
+        }
+
+        ProjectComment::create([
+            'company_id'      => $project->company_id,
+            'project_id'      => $project->id,
+            'author_admin_id' => $this->admin()->id,
+            'body'            => "Final project package approved and delivered to the client.",
+            'visibility'      => 'client',
+        ]);
+
+        return ApiResponse::success(
+            $project->fresh(['client:id,name,email,user_id', 'projectManager:id,name,role_type', 'seller:id,name,email', 'deliverySubmittedBy:id,name', 'deliveryApprovedByAdmin:id,name']),
+            'Project delivered to client'
+        );
     }
 
     public function close(Request $request, int $id): JsonResponse

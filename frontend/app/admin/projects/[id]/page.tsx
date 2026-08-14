@@ -342,6 +342,9 @@ export default function ProjectOverviewPage() {
           status={project.status}
           service={adminProjectService}
           canComplete canClose canReopen canForceClose canActivate
+          canApproveDelivery
+          deliveryStatus={project.delivery_status}
+          deliveryFileName={project.delivery_file_name}
           onUpdated={updated => setProject(updated)}
         />
         {project.status !== 'closed' && (

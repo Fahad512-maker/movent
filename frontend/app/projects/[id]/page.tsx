@@ -155,6 +155,10 @@ export default function UserProjectDetailPage() {
     can('project_management', 'canOverrideTaskStatus') && 'canOverrideTaskStatus',
   ].filter(Boolean) as string[];
   const isProjectPm = isProjectPmTier;
+  const canSubmitProjectDelivery = !!project && me?.role_type === 'project_manager' && canCompleteProjects && (
+    project.project_manager_id === me.id
+    || !!project.team_members?.some(member => member.user_id === me.id && member.user?.role_type === 'project_manager')
+  );
 
   // Edit Project (inline form, toggled from the header)
   const [editingProject, setEditingProject] = useState(false);
@@ -647,6 +651,8 @@ export default function UserProjectDetailPage() {
               canReopen={canReopenProjects}
               canForceClose={canForceCloseProjects}
               canActivate={canActivateProjects}
+              deliveryStatus={project.delivery_status}
+              deliveryFileName={project.delivery_file_name}
               onUpdated={updated => setProject(updated)}
             />
             {canEditProjects && project.status !== 'closed' && (
