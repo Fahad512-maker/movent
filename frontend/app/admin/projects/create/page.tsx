@@ -238,7 +238,7 @@ function CreateProjectForm() {
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={lbl}>Assign User</label>
+            <label style={lbl}>Project Manager</label>
             <select value={form.project_manager_id} onChange={e => setF('project_manager_id', e.target.value)} disabled={usersLoading} style={inp}>
               <option value="">Unassigned</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role] ?? u.role})</option>)}

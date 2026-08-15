@@ -837,10 +837,21 @@ const COMPANY_OPTIONS: CompanyOption[] = [
   { label: 'Unlimited', value: null, price_pkr: 2500, price_usd: 10 },
 ];
 
-// USA first — primary target market.
-const TIMEZONES: string[] = [
-  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-  'Europe/London', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Singapore',
+type CountryOption = { code: string; name: string; dial: string; timezone: string };
+
+// USA first — primary target market (mirrors the backend's own
+// America/New_York fallback in Api\PublicController::register()). Drives
+// both the phone field's dial code and the timezone sent at submit —
+// there's no separate timezone picker in the UI.
+const COUNTRIES: CountryOption[] = [
+  { code: 'US', name: 'United States',        dial: '+1',   timezone: 'America/New_York' },
+  { code: 'CA', name: 'Canada',                dial: '+1',   timezone: 'America/New_York' },
+  { code: 'GB', name: 'United Kingdom',        dial: '+44',  timezone: 'Europe/London' },
+  { code: 'AE', name: 'United Arab Emirates',  dial: '+971', timezone: 'Asia/Dubai' },
+  { code: 'PK', name: 'Pakistan',               dial: '+92',  timezone: 'Asia/Karachi' },
+  { code: 'IN', name: 'India',                  dial: '+91',  timezone: 'Asia/Kolkata' },
+  { code: 'AU', name: 'Australia',              dial: '+61',  timezone: 'Australia/Sydney' },
+  { code: 'SG', name: 'Singapore',              dial: '+65',  timezone: 'Asia/Singapore' },
 ];
 
 type PwStrength = { label: string; color: string; pct: number };
@@ -1047,7 +1058,8 @@ function RegisterContent() {
     setShowConfirm(true);
   };
   const [phone, setPhone] = useState<string>('');
-  const [timezone, setTimezone] = useState<string>('America/New_York');
+  const [countryCode, setCountryCode] = useState<string>('US');
+  const selectedCountry = COUNTRIES.find(c => c.code === countryCode) ?? COUNTRIES[0];
 
   useEffect(() => {
     setLoadingPackages(true);
@@ -1155,10 +1167,11 @@ function RegisterContent() {
     try {
       const res = await publicService.register({
         company_name: companyName, name, email, password,
-        password_confirmation: confirm, phone: phone || undefined,
+        password_confirmation: confirm,
+        phone: phone.trim() ? `${selectedCountry.dial} ${phone.trim()}` : undefined,
         package_id: pkgToUse.id,
         selected_modules: modulesToUse,
-        currency, start_type: 'paid', timezone,
+        currency, start_type: 'paid', timezone: selectedCountry.timezone,
         max_users: seat.value, max_companies: company.value,
       });
       if (res.success) {
@@ -1379,24 +1392,37 @@ function RegisterContent() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
-                  <InputField
-                    label="Phone (Optional)"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder=""
-                  />
                   <div style={{ marginBottom: 18 }}>
-                    <label style={labelBase}>Timezone</label>
+                    <label style={labelBase}>Country</label>
                     <div style={{ position: 'relative' }}>
                       <select
-                        value={timezone}
-                        onChange={e => setTimezone(e.target.value)}
+                        value={countryCode}
+                        onChange={e => setCountryCode(e.target.value)}
                         style={{ ...inputBase, paddingLeft: 14, paddingRight: 14, appearance: 'none' }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
                       >
-                        {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                        {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name} ({c.dial})</option>)}
                       </select>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={labelBase}>Phone (Optional)</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                        color: '#6b7280', fontSize: 15, fontWeight: 500, pointerEvents: 'none',
+                      }}>
+                        {selectedCountry.dial}
+                      </span>
+                      <input
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        placeholder="(555) 000-0000"
+                        style={{ ...inputBase, paddingLeft: 56 }}
+                        onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
+                        onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
+                      />
                     </div>
                   </div>
                 </div>

@@ -206,6 +206,22 @@ export default function UserProjectDetailPage() {
   const [newInvDesc, setNewInvDesc]   = useState('');
   const [newInvAmount, setNewInvAmount] = useState('');
   const [newInvDueDate, setNewInvDueDate] = useState('');
+  // Only asked for when the project has no linked client — otherwise the
+  // invoice always goes straight to that client's own email (matches
+  // Api\User\ProjectController::createInvoice()'s recipient_email rule).
+  const [newInvEmail, setNewInvEmail] = useState('');
+  // Shown as an inline confirmation right here on the project page instead of
+  // navigating away — the user asked for the link to stay visible where they
+  // just created it, not to be forced onto the invoice's own page.
+  const [createdInvoice, setCreatedInvoice] = useState<{ id: number; invoiceNumber: string; sentTo: string; paymentUrl?: string } | null>(null);
+  const [invoiceLinkCopied, setInvoiceLinkCopied] = useState(false);
+  const copyInvoiceLink = () => {
+    if (!createdInvoice?.paymentUrl) return;
+    navigator.clipboard.writeText(createdInvoice.paymentUrl).then(() => {
+      setInvoiceLinkCopied(true);
+      setTimeout(() => setInvoiceLinkCopied(false), 2500);
+    });
+  };
 
   // A milestone invoice must always match whatever currency this project's
   // existing invoices already use — never a hardcoded default (matches
@@ -215,18 +231,23 @@ export default function UserProjectDetailPage() {
 
   const handleCreateProjectInvoice = async () => {
     if (!newInvDesc.trim() || !newInvAmount) { toast.error('Description and amount are required'); return; }
+    if (!project?.client && !newInvEmail.trim()) { toast.error('This project has no linked client — enter an email to send the invoice to'); return; }
     setInvoiceBusy(true);
     try {
+      const sentTo = project?.client?.email ?? newInvEmail.trim();
       const invoice = await userProjectService.createInvoice(id, {
         due_date: newInvDueDate || null,
         currency: projectInvoiceCurrency,
         items: [{ description: newInvDesc.trim(), quantity: 1, unit_price: Number(newInvAmount) }],
+        recipient_email: project?.client ? undefined : newInvEmail.trim(),
       });
-      toast.success('Invoice created for project');
-      // Land on the new invoice's own detail page — same as every other
-      // invoice-creation flow (frontend/app/invoices/new/page.tsx) — rather
-      // than staying here with no way to see what was just created.
-      router.push(`/invoices/${invoice.id}`);
+      toast.success('Invoice created and sent');
+      setCreatedInvoice({ id: invoice.id, invoiceNumber: invoice.invoice_number, sentTo, paymentUrl: invoice.payment_url });
+      setNewInvDesc(''); setNewInvAmount(''); setNewInvDueDate(''); setNewInvEmail('');
+      setShowCreateInvoice(false);
+      // Refresh in place (no full-page loading flash) so the new invoice
+      // shows up in the Invoices & Billing table below right away.
+      userProjectService.getOne(id).then(setProject).catch(() => {});
     } catch (err: unknown) {
       const ex = err as { response?: { data?: { message?: string } } };
       toast.error(ex.response?.data?.message ?? 'Failed to create invoice');
@@ -605,7 +626,7 @@ export default function UserProjectDetailPage() {
 
   return (
     <DashboardLayout title={project.name}>
-      <div style={{ maxWidth: 1100 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
         {/* ── Header ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
@@ -779,13 +800,45 @@ export default function UserProjectDetailPage() {
               </div>
             </div>
 
+            {createdInvoice && (
+              <div style={{ marginBottom: 14, padding: '12px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, color: '#065f46' }}>
+                    ✓ Invoice {createdInvoice.invoiceNumber} created and sent to {createdInvoice.sentTo}.
+                  </span>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <Link href={`/invoices/${createdInvoice.id}`} style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>
+                      View Invoice →
+                    </Link>
+                    <button onClick={() => setCreatedInvoice(null)} style={{ background: 'none', border: 'none', color: '#65a30d', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                  </div>
+                </div>
+                {createdInvoice.paymentUrl && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, color: '#166534', fontWeight: 600, marginBottom: 6 }}>Payment Link (share directly with client)</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input readOnly value={createdInvoice.paymentUrl} onFocus={e => e.target.select()} style={{ flex: 1, padding: '8px 10px', border: '1.5px solid #86efac', borderRadius: 7, fontSize: 12, background: '#fff', color: '#374151', outline: 'none' }} />
+                      <button onClick={copyInvoiceLink} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: invoiceLinkCopied ? '#059669' : '#16a34a', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {invoiceLinkCopied ? 'Copied!' : 'Copy Link'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {showCreateInvoice && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input value={newInvDesc} onChange={e => setNewInvDesc(e.target.value)} placeholder="Description (e.g. Milestone 2)" style={{ ...inp, flex: '1 1 220px' }} />
                 <input type="number" min={0} step="0.01" value={newInvAmount} onChange={e => setNewInvAmount(e.target.value)} placeholder={`Amount (${projectInvoiceCurrency ?? 'USD'})`} style={{ ...inp, width: 160 }} />
                 <input type="date" value={newInvDueDate} onChange={e => setNewInvDueDate(e.target.value)} style={{ ...inp, width: 160 }} />
+                {project.client ? (
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Will be sent to {project.client.email ?? project.client.name}</div>
+                ) : (
+                  <input type="email" value={newInvEmail} onChange={e => setNewInvEmail(e.target.value)} placeholder="Recipient email (no client on this project)" style={{ ...inp, flex: '1 1 220px' }} />
+                )}
                 <button onClick={handleCreateProjectInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
-                  {invoiceBusy ? 'Creating…' : 'Create'}
+                  {invoiceBusy ? 'Creating…' : 'Create & Send'}
                 </button>
                 {projectInvoiceCurrency && (
                   <div style={{ width: '100%', fontSize: 11, color: '#94a3b8' }}>

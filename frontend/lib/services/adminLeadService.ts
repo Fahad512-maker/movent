@@ -35,6 +35,7 @@ export interface Lead {
   fulfillment_status?: string | null;
   won_at?: string | null;
   // Detail view extras
+  has_invoice?: boolean;
   follow_ups?: FollowUp[];
   activities?: LeadActivity[];
 }

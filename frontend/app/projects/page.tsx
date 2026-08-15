@@ -8,8 +8,7 @@ import { userProjectService } from '@/lib/services/userProjectService';
 import { userLeadService } from '@/lib/services/adminLeadService';
 import { Project } from '@/lib/services/adminProjectService';
 import { notificationService } from '@/lib/services/notificationService';
-import { can, getAuthUser } from '@/lib/auth';
-import { User } from '@/types';
+import { can } from '@/lib/auth';
 import api from '@/lib/axios';
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, inp, lbl } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
@@ -29,13 +28,12 @@ function UserProjectsList() {
   const [loading, setLoading]   = useState(true);
   const [statusF, setStatusF]   = useState('');
 
-  // Hard role check, defense-in-depth (mirrors the same rule now enforced
-  // in Api\User\ProjectController::store()): a Seller must never get the
-  // unrestricted "create any project, no lead/payment needed" path, even if
-  // a Company Admin also happens to grant them the broader canCreateProjects
-  // (a PM-tier permission) alongside their intended canCreateProjectHandoff.
-  const isSeller = (getAuthUser() as User | null)?.role_type === 'seller';
-  const canCreate = (can('project_management', 'canCreateProjects') && !isSeller)
+  // A Seller holding canCreateProjects (granted via the "Manage Projects"
+  // bundle) gets the same unrestricted "+ New Project" path as PM/Manager
+  // tiers — mirrors Api\User\ProjectController::store(). Separately, a
+  // Seller who only holds canCreateProjectHandoff can still create a project
+  // via the lead/invoice handoff flow (arriving with ?lead_id=/?invoice_id=).
+  const canCreate = can('project_management', 'canCreateProjects')
     || ((!!leadId || !!invoiceId) && can('project_management', 'canCreateProjectHandoff'));
   const [showCreate, setShowCreate] = useState(!!leadId || !!invoiceId);
   const [creating, setCreating]     = useState(false);

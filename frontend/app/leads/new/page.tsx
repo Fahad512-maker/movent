@@ -87,7 +87,7 @@ export default function NewLeadPage() {
 
   return (
     <DashboardLayout title="New Lead">
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
         </button>
@@ -120,7 +120,7 @@ export default function NewLeadPage() {
             )}
 
             {/* Contact info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 18 }}>
               <div>
                 <label style={lbl}>Full Name *</label>
                 <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="Lead's full name" required />
@@ -140,7 +140,7 @@ export default function NewLeadPage() {
             </div>
 
             {/* Lead meta */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 18 }}>
               <div>
                 <label style={lbl}>Source</label>
                 <select style={inp} value={source} onChange={e => setSource(e.target.value)}>
@@ -155,13 +155,16 @@ export default function NewLeadPage() {
               </div>
               <div>
                 <label style={lbl}>Status</label>
+                {/* No "Won" option here — a lead only becomes Won via the
+                    pipeline action (which stamps deal_reference/won_at) or
+                    automatically once its invoice is paid in full, never at
+                    creation (mirrors Api\*\LeadController::store()'s guard). */}
                 <select style={inp} value={status} onChange={e => setStatus(e.target.value)}>
                   <option value="new">New</option>
                   <option value="contacted">Contacted</option>
                   <option value="qualified">Qualified</option>
                   <option value="proposal">Proposal</option>
                   <option value="negotiation">Negotiation</option>
-                  <option value="won">Won</option>
                   <option value="lost">Lost</option>
                 </select>
               </div>
@@ -180,7 +183,7 @@ export default function NewLeadPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 18 }}>
               <div>
                 <label style={lbl}>Next Follow-up Date</label>
                 <input type="date" style={inp} value={followupDate} onChange={e => setFollowupDate(e.target.value)} />
@@ -196,9 +199,9 @@ export default function NewLeadPage() {
               <textarea style={{ ...inp, height: 96, resize: 'vertical' }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Additional context, meeting notes, etc." />
             </div>
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => router.back()} style={{ flex: 1, padding: '11px 0', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-              <button type="submit" disabled={saving} style={{ flex: 3, padding: '11px 0', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => router.back()} style={{ padding: '10px 22px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button type="submit" disabled={saving} style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
                 {saving ? 'Saving…' : 'Create Lead'}
               </button>
             </div>
