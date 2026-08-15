@@ -47,6 +47,18 @@ export const userProjectMessengerService = {
   eligibleParticipants: async (projectId: number): Promise<ProjectMessengerEligibleUser[]> =>
     (await api.get(`/user/projects/${projectId}/messenger/eligible-participants`)).data.data,
 
+  // This project's own Seller only — every active Project Manager at the
+  // company, whether or not they're already tied to this project (see
+  // Api\User\ProjectMessengerController::eligiblePms()).
+  eligiblePms: async (projectId: number): Promise<{ id: number; name: string }[]> =>
+    (await api.get(`/user/projects/${projectId}/messenger/eligible-pms`)).data.data,
+
+  // Adds the PM to the project's team AND this chat, and notifies them of
+  // both — see Api\User\ProjectMessengerController::invitePm().
+  invitePm: async (projectId: number, userId: number): Promise<void> => {
+    await api.post(`/user/projects/${projectId}/messenger/invite-pm`, { user_id: userId });
+  },
+
   addParticipant: async (projectId: number, userId: number): Promise<void> => {
     await api.post(`/user/projects/${projectId}/messenger/participants`, { user_id: userId });
   },
@@ -59,6 +71,10 @@ export const userProjectMessengerService = {
   messages: async (projectId: number): Promise<{ messages: ChatMessage[] }> =>
     (await api.get(`/user/projects/${projectId}/messenger/messages`)).data.data,
 
+  // Whether the message ends up visible to the project's Client is computed
+  // server-side from who's sending and whether they @mentioned anyone (see
+  // Api\User\ProjectMessengerController::send()) — there's no client-side
+  // toggle for it.
   send: async (
     projectId: number, content: string, mentions: number[], file?: File | null
   ): Promise<ChatMessage> => {
@@ -113,6 +129,10 @@ export const adminProjectMessengerService = {
   messages: async (projectId: number): Promise<{ messages: ChatMessage[] }> =>
     (await api.get(`/admin/projects/${projectId}/messenger/messages`)).data.data,
 
+  // Whether the message ends up visible to the project's Client is computed
+  // server-side from whether Company Admin @mentioned anyone (see
+  // Api\Admin\ProjectMessengerController::send()) — there's no client-side
+  // toggle for it.
   send: async (
     projectId: number, content: string, mentions: number[], file?: File | null
   ): Promise<ChatMessage> => {

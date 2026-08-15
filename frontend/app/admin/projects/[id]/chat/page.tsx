@@ -176,16 +176,6 @@ export default function AdminProjectChatPage() {
           padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#64748b',
         }}>← Back</button>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Chat{projectName && ` — ${projectName}`}</h2>
-        {clientId && (
-          // THIS project's own client conversation (the "Project Chat" tab the
-          // client sees in their portal) — not the account-level Client
-          // Messages thread it used to open, which was shared across all of
-          // that client's projects. See App\Services\ProjectClientChatService.
-          <button onClick={() => router.push(`/admin/projects/${id}/client-chat`)} title="Open this project's chat with the client" style={{
-            marginLeft: 'auto', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8,
-            padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#2563eb',
-          }}>💬 Chat with Client</button>
-        )}
       </div>
 
       <ProjectTabs projectId={projectId} active="chat" isDraft={isDraft} />
@@ -284,6 +274,9 @@ export default function AdminProjectChatPage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
                           <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{fmtShort(m.sent_at)}{m.edited_at && ' (edited)'}</span>
+                          {!m.is_deleted && m.visibility === 'client' && (
+                            <span title="The client can see this message" style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '1px 7px' }}>👁 Client</span>
+                          )}
                           {!m.is_deleted && isMine && editingMessageId !== m.id && m.message_type === 'text' && (
                             <button onClick={() => startEdit(m)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Edit</button>
                           )}
@@ -323,7 +316,7 @@ export default function AdminProjectChatPage() {
                     <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                       onChange={e => { setFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
                   </label>
-                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : 'Type a message… use @ to mention'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
+                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : clientId ? 'Type a message… the client sees it unless you @mention someone' : 'Type a message… use @ to mention'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
                   <button type="submit" disabled={sending || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : (sending ? '#93c5fd' : '#2563eb'), color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (sending ? 'wait' : 'pointer') }}>Send</button>
                 </div>
               </form>

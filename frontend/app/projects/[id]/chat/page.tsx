@@ -54,6 +54,7 @@ export default function ProjectChatPage() {
   // by itself once the project is activated.
   const [isDraft, setIsDraft] = useState(false);
   const [clientId, setClientId] = useState<number | null>(null);
+  const [sellerId, setSellerId] = useState<number | null>(null);
   const [thread, setThread] = useState<ProjectMessengerThread | null>(null);
   const [canManageParticipants, setCanManageParticipants] = useState(false);
   // Literal PM only. Delegated participant managers still cannot @mention a
@@ -73,8 +74,13 @@ export default function ProjectChatPage() {
   const [selectedMentions, setSelectedMentions] = useState<number[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
+  const [showInvitePm, setShowInvitePm] = useState(false);
+  const [eligiblePms, setEligiblePms] = useState<{ id: number; name: string }[]>([]);
+  const [invitePmId, setInvitePmId] = useState('');
+  const [invitingPm, setInvitingPm] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fetchedEligibleRef = useRef(false);
+  const fetchedEligiblePmsRef = useRef(false);
 
   const loadMessages = () => {
     userProjectMessengerService.messages(projectId).then(r => setMessages(r.messages)).catch(() => {});
@@ -98,7 +104,13 @@ export default function ProjectChatPage() {
 
   useEffect(() => {
     loadThread();
-    userProjectService.getOne(projectId).then(p => { setProjectName(p.name); setClientId(p.client_id); setIsDraft(p.status === 'draft'); }).catch(() => {});
+    userProjectService.getOne(projectId).then(p => {
+      setProjectName(p.name);
+      setClientId(p.client_id);
+      setIsDraft(p.status === 'draft');
+      const seller = p.seller_id;
+      setSellerId(seller == null ? null : (typeof seller === 'object' ? seller.id : seller));
+    }).catch(() => {});
     const interval = setInterval(() => { loadThread(); }, 8000);
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -127,6 +139,28 @@ export default function ProjectChatPage() {
   const toggleMute = async () => {
     try { await userProjectMessengerService.toggleMute(projectId); loadThread(); }
     catch { toast.error('Failed to update mute state'); }
+  };
+
+  const toggleInvitePm = () => {
+    setShowInvitePm(v => !v);
+    if (!fetchedEligiblePmsRef.current) {
+      fetchedEligiblePmsRef.current = true;
+      userProjectMessengerService.eligiblePms(projectId).then(setEligiblePms).catch(() => {});
+    }
+  };
+
+  const invitePm = async () => {
+    if (!invitePmId) return;
+    setInvitingPm(true);
+    try {
+      await userProjectMessengerService.invitePm(projectId, Number(invitePmId));
+      toast.success('Project Manager invited');
+      setInvitePmId('');
+      setShowInvitePm(false);
+      loadThread();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to invite Project Manager'));
+    } finally { setInvitingPm(false); }
   };
 
   const send = async (e: React.FormEvent) => {
@@ -204,17 +238,23 @@ export default function ProjectChatPage() {
   // Mirrors send()'s mention rule exactly, so the suggestion list never
   // offers a tag the server would silently drop: a Seller can only ever
   // successfully tag the literal PM or Company Admin (never the rest of the
-  // team); everyone else can tag anyone EXCEPT a Seller, unless they're the
-  // literal PM. Company Admin is never a real chat_participants row, so it's
-  // added as a synthetic candidate (id 0, matching send()'s
-  // ADMIN_MENTION_ID) rather than coming from `thread.participants`.
+  // team, never the Client); everyone else can tag anyone EXCEPT a Seller or
+  // the Client, unless they're the literal PM (the only one who can tag
+  // either — tagging the Client is what promotes a PM's message to
+  // visibility='client', see send()). Company Admin is never a real
+  // chat_participants row, so it's added as a synthetic candidate (id 0,
+  // matching send()'s ADMIN_MENTION_ID) rather than coming from
+  // `thread.participants`.
   const meIsSeller = me?.role_type === 'seller';
+  // Only this project's own linked Seller may invite a PM here — matches
+  // Api\User\ProjectMessengerController::invitePm()'s own gate exactly.
+  const isProjectSeller = meIsSeller && sellerId != null && me?.id === sellerId;
   const ADMIN_MENTION_ID = 0;
   const mentionCandidates = (query: string) => {
     const q = query.toLowerCase();
     const staff = (thread?.participants ?? []).filter(p =>
       p.user_id !== me?.id
-      && (meIsSeller ? !!p.is_project_pm : (isLiteralPm || p.role !== 'seller'))
+      && (meIsSeller ? !!p.is_project_pm : (isLiteralPm || (p.role !== 'seller' && p.role !== 'client')))
       && p.name?.toLowerCase().includes(q)
     );
     const admin: ProjectMessengerParticipant = { user_id: ADMIN_MENTION_ID, name: 'Company Admin', role: null };
@@ -238,16 +278,6 @@ export default function ProjectChatPage() {
           padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#64748b',
         }}>← Back</button>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Chat{projectName && ` — ${projectName}`}</h2>
-        {clientId && (
-          // THIS project's own client conversation (the "Project Chat" tab the
-          // client sees in their portal) — not the account-level Client
-          // Messages thread it used to open, which was shared across all of
-          // that client's projects. See App\Services\ProjectClientChatService.
-          <button onClick={() => router.push(`/projects/${id}/client-chat`)} title="Open this project's chat with the client" style={{
-            marginLeft: 'auto', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8,
-            padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#2563eb',
-          }}>💬 Chat with Client</button>
-        )}
       </div>
 
       <div style={{ height: 'calc(100vh - 220px)', minHeight: 420 }}>
@@ -270,15 +300,35 @@ export default function ProjectChatPage() {
                   {canManageParticipants && (
                     <button onClick={() => setShowParticipants(v => !v)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 12px', fontSize: 11.5, color: '#64748b', cursor: 'pointer' }}>Participants</button>
                   )}
+                  {isProjectSeller && (
+                    <button onClick={toggleInvitePm} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 12px', fontSize: 11.5, color: '#64748b', cursor: 'pointer' }}>+ Invite PM</button>
+                  )}
                   <button onClick={toggleMute} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 12px', fontSize: 11.5, color: '#64748b', cursor: 'pointer' }}>
                     {thread.is_muted ? '🔔 Unmute' : '🔕 Mute'}
                   </button>
                 </div>
               </div>
 
+              {isProjectSeller && showInvitePm && (
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select value={invitePmId} onChange={e => setInvitePmId(e.target.value)} style={{ ...inp, fontSize: 12 }}>
+                      <option value="">Select a Project Manager…</option>
+                      {eligiblePms.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <button onClick={invitePm} disabled={invitingPm || !invitePmId} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: invitingPm || !invitePmId ? 'not-allowed' : 'pointer', flexShrink: 0, opacity: invitingPm || !invitePmId ? 0.6 : 1 }}>Invite</button>
+                  </div>
+                  {eligiblePms.length === 0 && (
+                    <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 6 }}>No active Project Managers found at your company.</div>
+                  )}
+                </div>
+              )}
+
               {me?.role_type === 'seller' && (
                 <div style={{ padding: '8px 20px', fontSize: 11.5, color: '#b45309', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
-                  You only see messages Company Admin or the Project Manager tag you in, plus your own messages.
+                  You only see your own messages, plain messages from Company Admin, anything Admin tags you or the Project Manager in, and anything the Project Manager tags you in — never the rest of the team.
                 </div>
               )}
 
@@ -355,6 +405,9 @@ export default function ProjectChatPage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
                           <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{fmtShort(m.sent_at)}{m.edited_at && ' (edited)'}</span>
+                          {!m.is_deleted && m.visibility === 'client' && (
+                            <span title="The client can see this message" style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '1px 7px' }}>👁 Client</span>
+                          )}
                           {!m.is_deleted && isMine && editingMessageId !== m.id && (
                             <>
                               {m.message_type === 'text' && (
@@ -398,7 +451,7 @@ export default function ProjectChatPage() {
                     <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
                       onChange={e => { setFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
                   </label>
-                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : 'Type a message… use @ to mention'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
+                  <input value={text} onChange={e => onTextChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Chat opens up once the project is activated' : clientId ? 'Type a message… the client sees it unless you @mention someone' : 'Type a message… use @ to mention'} style={{ ...inp, borderRadius: 20, flex: 1, background: isDraft ? '#f8fafc' : '#fff' }} />
                   <button type="submit" disabled={sending || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : (sending ? '#93c5fd' : '#2563eb'), color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (sending ? 'wait' : 'pointer') }}>Send</button>
                 </div>
               </form>

@@ -630,9 +630,14 @@ export default function UserProjectDetailPage() {
           </div>
           <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
             {/* The Seller side has no tab strip — this button is its Chat
-                tab, so it locks on a draft like the Admin tabs do. */}
+                tab, so it locks on a draft like the Admin tabs do. Project
+                Chat now includes the project's Client (via a "Visible to
+                client" toggle on each message) — the separate "Chat with
+                Client" conversation this used to route Sellers to is retired
+                (its old data stays intact for history, just no longer
+                linked from anywhere). */}
             <button
-              onClick={() => !isDraft && router.push(isSeller ? `/projects/${id}/client-chat` : `/projects/${id}/chat`)}
+              onClick={() => !isDraft && router.push(`/projects/${id}/chat`)}
               disabled={isDraft}
               title={isDraft ? DRAFT_HINT : undefined}
               style={{
@@ -640,7 +645,7 @@ export default function UserProjectDetailPage() {
                 color: isDraft ? '#cbd5e1' : '#2563eb', fontSize: 13, fontWeight: 600,
                 cursor: isDraft ? 'not-allowed' : 'pointer',
               }}>
-              {isSeller ? 'Chat with Client' : 'Chat'}
+              Chat
             </button>
             <ProjectLifecycleActions
               projectId={id}

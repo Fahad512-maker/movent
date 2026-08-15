@@ -287,8 +287,14 @@ export interface ChatMessage {
   thread_id: number;
   content: string | null;
   message_type: 'text' | 'file' | 'image' | 'system';
-  // 'internal' = team-only (budget/costing/deliverable talk); 'client' = also
-  // visible to a Seller who only has "linked project chat" access.
+  // 'internal' = team-only; 'client' = also shown to the project's Client in
+  // their portal (Api\Client\ProjectChatController), if one is a participant
+  // of this thread (see ProjectChatService::addClient()). Only meaningful on
+  // the project-wise messenger (Api\*\ProjectMessengerController), where it's
+  // computed server-side, not chosen by the sender: a plain, untagged
+  // message from Company Admin or the project's own Seller is 'client';
+  // @mentioning someone (or being sent by anyone else) makes it 'internal'.
+  // Always 'client' on messages the Client themselves sends.
   visibility: 'internal' | 'client';
   attachment_path: string | null;
   attachment_name: string | null;
