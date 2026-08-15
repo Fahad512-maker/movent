@@ -9,6 +9,7 @@ use App\Models\ChatParticipant;
 use App\Models\ChatThread;
 use App\Models\Notification;
 use App\Models\Project;
+use App\Models\ProjectTeamMember;
 use App\Models\User;
 use App\Models\UserCompanyPermission;
 use App\Services\NotificationService;
@@ -38,15 +39,46 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 // PM/Admin — before they can see or send anything; they can never cause the
 // thread to be created themselves.
 //
-// Seller visibility (see canUserViewMessage()): a Seller sitting in the same
-// thread as the rest of the team does NOT see the general conversation —
-// only their own messages and any message where Company Admin/PM explicitly
-// @mentions them. Conversely, a Seller's own message is only ever visible
-// to Company Admin/PM, never the rest of the team. Only Company Admin/PM
-// can successfully @mention a Seller (see send()) — anyone else's attempt is
-// silently dropped, same convention as mentioning a non-participant. A
-// Seller CAN always successfully @mention Company Admin (ADMIN_MENTION_ID)
-// or the literal PM — those are the only two targets available to them.
+// Visibility rules (see canUserViewMessage() for the authoritative logic —
+// this is the summary). Five roles share this one thread: Company Admin
+// (unrestricted, separate controller — sees and can @mention everyone),
+// the literal PM, the Seller, the Client, and the wider team (Developer/QA/
+// Designer/Production/plain Team Member). Only the literal PM and Company
+// Admin can @mention a Seller or the Client — everyone else (Seller, team
+// member) can only ever successfully @mention the literal PM or Company
+// Admin (ADMIN_MENTION_ID); any other tag attempt is silently dropped, same
+// convention as mentioning a non-participant (see send()).
+//
+//   - The Seller sees only their own messages, any visibility='client'
+//     message (see below), and anything Company Admin/the PM explicitly
+//     @mentions them in — never the wider team's chatter, and never a plain
+//     team member's message. A Seller's own message is symmetrically only
+//     ever visible to Company Admin/the PM (plus the Client, if promoted to
+//     visibility='client').
+//   - The Client only ever sees visibility='client' messages — a manual
+//     toggle no longer exists; it's derived automatically (see send()): the
+//     Seller's or Company Admin's own plain, untagged message is promoted
+//     automatically (that's them "talking to the Client"), and so is the PM
+//     explicitly @mentioning the Client (the only way a PM message ever
+//     reaches them). Any other tagging (Admin tagging the Seller, the Seller
+//     tagging Admin/PM) stays a targeted internal exchange the Client never
+//     sees.
+//   - The literal PM is this thread's hub: sees Company Admin's messages and
+//     every plain team member's message unconditionally, but a Seller's or
+//     Client's message only if explicitly @mentioned in it (same restriction
+//     as everyone else outside that pair).
+//   - A plain team member has the narrowest sight of all: only their own
+//     messages, the PM's plain/untagged broadcasts, and anything that
+//     explicitly @mentions them — never Company Admin's general messages,
+//     another team member's messages, or a Seller's/Client's. Symmetrically,
+//     a team member's own message (plain, or @mentioning the PM) is only
+//     ever visible to the PM (and Company Admin) — never the rest of the
+//     team, the Seller, or the Client.
+//
+// Any newly-joining team member (PM included — see invitePm()) also never
+// sees the conversation from before they joined — see
+// ProjectChatService::addTeamMember()/addTaskAssignee() and the
+// history_from_message_id cutoff enforced in messages()/downloadAttachment().
 class ProjectMessengerController extends Controller
 {
     private const MAX_FILE_KB = 10240;
@@ -74,8 +106,24 @@ class ProjectMessengerController extends Controller
             ->exists();
     }
 
+    // Company Admin and the Client have their own guards/controllers for
+    // chat (this one is staff/sub-user-only) — but /user/* routes only check
+    // `auth:sanctum` (see config/auth.php: the 'client' portal login is a
+    // real `users` row authenticating through the SAME sanctum guard, unlike
+    // Admin's separate 'admin' guard), so nothing stops a Client's own valid
+    // token from otherwise reaching this controller directly. Now that a
+    // Client can be a genuine chat_participants row on this thread (see
+    // ProjectChatService::addClient()), that gap would let them bypass the
+    // visibility='client' filtering Api\Client\ProjectChatController enforces
+    // and read the team's internal messages outright. Hard-blocked here,
+    // once, at the one method every other method in this controller calls
+    // first.
     private function project(int $projectId): Project
     {
+        if ($this->user()->role_type === 'client') {
+            abort(403, 'Clients cannot access the internal project chat.');
+        }
+
         return Project::where('company_id', $this->user()->company_id)->findOrFail($projectId);
     }
 
@@ -125,11 +173,23 @@ class ProjectMessengerController extends Controller
     }
 
     // Advanced "Manage Project Chat Participants" works as a real delegated
-    // permission. PM-tier can manage implicitly; other staff must already be
-    // in the chat, so the key cannot become company-wide project access.
+    // permission. A company-wide overseer (canViewAllCompanyProjects, but
+    // NOT this project's own literal PM) can manage implicitly; other staff
+    // must already be in the chat, so the key cannot become company-wide
+    // project access.
     private function canManageParticipants(Project $project): bool
     {
         if ($this->user()->role_type === 'seller' || !$this->can('canManageProjectChatParticipants')) {
+            return false;
+        }
+
+        // The literal PM manages this project's PEOPLE via "Manage Team"
+        // instead — assignTeam() already syncs each addition into this same
+        // chat (ProjectChatService::addTeamMember()), and removing someone
+        // from the team drops their chat access too
+        // (removeParticipantIfNoLongerEligible()). Participants here is for
+        // a company-wide overseer who isn't actually this project's PM.
+        if ($this->isLiteralPm($project)) {
             return false;
         }
 
@@ -198,22 +258,111 @@ class ProjectMessengerController extends Controller
     //     isn't actually this project's PM still can't see/tag a Seller).
     private function canUserViewMessage(Project $project, ChatMessage $message, int $userId, ?string $roleType): bool
     {
+        // The Client is never actually evaluated by messages()'s filter —
+        // Api\User\ProjectMessengerController::project() hard-blocks
+        // role_type='client' outright — but notifyMessage() DOES call this
+        // per recipient, and the Client is now a genuine participant (see
+        // ProjectChatService::addClient()). Without this, every internal
+        // message would ping them with a "new message" notification
+        // regardless of visibility — not a content leak, but noise that
+        // reveals the team is discussing something. Only a
+        // visibility='client' message should ever reach them, mentioned or
+        // not (mentioning the Client does NOT override visibility the way
+        // it does for a Seller above — visibility is the one deliberate gate
+        // here, not an accident of who got tagged).
+        if ($roleType === 'client') {
+            return $message->visibility === 'client';
+        }
+
         if ($roleType === 'seller') {
             if ($message->sender_id === $userId) {
                 return true;
             }
-            $senderIsPrivileged = $message->sender_admin_id !== null
-                || ($message->sender_id !== null && $this->isProjectPmUser($project, $message->sender_id));
 
-            return $senderIsPrivileged && in_array($userId, $message->mentions ?? [], true);
+            // A visibility='client' message is, by construction, either
+            // Company Admin's or this Seller's own untagged broadcast (see
+            // send()) — meant for the Seller and the Client alike, no
+            // tagging required.
+            if ($message->visibility === 'client') {
+                return true;
+            }
+
+            $senderIsAdmin = $message->sender_admin_id !== null;
+            $senderIsPm = $message->sender_id !== null && $this->isProjectPmUser($project, $message->sender_id);
+
+            if (!$senderIsAdmin && !$senderIsPm) {
+                return false;
+            }
+
+            $mentions = $message->mentions ?? [];
+
+            if (in_array($userId, $mentions, true)) {
+                return true;
+            }
+
+            // Admin tagging the project's own PM is itself Seller-relevant —
+            // Admin/Seller/PM is one triangle, so the Seller sees it too even
+            // though only the PM was named (this can only be Admin's doing:
+            // the Seller's own message already returned true above, and the
+            // PM tagging themselves isn't a thing).
+            if ($senderIsAdmin && collect($mentions)->contains(
+                fn ($id) => $id !== self::ADMIN_MENTION_ID && $this->isProjectPmUser($project, $id)
+            )) {
+                return true;
+            }
+
+            // The PM's own plain, untagged message is NOT Seller-visible —
+            // unlike Admin's/the Seller's own untagged broadcast, it's meant
+            // for the wider team instead (a Developer/QA/Designer/plain team
+            // member sees any of the PM's plain messages by default — see
+            // below). The Seller is the one deliberate exception here, same
+            // as never seeing the rest of the team's general chatter.
+            return false;
         }
 
+        // Everyone else here is either the literal PM or a plain team member
+        // (Developer/QA/Designer/Production/Team Member) — Company Admin
+        // never reaches this method (separate, unrestricted controller).
+        if ($message->sender_id === $userId) {
+            return true;
+        }
+
+        if (in_array($userId, $message->mentions ?? [], true)) {
+            return true;
+        }
+
+        // A Seller-authored or Client-authored message is never broadcast to
+        // the wider team, and the literal PM isn't privileged here either —
+        // they only see one if explicitly @mentioned in it (handled above),
+        // same as anyone else. Company Admin is the only one who sees it
+        // unconditionally. The Seller's own branch above already covers them
+        // seeing a Client's message via the visibility='client' check, so
+        // this only gates everyone else.
         $senderIsSeller = $message->sender?->role_type === 'seller';
-        if ($senderIsSeller) {
-            return $this->isProjectPmUser($project, $userId);
+        $senderIsClient = $message->sender?->role_type === 'client';
+        if ($senderIsSeller || $senderIsClient) {
+            return false;
         }
 
-        return true;
+        if ($this->isProjectPmUser($project, $userId)) {
+            // The literal PM is the hub for the whole team: sees Company
+            // Admin's broadcasts and every team member's messages
+            // unconditionally (own-message/tagged already handled above;
+            // only a Seller's/Client's message ever requires a tag, per the
+            // check just above).
+            return true;
+        }
+
+        // A plain team member's only default view of someone ELSE's message
+        // (own and tagged are already handled above) is the project's own
+        // PM's plain, untagged broadcast — never Company Admin's general
+        // messages, and never another team member's messages. A team
+        // member's OWN message is symmetric: only the PM (and Admin) ever
+        // see it, plain or @mentioning the PM, never the rest of the team —
+        // enforced by this same rule from the other viewer's perspective.
+        $senderIsPm = $message->sender_id !== null && $this->isProjectPmUser($project, $message->sender_id);
+
+        return $senderIsPm && empty($message->mentions ?? []);
     }
 
     // The one place PM-tier vs everyone-else access diverges. PM-tier can
@@ -274,10 +423,37 @@ class ProjectMessengerController extends Controller
         // cause OTHER people to be added, only their own access is at stake.
         if ($this->isPM($project)) {
             ProjectChatService::syncFormalTeamParticipants($project, $thread);
+
+            // Same "PM/Admin-tier viewer syncs it" convention — brings the
+            // project's Client into this SAME thread the first time a PM/
+            // Admin opens it, instead of the separate "Chat with Client"
+            // thread (retired, but its data stays intact for history — see
+            // Api\Client\ProjectChatController). A Client here only ever
+            // sees visibility='client' messages; being a participant is what
+            // lets them be @mentioned and receive notifications, not a
+            // license to read the internal thread.
+            $clientUserId = \App\Services\ProjectClientChatService::clientUserId($project);
+            if ($clientUserId) {
+                ProjectChatService::addClient($project, $clientUserId);
+            }
         }
 
         $thread->load('participants.user:id,name,role_type');
         $mine = $thread->participants->firstWhere('user_id', $this->user()->id);
+
+        // A plain team member (Developer/QA/Designer/Production/Team
+        // Member) only ever sees fellow team members and the PM in "who's in
+        // this chat" — never the Seller or the Client — mirroring
+        // canUserViewMessage()'s isolation of them from the rest of the
+        // triangle. The Seller and the literal PM still see everyone (not
+        // requested to change here).
+        $visibleParticipants = $thread->participants;
+        if ($this->user()->role_type !== 'seller' && !$this->isLiteralPm($project)) {
+            $visibleParticipants = $visibleParticipants->filter(fn ($p) =>
+                $p->user_id === $this->user()->id
+                || !in_array($p->user?->role_type, ['seller', 'client'], true)
+            )->values();
+        }
 
         return ApiResponse::success([
             'is_pm'  => $this->isPM($project),
@@ -297,7 +473,7 @@ class ProjectMessengerController extends Controller
                 // than guessing off role_type (a user's role_type can say
                 // 'project_manager' without being THIS project's assigned
                 // manager, or vice versa).
-                'participants' => $thread->participants->map(fn ($p) => [
+                'participants' => $visibleParticipants->map(fn ($p) => [
                     'user_id' => $p->user_id, 'name' => $p->user?->name, 'role' => $p->user?->role_type,
                     'is_project_pm' => $this->isProjectPmUser($project, $p->user_id),
                 ])->values(),
@@ -335,6 +511,101 @@ class ProjectMessengerController extends Controller
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'role_type' => $u->role_type, 'is_seller' => $u->role_type === 'seller']);
 
         return ApiResponse::success($users->values());
+    }
+
+    // GET /user/projects/{projectId}/messenger/eligible-pms — this project's
+    // own Seller only. Every active Project Manager at the company, so the
+    // Seller can bring one onto a project that doesn't have one yet (not
+    // scoped to "already tied to the project" the way eligibleParticipants()
+    // is — that's the whole point of an invite).
+    public function eligiblePms(int $projectId): JsonResponse
+    {
+        $project = $this->project($projectId);
+        $user = $this->user();
+
+        if ($user->role_type !== 'seller' || $project->seller_id !== $user->id) {
+            return ApiResponse::error('Only this project\'s Seller can invite a Project Manager.', 403);
+        }
+
+        $users = User::where('company_id', $project->company_id)
+            ->where('role_type', 'project_manager')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return ApiResponse::success($users);
+    }
+
+    // POST /user/projects/{projectId}/messenger/invite-pm { user_id } — this
+    // project's own Seller only. Brings a company Project Manager onto the
+    // project as a real team member (role_in_project='project_manager') —
+    // which is what isProjectPmUser()/invitablePmIds() actually key off, not
+    // projects.project_manager_id — so they're immediately recognized
+    // everywhere that matters (canUserViewMessage()'s Seller-triangle rule,
+    // @mention eligibility, the Client's own mentionable list). Also joins
+    // them into this thread directly, but ONLY from this point forward
+    // (ProjectChatService::addTeamMember()'s "from now" cutoff, same as any
+    // other new team member) — an invited PM never sees the conversation
+    // that happened before they joined, only messages sent after
+    // (messages()/downloadAttachment() enforce the cutoff) plus whatever
+    // tags them, which can only ever be a post-join message anyway
+    // (mentioning someone requires them to already be a participant).
+    // Idempotent: re-inviting an already-team PM is a no-op beyond confirming
+    // their role, same convention as ProjectChatService::addParticipant() —
+    // their existing history window is never narrowed by a second invite.
+    public function invitePm(Request $request, int $projectId): JsonResponse
+    {
+        $project = $this->project($projectId);
+        $user = $this->user();
+
+        if ($user->role_type !== 'seller' || $project->seller_id !== $user->id) {
+            return ApiResponse::error('Only this project\'s Seller can invite a Project Manager.', 403);
+        }
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+        ]);
+        $pmId = (int) $validated['user_id'];
+
+        $pm = User::where('id', $pmId)
+            ->where('company_id', $project->company_id)
+            ->where('role_type', 'project_manager')
+            ->where('is_active', true)
+            ->first();
+
+        if (!$pm) {
+            return ApiResponse::error('That user is not an active Project Manager at your company.', 422);
+        }
+
+        $existingPm = $project->teamMembers()->where('role_in_project', 'project_manager')->first();
+        if ($existingPm && $existingPm->user_id !== $pmId) {
+            return ApiResponse::error('This project already has a Project Manager — remove them from the team first.', 422);
+        }
+
+        $wasAlreadyOnTeam = $project->teamMembers()->where('user_id', $pmId)->exists();
+
+        ProjectTeamMember::updateOrCreate(
+            ['project_id' => $project->id, 'user_id' => $pmId],
+            ['role_in_project' => 'project_manager', 'assigned_by' => $user->id]
+        );
+
+        if (!$wasAlreadyOnTeam) {
+            Notification::create([
+                'user_id'    => $pmId,
+                'company_id' => $project->company_id,
+                'type'       => 'project_team_assigned',
+                'title'      => 'Added to project team',
+                'body'       => "{$user->name} added you to project \"{$project->name}\" as Project Manager.",
+                'data'       => ['project_id' => $project->id, 'link' => "/projects/{$project->id}"],
+            ]);
+        }
+
+        // Idempotent — also fires its own 'project_chat_added' notification,
+        // but only the first time (wasRecentlyCreated), same as re-running
+        // syncFormalTeamParticipants() on an existing member.
+        ProjectChatService::addTeamMember($project, $pmId);
+
+        return ApiResponse::success(null, 'Project Manager invited');
     }
 
     // POST /user/projects/{projectId}/messenger/participants { user_id } — PM/Admin only.
@@ -418,6 +689,14 @@ class ProjectMessengerController extends Controller
             return ApiResponse::error('You do not have access to project chat.', 403);
         }
 
+        // Any newly-joined team member (ProjectChatService::addTeamMember()/
+        // addTaskAssignee()) carries a history_from_message_id watermark —
+        // an existing, already-in-the-chat participant's is
+        // null (full history), so this is a no-op for them.
+        $myHistoryFrom = ChatParticipant::where('thread_id', $thread->id)
+            ->where('user_id', $user->id)
+            ->value('history_from_message_id');
+
         $messages = ChatMessage::where('thread_id', $thread->id)
             ->where('is_deleted', false)
             ->with(['sender:id,name,role_type', 'senderAdmin:id,name'])
@@ -425,6 +704,7 @@ class ProjectMessengerController extends Controller
             ->get()
             // The Seller isolation rule — see canUserViewMessage().
             ->filter(fn ($m) => $this->canUserViewMessage($project, $m, $user->id, $user->role_type))
+            ->filter(fn ($m) => $myHistoryFrom === null || $m->id > $myHistoryFrom)
             ->values();
 
         ChatParticipant::where('thread_id', $thread->id)->where('user_id', $user->id)->update(['last_read_at' => now()]);
@@ -467,34 +747,45 @@ class ProjectMessengerController extends Controller
 
         // Mention candidates are restricted to the thread's current
         // participants (plus the ADMIN_MENTION_ID sentinel, always allowed
-        // for everyone), with two direction-specific rules matching the
-        // "Seller only ever talks to Company Admin/PM" restriction:
-        //   - Only Company Admin/the literal PM can successfully @mention a
-        //     Seller — deliberately isLiteralPm(), NOT the broader isPM()
-        //     tier, so a canViewAllCompanyProjects holder who isn't actually
-        //     this project's PM still can't tag a Seller (this is also the
-        //     ONLY way a Seller ever sees a message outside their own — see
-        //     canUserViewMessage()).
-        //   - A Seller can only ever successfully @mention the literal PM or
-        //     Company Admin — never a Developer/Designer/QA/Production/Team
-        //     Member.
-        // Anyone else's tag attempt is silently dropped, same convention as
-        // mentioning a non-participant.
+        // for everyone). One rule covers every non-PM sender — Seller,
+        // Client-facing-triangle aside, or a plain team member
+        // (Developer/QA/Designer/Production/Team Member): they may only ever
+        // successfully @mention the literal PM (or Company Admin, via the
+        // sentinel) — never a Seller, never the Client, never each other.
+        // This is deliberately isLiteralPm(), NOT the broader isPM() tier, so
+        // a canViewAllCompanyProjects holder who isn't actually this
+        // project's PM still can't tag a Seller/Client either (this is also
+        // the ONLY way a Seller/team member ever sees a message outside
+        // their own — see canUserViewMessage()). Only the literal PM is
+        // unrestricted — they can @mention anyone, including the Client,
+        // which is the ONLY way a PM message ever reaches the Client (see
+        // this method's own visibility computation below). Anyone else's tag
+        // attempt is silently dropped, same convention as mentioning a
+        // non-participant.
         $isSenderLiteralPm = $this->isLiteralPm($project);
         $isSenderSeller = $user->role_type === 'seller';
         $participantIds = ChatParticipant::where('thread_id', $thread->id)->pluck('user_id');
         $mentions = collect($validated['mentions'] ?? [])->unique()
             ->filter(fn ($id) => $id === self::ADMIN_MENTION_ID || $participantIds->contains($id))
-            ->reject(function ($id) use ($isSenderLiteralPm, $isSenderSeller, $project) {
-                if ($id === self::ADMIN_MENTION_ID) {
+            ->reject(function ($id) use ($isSenderLiteralPm, $project) {
+                if ($id === self::ADMIN_MENTION_ID || $isSenderLiteralPm) {
                     return false;
                 }
-                if ($isSenderSeller) {
-                    return !$this->isProjectPmUser($project, $id);
-                }
-                return !$isSenderLiteralPm && User::find($id)?->role_type === 'seller';
+                return !$this->isProjectPmUser($project, $id);
             })
             ->values();
+
+        // Auto-computed visibility, replacing the old manual "visible to
+        // client" toggle — see the class-level doc comment above. This
+        // project's own Seller sending a plain, untagged message gets the
+        // promotion (Admin's side is handled identically in
+        // Api\Admin\ProjectMessengerController::send()); so does the PM
+        // explicitly @mentioning the Client — the only other way a message
+        // in this thread is ever meant to reach them.
+        $isProjectSeller = $isSenderSeller && $user->id === $project->seller_id;
+        $clientUserId = \App\Services\ProjectClientChatService::clientUserId($project);
+        $taggedClient = $clientUserId !== null && $mentions->contains($clientUserId);
+        $visibility = (($isProjectSeller && $mentions->isEmpty()) || $taggedClient) ? 'client' : 'internal';
 
         $attachmentPath = null;
         $attachmentName = null;
@@ -514,6 +805,7 @@ class ProjectMessengerController extends Controller
             'content'      => $validated['content'] ?? null,
             'mentions'     => $mentions->isNotEmpty() ? $mentions->all() : null,
             'message_type' => $messageType,
+            'visibility'   => $visibility,
             'attachment_path' => $attachmentPath,
             'attachment_name' => $attachmentName,
             'sent_at'      => now(),
@@ -602,6 +894,13 @@ class ProjectMessengerController extends Controller
             abort(403, 'You do not have access to this message.');
         }
 
+        $myHistoryFrom = ChatParticipant::where('thread_id', $thread->id)
+            ->where('user_id', $this->user()->id)
+            ->value('history_from_message_id');
+        if ($myHistoryFrom !== null && $message->id <= $myHistoryFrom) {
+            abort(403, 'You do not have access to this message.');
+        }
+
         return Storage::download($message->attachment_path, $message->attachment_name ?? 'attachment');
     }
 
@@ -671,6 +970,14 @@ class ProjectMessengerController extends Controller
                 continue;
             }
 
+            // Being @mentioned never overrides visibility for the Client
+            // (unlike the Seller-isolation rule above, where a mention IS the
+            // override) — tagging them in an internal message shouldn't ping
+            // them about a message they still can't actually see.
+            if (User::find($uid)?->role_type === 'client' && $message->visibility !== 'client') {
+                continue;
+            }
+
             Notification::create([
                 'user_id'    => $uid,
                 'company_id' => $project->company_id,
@@ -678,6 +985,38 @@ class ProjectMessengerController extends Controller
                 'title'      => "You were mentioned on {$project->name}",
                 'body'       => "{$senderName}: {$preview}",
                 'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => "/projects/{$project->id}/chat"],
+            ]);
+        }
+
+        // The project's own Seller sending a plain, untagged message is
+        // auto-promoted to visibility='client' (see send()) — Company Admin
+        // isn't a chat_participants row so the recipients loop above never
+        // reaches them; this is the one path that actually notifies Admin
+        // for it, mirroring the explicit ADMIN_MENTION_ID branch above for
+        // the tagged case.
+        if ($message->visibility === 'client' && $message->sender?->role_type === 'seller') {
+            NotificationService::notifyCompanyAdmins($project->company_id, null, [
+                'type'  => 'project_chat_message',
+                'title' => "New message on {$project->name}",
+                'body'  => "{$senderName}: {$preview}",
+                'url'   => "/admin/projects/{$project->id}/chat",
+            ]);
+        }
+
+        // A message from the project's own literal PM — plain, or tagging
+        // the Seller — is always meant to reach Company Admin too, same
+        // reasoning as the Seller block above: Admin has no chat_participants
+        // row so the recipients loop never reaches them. Skipped only when
+        // Admin was already tagged explicitly in this message — that already
+        // fired its own notification via the ADMIN_MENTION_ID branch above.
+        if ($message->sender_id !== null
+            && $this->isProjectPmUser($project, $message->sender_id)
+            && !collect($mentionIds ?? [])->contains(self::ADMIN_MENTION_ID)) {
+            NotificationService::notifyCompanyAdmins($project->company_id, null, [
+                'type'  => 'project_chat_message',
+                'title' => "New message on {$project->name}",
+                'body'  => "{$senderName}: {$preview}",
+                'url'   => "/admin/projects/{$project->id}/chat",
             ]);
         }
     }

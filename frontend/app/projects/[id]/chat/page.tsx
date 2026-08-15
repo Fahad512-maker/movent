@@ -236,15 +236,15 @@ export default function ProjectChatPage() {
   };
 
   // Mirrors send()'s mention rule exactly, so the suggestion list never
-  // offers a tag the server would silently drop: a Seller can only ever
-  // successfully tag the literal PM or Company Admin (never the rest of the
-  // team, never the Client); everyone else can tag anyone EXCEPT a Seller or
-  // the Client, unless they're the literal PM (the only one who can tag
-  // either — tagging the Client is what promotes a PM's message to
-  // visibility='client', see send()). Company Admin is never a real
-  // chat_participants row, so it's added as a synthetic candidate (id 0,
-  // matching send()'s ADMIN_MENTION_ID) rather than coming from
-  // `thread.participants`.
+  // offers a tag the server would silently drop: anyone who ISN'T the
+  // literal PM — Seller or plain team member alike — can only ever
+  // successfully tag the literal PM (or Company Admin, via the sentinel
+  // below); never a Seller, never the Client, never each other. Only the
+  // literal PM can tag anyone, including the Client — the only way a PM
+  // message ever reaches the Client (visibility='client', see send()).
+  // Company Admin is never a real chat_participants row, so it's added as a
+  // synthetic candidate (id 0, matching send()'s ADMIN_MENTION_ID) rather
+  // than coming from `thread.participants`.
   const meIsSeller = me?.role_type === 'seller';
   // Only this project's own linked Seller may invite a PM here — matches
   // Api\User\ProjectMessengerController::invitePm()'s own gate exactly.
@@ -254,7 +254,7 @@ export default function ProjectChatPage() {
     const q = query.toLowerCase();
     const staff = (thread?.participants ?? []).filter(p =>
       p.user_id !== me?.id
-      && (meIsSeller ? !!p.is_project_pm : (isLiteralPm || (p.role !== 'seller' && p.role !== 'client')))
+      && (isLiteralPm || !!p.is_project_pm)
       && p.name?.toLowerCase().includes(q)
     );
     const admin: ProjectMessengerParticipant = { user_id: ADMIN_MENTION_ID, name: 'Company Admin', role: null };
@@ -329,6 +329,12 @@ export default function ProjectChatPage() {
               {me?.role_type === 'seller' && (
                 <div style={{ padding: '8px 20px', fontSize: 11.5, color: '#b45309', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
                   You only see your own messages, plain messages from Company Admin, anything Admin tags you or the Project Manager in, and anything the Project Manager tags you in — never the rest of the team.
+                </div>
+              )}
+
+              {me?.role_type !== 'seller' && me?.role_type !== 'client' && !isLiteralPm && (
+                <div style={{ padding: '8px 20px', fontSize: 11.5, color: '#b45309', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
+                  You only see your own messages, the Project Manager's plain messages, and anything anyone tags you in. Your own messages are only ever seen by the Project Manager and Company Admin.
                 </div>
               )}
 

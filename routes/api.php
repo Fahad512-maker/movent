@@ -815,6 +815,8 @@ Route::prefix('user')->group(function () {
             // Project Chat — one thread per project (see ProjectChatService).
             Route::get('projects/{projectId}/messenger',                              [UserProjectMessengerController::class, 'show']);
             Route::get('projects/{projectId}/messenger/eligible-participants',        [UserProjectMessengerController::class, 'eligibleParticipants']);
+            Route::get('projects/{projectId}/messenger/eligible-pms',                 [UserProjectMessengerController::class, 'eligiblePms']);
+            Route::post('projects/{projectId}/messenger/invite-pm',                   [UserProjectMessengerController::class, 'invitePm']);
             Route::get('projects/{projectId}/messenger/messages',                     [UserProjectMessengerController::class, 'messages']);
             Route::post('projects/{projectId}/messenger/messages',                    [UserProjectMessengerController::class, 'send']);
             Route::delete('projects/{projectId}/messenger/messages/{messageId}',      [UserProjectMessengerController::class, 'deleteMessage']);

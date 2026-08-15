@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ChatMessage;
 use App\Models\ChatParticipant;
 use App\Models\ChatThread;
 use App\Models\Notification;
@@ -63,7 +64,10 @@ class ProjectChatService
     // Manager" is a hard rule, not a default. Idempotent (firstOrCreate) and
     // safe to call on every PM/Admin show() — already-synced members are a
     // no-op, and only a truly new addition fires the "added to chat"
-    // notification (guarded by wasRecentlyCreated).
+    // notification (guarded by wasRecentlyCreated). Same "from now" cutoff as
+    // addTeamMember()/addTaskAssignee() — a newly-synced member never sees
+    // the conversation from before they were tied to the project, however
+    // that happened to be established.
     public static function syncFormalTeamParticipants(Project $project, ChatThread $thread): void
     {
         $memberIds = static::formalMemberIds($project);
@@ -73,11 +77,12 @@ class ProjectChatService
 
         $sellerIds = User::whereIn('id', $memberIds)->where('role_type', 'seller')->pluck('id');
         $autoAddIds = $memberIds->diff($sellerIds);
+        $cutoff = static::currentMessageWatermark($thread);
 
         foreach ($autoAddIds as $userId) {
             $participant = ChatParticipant::firstOrCreate(
                 ['thread_id' => $thread->id, 'user_id' => $userId],
-                ['role' => 'member', 'joined_at' => now()]
+                ['role' => 'member', 'joined_at' => now(), 'history_from_message_id' => $cutoff]
             );
 
             if (!$participant->wasRecentlyCreated) {
@@ -95,17 +100,30 @@ class ProjectChatService
         }
     }
 
+    // The thread's current latest message id — the "from now" cutoff stamped
+    // on a newly-joining participant so they never see what came before them
+    // (0 on an empty thread, still not NULL, which is what distinguishes
+    // "from now" from a full-history join everywhere this column is read).
+    private static function currentMessageWatermark(ChatThread $thread): int
+    {
+        return (int) (ChatMessage::where('thread_id', $thread->id)->max('id') ?? 0);
+    }
+
     // Shared by addSeller()/addTaskAssignee()/addTeamMember() — every "this
     // specific act of assignment is itself the authorization" call site.
     // Idempotent; creates the thread if needed and only notifies on a
-    // genuinely new add (wasRecentlyCreated).
-    private static function addParticipant(Project $project, int $userId): void
+    // genuinely new add (wasRecentlyCreated). $historyFromMessageId only
+    // ever applies on that same first creation — firstOrCreate() leaves an
+    // EXISTING participant's row (and their history) untouched, so
+    // re-adding someone already in the conversation never narrows what they
+    // can already see.
+    private static function addParticipant(Project $project, int $userId, ?int $historyFromMessageId = null): void
     {
         $thread = static::threadFor($project);
 
         $participant = ChatParticipant::firstOrCreate(
             ['thread_id' => $thread->id, 'user_id' => $userId],
-            ['role' => 'member', 'joined_at' => now()]
+            ['role' => 'member', 'joined_at' => now(), 'history_from_message_id' => $historyFromMessageId]
         );
 
         if (!$participant->wasRecentlyCreated) {
@@ -134,16 +152,34 @@ class ProjectChatService
         static::addParticipant($project, $sellerId);
     }
 
+    // The project's Client, once their portal account is linked and enabled —
+    // added to the SAME internal thread as the team, but this alone doesn't
+    // expose team chatter to them: only ChatMessage rows with
+    // visibility='client' are ever surfaced back to the Client (see
+    // Api\Client\ProjectChatController, which reads this same thread filtered
+    // that way). Safe to call repeatedly (addParticipant() is idempotent);
+    // callers only invoke this from a staff view (Admin/PM opening Project
+    // Chat), same convention as syncFormalTeamParticipants() — the Client
+    // itself never reaches this service (Api\User\ProjectMessengerController
+    // hard-blocks role_type='client').
+    public static function addClient(Project $project, int $clientUserId): void
+    {
+        static::addParticipant($project, $clientUserId);
+    }
+
     // Call right after a task's assigned_to is set (TaskController::store()/
     // update(), both Admin and User guards) — same convention as addSeller():
     // the assignment itself is the authorized act, so the new assignee
     // shouldn't have to wait for a PM to next open the chat page
     // (syncFormalTeamParticipants()) before they can see/send in it. Never
     // called with a Seller's id — assignedToRule() already keeps a Seller
-    // from ever being a task's assigned_to.
+    // from ever being a task's assigned_to. "From now" cutoff — a newly
+    // assigned Developer/Designer/QA/Production never sees the conversation
+    // from before their assignment.
     public static function addTaskAssignee(Project $project, int $userId): void
     {
-        static::addParticipant($project, $userId);
+        $thread = static::threadFor($project);
+        static::addParticipant($project, $userId, static::currentMessageWatermark($thread));
     }
 
     // Call right after a user is added/updated as a formal team member
@@ -154,10 +190,14 @@ class ProjectChatService
     // waiting for someone else to next open the chat page before they can
     // see/send in it. Callers must NEVER invoke this for a Seller being
     // added to the team — mirrors syncFormalTeamParticipants()'s hard
-    // "Seller can never be auto-added" rule.
+    // "Seller can never be auto-added" rule. "From now" cutoff, same as
+    // addTaskAssignee() — a newly added Developer/Designer/QA/Project
+    // Manager/plain team member never sees the conversation from before they
+    // joined the project.
     public static function addTeamMember(Project $project, int $userId): void
     {
-        static::addParticipant($project, $userId);
+        $thread = static::threadFor($project);
+        static::addParticipant($project, $userId, static::currentMessageWatermark($thread));
     }
 
     // Call after a user stops being formally tied to a project (e.g.
