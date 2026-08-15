@@ -346,7 +346,16 @@ export default function LeadDetailPage() {
   // only status that hides this button.
   const canShowCreateInvoice = hasInvoiceMod && canCreateInvoice && notLost && !!dealEligibility && !hasLeadInvoice && awaitingProjectPayment;
   const canShowInvoiceStatus = notLost && !!latestInvoice && awaitingProjectPayment;
-  const canShowConvert = isWonDeal && !lead.client_id && projectCreationEligible && (isAdmin || canConvertLead);
+  // Convert to Client only requires the Deal to be Won (i.e. its invoice was
+  // paid in full — see LeadDealService::markWonFromPayment()) and not
+  // already converted — Api\{Admin,User}\LeadController::convert() itself
+  // never checks project_creation_eligible either, it just creates a plain
+  // Client row. Requiring that flag here too was stricter than the backend
+  // actually enforces, and since project_creation_eligible depends on
+  // required_kickoff_amount/estimated_value — fields nothing in the UI ever
+  // sets — it was effectively always false, permanently hiding this button
+  // even once the lead was genuinely Won.
+  const canShowConvert = isWonDeal && !lead.client_id && (isAdmin || canConvertLead);
 
   return (
     <DashboardLayout title={lead.name}>
@@ -377,9 +386,10 @@ export default function LeadDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {/* Convert to Client — only after the Deal has cleared its
-                  payment requirement. Before payment, the seller should raise
-                  the invoice first. A basic Client record, same for everyone.
+              {/* Convert to Client — as soon as the Deal is Won (its invoice
+                  paid in full auto-flips lead.status, see
+                  LeadDealService::markWonFromPayment()) and not already
+                  converted. A basic Client record, same for everyone.
                   Api\Admin\LeadController::convert() has never required the
                   Client module (it just creates a plain Client row, same as
                   the sub-user path's Sales-bundled canManagePipeline +
@@ -476,10 +486,16 @@ export default function LeadDetailPage() {
                   const locked   = step === 'won' || (lead.status === 'won' && step !== 'won') || hasInvoice;
                   const bg       = isWon ? '#059669' : isActive ? '#2563eb' : isPast ? '#93c5fd' : '#e2e8f0';
                   const col      = (isActive || isPast || isWon) ? '#fff' : '#94a3b8';
+                  // A reached step (current, past, or genuinely Won) stays at
+                  // full opacity even though it's `locked` against further
+                  // clicks — `locked` alone would otherwise fade out Won's
+                  // green background the moment it's actually achieved, which
+                  // reads as "still disabled" even though the deal IS won.
+                  const reached  = isActive || isPast || isWon;
                   return (
                     <button key={step} onClick={() => !locked && handleStatusChange(step)} disabled={locked}
                       title={step === 'won' && !isWon ? 'Won happens automatically once an invoice on this lead is paid in full' : undefined}
-                      style={{ flex: 1, padding: '7px 0', background: bg, color: col, border: 'none', borderRadius: idx === 0 ? '8px 0 0 8px' : idx === PIPELINE_STEPS.length - 1 ? '0 8px 8px 0' : 0, fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.6 : 1 }}>
+                      style={{ flex: 1, padding: '7px 0', background: bg, color: col, border: 'none', borderRadius: idx === 0 ? '8px 0 0 8px' : idx === PIPELINE_STEPS.length - 1 ? '0 8px 8px 0' : 0, fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: locked ? 'not-allowed' : 'pointer', opacity: reached || !locked ? 1 : 0.6 }}>
                       {cap(step)}
                     </button>
                   );
