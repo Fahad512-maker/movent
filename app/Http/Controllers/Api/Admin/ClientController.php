@@ -354,6 +354,16 @@ class ClientController extends Controller
 
         $company->update($data);
 
+        // The tenant-level currency (company_admins.currency) is what
+        // invoices actually key off (Company::invoicingProfile() — one
+        // Company Admin can own multiple companies, so invoicing uses one
+        // shared currency identity across all of them, same value the
+        // Settings → Company tab writes via
+        // Api\Admin\SettingsController::updateCompany()). Without this,
+        // changing currency here would update companies.currency but leave
+        // invoices unaffected.
+        $this->admin()->update(['currency' => $data['currency']]);
+
         return ApiResponse::success($company->only([
             'id', 'name', 'currency', 'industry', 'email', 'phone', 'address', 'timezone',
         ]), 'Company updated successfully');

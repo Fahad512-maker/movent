@@ -336,7 +336,12 @@ function NewInvoiceForm() {
     return {
       company_id:      companyId,
       lead_id:         leadId || undefined,
-      currency,
+      // Not sent — `currency` here is just a read-only preview of the
+      // Company Admin's Settings-configured currency (see the comment where
+      // it's set above). Sending a value cached at login/page-load could go
+      // stale if currency was changed since; the backend always derives it
+      // fresh from Company::invoicingProfile() when omitted (see
+      // Api\Admin\InvoiceController::store()/Api\User\InvoiceController::store()).
       tax_rate:        taxRate,
       discount_amount: discount,
       notes:           notes || null,
