@@ -49,6 +49,10 @@ class InvoicePaymentService
      * "Automatically create project after payment" on. It is safe to reach here
      * more than once for the same invoice: the service keys off
      * invoices.project_id and won't start a second project.
+     *
+     * It is also where a lead-linked invoice being paid IN FULL auto-marks its
+     * Lead Won — see LeadDealService::markWonFromPayment(), a no-op for an
+     * invoice not yet fully settled or a Lead already Won/Lost.
      */
     public static function applyToInvoice(Invoice $invoice, Payment $payment): void
     {
@@ -58,6 +62,10 @@ class InvoicePaymentService
             ? 'paid'
             : 'partially_paid';
         $invoice->save();
+
+        if ($invoice->lead_id && ($lead = $invoice->lead)) {
+            LeadDealService::markWonFromPayment($lead, $invoice);
+        }
 
         PaymentProjectStartService::handle($invoice);
     }

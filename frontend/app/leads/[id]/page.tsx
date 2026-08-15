@@ -161,7 +161,7 @@ export default function LeadDetailPage() {
   }, [leadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEligibility = () => {
-    if (!lead || lead.status !== 'won') { setDealEligibility(null); return; }
+    if (!lead || lead.status === 'lost') { setDealEligibility(null); return; }
     svc.projectEligibility(lead.id).then(setDealEligibility).catch(() => {});
   };
 
@@ -335,8 +335,17 @@ export default function LeadDetailPage() {
   const latestInvoice = dealEligibility?.latest_invoice ?? null;
   const hasLeadInvoice = (dealEligibility?.invoice_count ?? 0) > 0;
   const awaitingProjectPayment = !hasProject && !projectCreationEligible;
-  const canShowCreateInvoice = hasInvoiceMod && canCreateInvoice && isWonDeal && !!dealEligibility && !hasLeadInvoice && awaitingProjectPayment;
-  const canShowInvoiceStatus = isWonDeal && !!latestInvoice && awaitingProjectPayment;
+  const notLost = lead.status !== 'lost';
+  // Once an invoice exists, the pipeline is driven only by
+  // LeadDealService::markWonFromPayment() on the backend — no more manual
+  // status clicks (Won, Lost, or Reopen) from this page.
+  const hasInvoice = !!lead.has_invoice;
+  // Invoice can be raised as soon as the lead exists — it no longer waits on
+  // Won first. Paying it in full is what marks the lead Won automatically
+  // (see App\Services\LeadDealService::markWonFromPayment()); Lost is the
+  // only status that hides this button.
+  const canShowCreateInvoice = hasInvoiceMod && canCreateInvoice && notLost && !!dealEligibility && !hasLeadInvoice && awaitingProjectPayment;
+  const canShowInvoiceStatus = notLost && !!latestInvoice && awaitingProjectPayment;
   const canShowConvert = isWonDeal && !lead.client_id && projectCreationEligible && (isAdmin || canConvertLead);
 
   return (
@@ -404,11 +413,13 @@ export default function LeadDetailPage() {
                   </button>
                 ) : null
               )}
-              {/* Invoice handoff — first action after Won. The invoice form
-                  supports lead-only/guest invoices, so conversion to Client is
-                  intentionally not required here. Once the Deal is paid enough
-                  to become project-eligible, this hides and Convert/Project
-                  actions take over. */}
+              {/* Invoice handoff — available as soon as the lead is created,
+                  any stage before Lost. The invoice form supports lead-only/
+                  guest invoices, so conversion to Client is intentionally not
+                  required here. Paying it in full auto-marks the lead Won
+                  (LeadDealService::markWonFromPayment()); once the Deal is
+                  paid enough to become project-eligible, this hides and
+                  Convert/Project actions take over. */}
               {canShowCreateInvoice && (
                 <button onClick={handleCreateInvoice}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -445,36 +456,46 @@ export default function LeadDetailPage() {
           {/* Pipeline bar */}
           {lead.status !== 'lost' && canManagePipe && (
             <div style={{ marginTop: 22 }}>
+              {hasInvoice && (
+                <div style={{ marginBottom: 8, fontSize: 11.5, color: '#94a3b8' }}>
+                  🔒 Status is locked — an invoice has been raised on this lead. It moves to Won automatically once paid in full.
+                </div>
+              )}
               <div style={{ display: 'flex' }}>
                 {PIPELINE_STEPS.map((step, idx) => {
                   const isActive = step === lead.status;
                   const isPast   = pipelineIdx >= 0 && idx < pipelineIdx;
                   const isWon    = step === 'won' && lead.status === 'won';
-                  // Once Won, every earlier stage is locked — a deal can't be
-                  // walked back to New/Contacted/Qualified/Proposal/
-                  // Negotiation from here (mirrors the existing Lost lock,
-                  // which hides the whole bar). "Mark as Lost" below stays
-                  // available for a Won deal that later falls through.
-                  const locked   = lead.status === 'won' && step !== 'won';
+                  // Won is never a manual click — it only ever comes from
+                  // LeadDealService::markWonFromPayment() (an invoice paid in
+                  // full), enforced server-side too. Once Won, every earlier
+                  // stage is also locked — a deal can't be walked back to New/
+                  // Contacted/Qualified/Proposal/Negotiation from here
+                  // (mirrors the existing Lost lock, which hides the whole
+                  // bar). Once an invoice exists, every step locks.
+                  const locked   = step === 'won' || (lead.status === 'won' && step !== 'won') || hasInvoice;
                   const bg       = isWon ? '#059669' : isActive ? '#2563eb' : isPast ? '#93c5fd' : '#e2e8f0';
                   const col      = (isActive || isPast || isWon) ? '#fff' : '#94a3b8';
                   return (
                     <button key={step} onClick={() => !locked && handleStatusChange(step)} disabled={locked}
+                      title={step === 'won' && !isWon ? 'Won happens automatically once an invoice on this lead is paid in full' : undefined}
                       style={{ flex: 1, padding: '7px 0', background: bg, color: col, border: 'none', borderRadius: idx === 0 ? '8px 0 0 8px' : idx === PIPELINE_STEPS.length - 1 ? '0 8px 8px 0' : 0, fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.6 : 1 }}>
                       {cap(step)}
                     </button>
                   );
                 })}
               </div>
-              <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => handleStatusChange('lost')} style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark as Lost ✕</button>
-              </div>
+              {!hasInvoice && (
+                <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => handleStatusChange('lost')} style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark as Lost ✕</button>
+                </div>
+              )}
             </div>
           )}
           {lead.status === 'lost' && (
             <div style={{ marginTop: 14, padding: '10px 16px', background: '#fef2f2', borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>This lead was marked as lost.{lead.lost_reason ? ` Reason: ${lead.lost_reason}` : ''}</span>
-              {canManagePipe && (
+              {canManagePipe && !hasInvoice && (
                 <button onClick={() => handleStatusChange('new')} style={{ background: 'none', border: '1.5px solid #fecaca', borderRadius: 7, padding: '5px 12px', color: '#dc2626', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Reopen</button>
               )}
             </div>

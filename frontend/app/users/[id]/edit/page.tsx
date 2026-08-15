@@ -162,7 +162,7 @@ function EditUserPageContent() {
 
   return (
     <DashboardLayout title="Edit User">
-      <div style={{ maxWidth: 860 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.push('/admin/users')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to Users
         </button>

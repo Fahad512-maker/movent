@@ -200,16 +200,12 @@ class ProjectController extends Controller
     {
         $user = $this->user();
 
-        // Hard role_type check, defense-in-depth: a Seller must never get
-        // the unrestricted "create any project, no lead/payment needed"
-        // path — even if a Company Admin mistakenly also grants them the
-        // broader canCreateProjects (a PM-tier permission) alongside their
-        // intended canCreateProjectHandoff. Without this, canCreateProjects
-        // alone flips $isHandoff to false below, skipping the entire
-        // Deal-eligibility gate this controller exists to enforce. Matches
-        // the same hard role_type='seller' pattern already used throughout
-        // TaskController/ProjectAttachmentController/ProjectMessengerController.
-        $canFullCreate = $this->can('canCreateProjects') && $user->role_type !== 'seller';
+        // A Seller holding canCreateProjects (granted via the "Manage
+        // Projects" bundle) gets the same unrestricted "create any project,
+        // no lead/payment needed" path as PM/Manager tiers. Separately, a
+        // Seller who only holds canCreateProjectHandoff still goes through
+        // the Deal-eligibility-gated $isHandoff branch below.
+        $canFullCreate = $this->can('canCreateProjects');
         $canHandoff    = $this->can('canCreateProjectHandoff');
 
         if (!$canFullCreate && !$canHandoff) {
@@ -381,9 +377,14 @@ class ProjectController extends Controller
         $validated['priority'] ??= 'medium';
         $validated['created_by'] = $user->id;
         $validated['reference']  = $this->nextProjectReference();
-        if ($isHandoff) {
+        // seller_id is set for any Seller-created project (handoff or a
+        // full, unrestricted create) — source is only meaningful for the
+        // handoff path, where it records what triggered the project.
+        if ($user->role_type === 'seller') {
             $validated['seller_id'] = $user->id;
-            $validated['source']    = $sourceInvoice
+        }
+        if ($isHandoff) {
+            $validated['source'] = $sourceInvoice
                 ? ($sourceInvoice->status === 'paid' ? 'paid_invoice_handoff' : 'partial_paid_invoice_handoff')
                 : 'sales_handoff';
         }
@@ -612,6 +613,10 @@ class ProjectController extends Controller
         $user = $this->user();
         $project = $this->visibleProjects()->findOrFail($id);
 
+        // The invoice is always emailed immediately once created below — to
+        // the project's own client if it has one, otherwise to a one-off
+        // address collected right here (a project can legitimately have no
+        // client, see 2026_07_04_000003_make_projects_client_id_nullable).
         $data = $request->validate([
             'due_date'            => 'nullable|date',
             'currency'            => 'nullable|string|max:10',
@@ -622,6 +627,9 @@ class ProjectController extends Controller
             'items.*.description' => 'required|string|max:500',
             'items.*.quantity'    => 'required|numeric|min:0.01',
             'items.*.unit_price'  => 'required|numeric|min:0',
+            'recipient_email'     => [$project->client_id ? 'nullable' : 'required', 'email', 'max:255'],
+        ], [
+            'recipient_email.required' => 'This project has no linked client — an email address is required to send the invoice.',
         ]);
 
         $taxRate  = (float) ($data['tax_rate']        ?? 0);
@@ -672,6 +680,11 @@ class ProjectController extends Controller
             'status'          => 'draft',
             'due_date'        => $data['due_date'] ?? null,
             'notes'           => $data['notes']    ?? null,
+            // Recorded only for a no-client project — a client-linked
+            // invoice always resolves its recipient from client.email
+            // instead, same as everywhere else in the app.
+            'customer_name'   => $project->client_id ? null : $project->name,
+            'customer_email'  => $project->client_id ? null : $data['recipient_email'],
         ]);
 
         foreach ($items as $i => $item) {
@@ -688,7 +701,47 @@ class ProjectController extends Controller
         $this->logActivity($project->company_id, 'invoice_created', 'Project', $project->id,
             ['invoice_id' => $invoice->id, 'invoice_number' => $invoice->invoice_number]);
 
-        return ApiResponse::success($invoice->load('items'), 'Invoice created for project', 201);
+        // Send it right away — the project's own client if there is one,
+        // else the one-off address collected above. Mirrors
+        // Api\User\InvoiceController::sendEmail() exactly (public token,
+        // payment URL, InvoiceMail, draft->sent, portal notification), just
+        // inlined here since this invoice is always a fresh draft — there is
+        // no "already sent" case to check for.
+        $recipientEmail = $project->client?->email ?? $data['recipient_email'];
+
+        $company     = \App\Models\Company::find($project->company_id);
+        $invoice->generatePublicToken(30);
+        $invoice->refresh();
+        $paymentUrl  = config('app.frontend_url') . '/pay/invoice/' . $invoice->payment_token;
+        $companyName = $company->invoicingProfile()['name'];
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($recipientEmail)->send(new \App\Mail\InvoiceMail($invoice, $paymentUrl, $companyName));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[project-invoice] email send failed', ['invoice_id' => $invoice->id, 'error' => $e->getMessage()]);
+            // The public token was already generated above, so the link is
+            // still valid even though the email itself failed — hand it back
+            // so the seller can share it manually instead of losing it.
+            $responseData = $invoice->load('items')->toArray();
+            $responseData['payment_url'] = $paymentUrl;
+            return ApiResponse::success($responseData, 'Invoice created, but the email could not be sent. You can copy the payment link below or resend it from the invoice page.', 201);
+        }
+
+        $invoice->update(['status' => 'sent', 'sent_at' => now(), 'sent_by' => $user->id]);
+        \App\Services\InvoiceNotificationService::notifyClientInvoiceSent($invoice);
+
+        if ($invoice->lead_id) {
+            Lead::find($invoice->lead_id)?->logActivity('note_added',
+                "Invoice {$invoice->invoice_number} sent to {$recipientEmail}", $user->name ?? 'User');
+        }
+        $this->logActivity($project->company_id, 'invoice_sent', 'Invoice', $invoice->id,
+            ['invoice_number' => $invoice->invoice_number, 'sent_to' => $recipientEmail]);
+
+        $responseData = $invoice->load('items')->toArray();
+        $responseData['payment_url'] = $paymentUrl;
+        $responseData['sent_to']     = $recipientEmail;
+
+        return ApiResponse::success($responseData, "Invoice created and sent to {$recipientEmail}", 201);
     }
 
     // Mirrors Api\Admin\ProjectController::createProjectFolders() — same

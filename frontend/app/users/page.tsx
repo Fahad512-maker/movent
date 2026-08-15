@@ -136,7 +136,7 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout title="Users & Permissions">
-      <div style={{ maxWidth: 1280 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>

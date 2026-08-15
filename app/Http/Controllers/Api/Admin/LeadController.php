@@ -10,7 +10,6 @@ use App\Models\LeadTransfer;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\User;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -92,6 +91,15 @@ class LeadController extends Controller
             return ApiResponse::error('A lead with this email already exists.', 422);
         }
 
+        // A brand-new lead can never be created Won directly — Won only ever
+        // comes from updateStatus() (which stamps deal_reference/won_at/
+        // fulfillment_status) or LeadDealService::markWonFromPayment(). A
+        // plain Lead::create() with status=won would skip all of that and
+        // leave a "Deal" with no deal_reference.
+        if (($validated['status'] ?? 'new') === 'won') {
+            return ApiResponse::error('A lead cannot be created as Won directly — mark it Won from the pipeline, or let it become Won automatically once its invoice is paid in full.', 422);
+        }
+
         $validated['status']   ??= 'new';
         $validated['priority'] ??= 'medium';
 
@@ -120,6 +128,7 @@ class LeadController extends Controller
             ->findOrFail($id);
 
         $data         = $this->format($lead);
+        $data['has_invoice'] = $lead->invoices()->exists();
         $data['follow_ups']  = $lead->followUps->map(fn($f) => $this->formatFollowUp($f))->values();
         $data['activities']  = $lead->activities->map(fn($a) => [
             'id'          => $a->id,
@@ -177,6 +186,22 @@ class LeadController extends Controller
             return ApiResponse::error('This lead has already been won and cannot be moved back to an earlier stage.', 422);
         }
 
+        // Becoming Won only ever happens through updateStatus() (stamps
+        // deal_reference/won_at/fulfillment_status) or
+        // LeadDealService::markWonFromPayment() — never through this plain
+        // Edit form, which would skip all of that. Re-saving status=won on
+        // an already-won lead is still a harmless no-op.
+        if (isset($validated['status']) && $validated['status'] === 'won' && $old['status'] !== 'won') {
+            return ApiResponse::error('A lead cannot be marked Won from this form — use the pipeline action, or let it become Won automatically once its invoice is paid in full.', 422);
+        }
+
+        // Same invoice lock as updateStatus() — once a lead has an invoice,
+        // status is driven only by LeadDealService::markWonFromPayment() on
+        // payment, never by hand through this form.
+        if (isset($validated['status']) && $validated['status'] !== $old['status'] && $lead->invoices()->exists()) {
+            return ApiResponse::error('This lead has an invoice — its status now changes automatically once the invoice is paid in full.', 422);
+        }
+
         $lead->update($validated);
 
         // Log meaningful changes
@@ -201,136 +226,52 @@ class LeadController extends Controller
         return ApiResponse::success($this->format($lead));
     }
 
-    // Next DEAL-{year}-{seq} reference — same sequence/table as
-    // Api\User\LeadController's own copy (both query the same `leads` table,
-    // so uniqueness holds regardless of which guard generated it).
-    private function nextDealReference(): string
-    {
-        $year = now()->year;
-        $maxSeq = Lead::withTrashed()
-            ->where('deal_reference', 'like', "DEAL-{$year}-%")
-            ->pluck('deal_reference')
-            ->map(fn ($reference) => (int) substr($reference, -4))
-            ->max();
-
-        $seq = $maxSeq ? $maxSeq + 1 : 1;
-
-        do {
-            $reference = sprintf('DEAL-%d-%04d', $year, $seq++);
-        } while (Lead::withTrashed()->where('deal_reference', $reference)->exists());
-
-        return $reference;
-    }
-
     public function updateStatus(Request $request, int $id): JsonResponse
     {
         $lead = Lead::whereIn('company_id', $this->companyIds())->findOrFail($id);
         $old  = $lead->status;
 
-        $becomingWon = $request->input('status') === 'won' && $old !== 'won';
-
         // Once Won, a deal can never be walked back to an earlier pipeline
         // stage — mirrors the existing one-way Lost lock (which requires the
         // explicit "Reopen" action to leave, never a plain status edit).
-        // Marking a Won deal Lost afterward (it fell through) is still
-        // allowed; re-saving status=won on an already-won lead is a no-op,
-        // not a revert.
         $earlierStages = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
         if ($old === 'won' && in_array($request->input('status'), $earlierStages, true)) {
             return ApiResponse::error('This lead has already been won and cannot be moved back to an earlier stage.', 422);
         }
 
-        $rules = [
+        // Won is reachable ONLY via LeadDealService::markWonFromPayment() —
+        // an invoice on this lead paid in full — never manually through the
+        // pipeline, same as store()/update() already enforce. Re-saving
+        // status=won on an already-won lead is still a harmless no-op.
+        if ($request->input('status') === 'won' && $old !== 'won') {
+            return ApiResponse::error('A lead cannot be marked Won manually - it becomes Won automatically once its invoice is paid in full.', 422);
+        }
+
+        // Once a lead has an invoice, its pipeline is driven only by
+        // LeadDealService::markWonFromPayment() on payment — no more manual
+        // clicks through this endpoint (Lost, Reopen, or otherwise).
+        if ($request->input('status') !== $old && $lead->invoices()->exists()) {
+            return ApiResponse::error('This lead has an invoice — its status now changes automatically once the invoice is paid in full.', 422);
+        }
+
+        $request->validate([
             'status'      => ['required', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],
             'lost_reason' => ['nullable', 'string'],
-        ];
-        // proposed_project_title is no longer required up front — the
-        // frontend's confirmation modal was removed (flow is now Won ->
-        // Convert to Client -> Create Invoice, no popup) — it defaults to
-        // "{name} — Project" below when not supplied.
-        if ($becomingWon) {
-            $rules['proposed_project_title']      = ['nullable', 'string', 'max:255'];
-            $rules['service_category']            = ['nullable', 'string', 'max:100'];
-            $rules['scope_summary']               = ['nullable', 'string'];
-            $rules['detailed_scope']              = ['nullable', 'string'];
-            $rules['quotation_reference']         = ['nullable', 'string', 'max:100'];
-            $rules['required_kickoff_amount']     = ['nullable', 'numeric', 'min:0'];
-            $rules['required_kickoff_percentage'] = ['nullable', 'numeric', 'min:0', 'max:100'];
-            $rules['expected_start_date']         = ['nullable', 'date'];
-            $rules['expected_end_date']           = ['nullable', 'date'];
-        }
-        $request->validate($rules);
+        ]);
 
         $data = ['status' => $request->status];
-        if ($request->status === 'won' && !$lead->converted_at) {
-            $data['converted_at'] = now();
-        }
         if ($request->status === 'lost' && $request->filled('lost_reason')) {
             $data['lost_reason'] = $request->lost_reason;
         }
+        $lead->update($data);
 
-        if ($becomingWon) {
-            $data['won_at']             = now();
-            $data['fulfillment_status'] = 'awaiting_invoice';
-            // No confirmation modal on the frontend anymore — default the
-            // title instead of requiring it up front.
-            $data['proposed_project_title'] = $request->filled('proposed_project_title')
-                ? $request->input('proposed_project_title')
-                : "{$lead->name} — Project";
-            foreach ([
-                'service_category', 'scope_summary', 'detailed_scope',
-                'quotation_reference', 'required_kickoff_amount', 'required_kickoff_percentage',
-                'expected_start_date', 'expected_end_date',
-            ] as $field) {
-                if ($request->filled($field)) {
-                    $data[$field] = $request->input($field);
-                }
-            }
-
-            // nextDealReference()'s read-last-then-pick-next-free check isn't
-            // atomic — two concurrent "mark as won" requests can both land on
-            // the same number and one loses to the unique constraint. Retry
-            // with a freshly recomputed reference a few times rather than
-            // losing this whole update (and every deal field submitted
-            // alongside it) to an unhandled 1062.
-            $attempts = 0;
-            while (true) {
-                $data['deal_reference'] = $this->nextDealReference();
-                try {
-                    $lead->update($data);
-                    break;
-                } catch (QueryException $e) {
-                    $isDealRefCollision = (int) $e->getCode() === 23000
-                        && str_contains($e->getMessage(), 'leads_deal_reference_unique');
-                    if (!$isDealRefCollision || ++$attempts >= 5) {
-                        throw $e;
-                    }
-                }
-            }
-        } else {
-            $lead->update($data);
-        }
-
-        if ($becomingWon) {
-            $lead->logActivity('deal_created', "Deal {$lead->deal_reference} created — {$lead->proposed_project_title}",
-                $this->adminName(), ['deal_reference' => $lead->deal_reference]);
-        }
-
-        $type = match($request->status) {
-            'won'  => 'won',
-            'lost' => 'lost',
-            default => 'status_changed',
-        };
+        $type = $request->status === 'lost' ? 'lost' : 'status_changed';
         $lead->logActivity($type, "Status changed from {$old} to {$request->status}", $this->adminName(),
             ['from' => $old, 'to' => $request->status]);
 
-        $notifyType = match ($request->status) {
-            'won'   => 'lead_won',
-            'lost'  => 'lead_lost',
-            default => 'lead_status_changed',
-        };
+        $notifyType = $request->status === 'lost' ? 'lead_lost' : 'lead_status_changed';
         $this->notifyUser($lead->assigned_to, $lead, $notifyType,
-            $request->status === 'won' ? 'Lead won!' : ($request->status === 'lost' ? 'Lead lost' : 'Lead status changed'),
+            $request->status === 'lost' ? 'Lead lost' : 'Lead status changed',
             "Lead \"{$lead->name}\" status changed to \"{$request->status}\".");
 
         $lead->load(['assignedTo:id,name']);

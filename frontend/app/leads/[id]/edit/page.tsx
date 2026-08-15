@@ -35,6 +35,10 @@ export default function EditLeadPage() {
   // lock (mirrors the lead detail page's pipeline bar): once won, this form
   // must not be a backdoor to revert it to an earlier stage.
   const [originalStatus, setOriginalStatus] = useState('new');
+  // Once a lead has an invoice, its status is driven only by
+  // LeadDealService::markWonFromPayment() on payment — mirrors the lead
+  // detail page's pipeline lock.
+  const [hasInvoice, setHasInvoice] = useState(false);
   const [priority, setPriority]       = useState('medium');
   const [estValue, setEstValue]       = useState('');
   const [notes, setNotes]             = useState('');
@@ -51,6 +55,7 @@ export default function EditLeadPage() {
       setSource(lead.source ?? '');
       setStatus(lead.status);
       setOriginalStatus(lead.status);
+      setHasInvoice(!!lead.has_invoice);
       setPriority(lead.priority);
       setEstValue(lead.estimated_value > 0 ? String(lead.estimated_value) : '');
       setNotes(lead.notes ?? '');
@@ -127,21 +132,23 @@ export default function EditLeadPage() {
                 <label style={lbl}>Status</label>
                 {/* Once Won, status is locked entirely from this form — a
                     deal can never be walked back to an earlier stage here
-                    (mirrors the lead detail page's pipeline lock). Marking a
-                    Won deal Lost is still available, just via the detail
-                    page's dedicated "Mark as Lost" action, not this form. */}
-                <select style={originalStatus === 'won' ? { ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : inp}
-                  value={status} onChange={e => setStatus(e.target.value)} disabled={originalStatus === 'won'}>
-                  {originalStatus === 'won' ? (
-                    <option value="won">Won</option>
+                    (mirrors the lead detail page's pipeline lock). Once an
+                    invoice exists, status locks too — only an invoice payment
+                    (LeadDealService::markWonFromPayment()) can move it to Won
+                    from here on. */}
+                <select style={(originalStatus === 'won' || hasInvoice) ? { ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : inp}
+                  value={status} onChange={e => setStatus(e.target.value)} disabled={originalStatus === 'won' || hasInvoice}>
+                  {(originalStatus === 'won' || hasInvoice) ? (
+                    <option value={originalStatus}>{originalStatus.charAt(0).toUpperCase() + originalStatus.slice(1)}</option>
                   ) : (
                     <>
+                      {/* No "Won" option here either — same guard as the New
+                          Lead form, enforced server-side too. */}
                       <option value="new">New</option>
                       <option value="contacted">Contacted</option>
                       <option value="qualified">Qualified</option>
                       <option value="proposal">Proposal</option>
                       <option value="negotiation">Negotiation</option>
-                      <option value="won">Won</option>
                       <option value="lost">Lost</option>
                     </>
                   )}
@@ -149,6 +156,11 @@ export default function EditLeadPage() {
                 {originalStatus === 'won' && (
                   <p style={{ margin: '5px 0 0', fontSize: 11, color: '#94a3b8' }}>
                     This lead has already been won and can&apos;t be moved back to an earlier stage.
+                  </p>
+                )}
+                {originalStatus !== 'won' && hasInvoice && (
+                  <p style={{ margin: '5px 0 0', fontSize: 11, color: '#94a3b8' }}>
+                    🔒 This lead has an invoice — status changes automatically once it&apos;s paid in full.
                   </p>
                 )}
               </div>

@@ -186,15 +186,14 @@ class RoleDefaultPermissions
                 // canReopenProjects ARE functional for a Seller —
                 // visibleProjects()/ProjectController scope includes
                 // seller_id match, so these apply to a Seller's own linked/
-                // handed-off project. canCreateProjects is NOT included here —
-                // store() hard-blocks role_type='seller' from the unrestricted
-                // create path; canCreateProjectHandoff above is the real
-                // Seller-tier equivalent.
+                // handed-off project.
                 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
-                // canCreateProjects: cosmetic-only completion of the "Manage
-                // Projects" bundle — store() excludes role_type='seller' from
-                // this path regardless (see above), so it grants nothing beyond
-                // what canCreateProjectHandoff already does.
+                // canCreateProjects — functional per 2026-08-15 request: a
+                // Seller holding this now gets the same unrestricted
+                // "+ New Project" path as PM/Manager tiers (store() no longer
+                // hard-blocks role_type='seller' here). canCreateProjectHandoff
+                // above remains the lead/invoice-gated alternative for a
+                // Seller who should only create a project as a deal handoff.
                 'canCreateProjects',
                 // canActivateProjects — functional, not cosmetic: a draft
                 // project auto-created from a client's payment
