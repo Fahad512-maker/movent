@@ -550,9 +550,9 @@ class ProjectMessengerController extends Controller
     // (messages()/downloadAttachment() enforce the cutoff) plus whatever
     // tags them, which can only ever be a post-join message anyway
     // (mentioning someone requires them to already be a participant).
-    // Idempotent: re-inviting an already-team PM is a no-op beyond confirming
-    // their role, same convention as ProjectChatService::addParticipant() —
-    // their existing history window is never narrowed by a second invite.
+    // Rejects re-inviting a PM already assigned to THIS project (a distinct,
+    // clearer error than silently no-op'ing — the Seller almost certainly
+    // meant to do something else, like check who's assigned).
     public function invitePm(Request $request, int $projectId): JsonResponse
     {
         $project = $this->project($projectId);
@@ -578,8 +578,13 @@ class ProjectMessengerController extends Controller
         }
 
         $existingPm = $project->teamMembers()->where('role_in_project', 'project_manager')->first();
-        if ($existingPm && $existingPm->user_id !== $pmId) {
-            return ApiResponse::error('This project already has a Project Manager — remove them from the team first.', 422);
+        if ($existingPm) {
+            return ApiResponse::error(
+                $existingPm->user_id === $pmId
+                    ? 'This Project Manager is already assigned to this project.'
+                    : 'This project already has a Project Manager — remove them from the team first.',
+                422
+            );
         }
 
         $wasAlreadyOnTeam = $project->teamMembers()->where('user_id', $pmId)->exists();
@@ -916,13 +921,21 @@ class ProjectMessengerController extends Controller
 
             if (!$participant->wasRecentlyCreated) continue;
 
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = User::find($userId)?->role_type === 'client'
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
+
             Notification::create([
                 'user_id'    => $userId,
                 'company_id' => $project->company_id,
                 'type'       => 'project_chat_added',
                 'title'      => "Added to project chat — {$project->name}",
                 'body'       => "{$actorName} added you to project chat for '{$project->name}'.",
-                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => "/projects/{$project->id}/chat"],
+                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => $link],
             ]);
         }
     }
@@ -945,13 +958,21 @@ class ProjectMessengerController extends Controller
                 continue;
             }
 
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = $participant->user?->role_type === 'client'
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
+
             Notification::create([
                 'user_id'    => $participant->user_id,
                 'company_id' => $project->company_id,
                 'type'       => 'project_chat_message',
                 'title'      => "New message on {$project->name}",
                 'body'       => "{$senderName}: {$preview}",
-                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => "/projects/{$project->id}/chat"],
+                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => $link],
             ]);
         }
 
@@ -970,13 +991,23 @@ class ProjectMessengerController extends Controller
                 continue;
             }
 
+            $targetIsClient = User::find($uid)?->role_type === 'client';
+
             // Being @mentioned never overrides visibility for the Client
             // (unlike the Seller-isolation rule above, where a mention IS the
             // override) — tagging them in an internal message shouldn't ping
             // them about a message they still can't actually see.
-            if (User::find($uid)?->role_type === 'client' && $message->visibility !== 'client') {
+            if ($targetIsClient && $message->visibility !== 'client') {
                 continue;
             }
+
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = $targetIsClient
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
 
             Notification::create([
                 'user_id'    => $uid,
@@ -984,7 +1015,7 @@ class ProjectMessengerController extends Controller
                 'type'       => 'mentioned_in_project_chat',
                 'title'      => "You were mentioned on {$project->name}",
                 'body'       => "{$senderName}: {$preview}",
-                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => "/projects/{$project->id}/chat"],
+                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => $link],
             ]);
         }
 

@@ -197,6 +197,11 @@ class PublicController extends Controller
             // limit checks). Null here means "unlimited", same as the Package.
             'max_users_per_company'  => $validated['max_users'] ?? null,
             'max_companies'          => $validated['max_companies'] ?? null,
+            // Explicit, not left to the column default — this is the
+            // tenant-level currency Company::invoicingProfile() treats as
+            // authoritative for every invoice. Always 'USD' (validated
+            // above), same as the Company row created just below.
+            'currency'               => $validated['currency'],
         ]);
 
         // Create company

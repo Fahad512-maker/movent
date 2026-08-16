@@ -59,8 +59,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => clearInterval(interval);
   }, [pathname]);
 
-  const linkOf = (n: ClientNotification): string | null =>
-    typeof n.data?.link === 'string' ? n.data.link : null;
+  // Defense-in-depth: a stale or mistargeted backend link pointing outside
+  // the Client Portal (e.g. a staff route like /projects/{id}/chat) would
+  // send this session's requests out with no auth_token cookie — the staff
+  // page 401s, and the staff axios interceptor treats that as an invalid
+  // session and hard-redirects to the staff /login, stranding the client
+  // mid-task. Only ever follow a link that stays inside /client/...
+  const linkOf = (n: ClientNotification): string | null => {
+    const link = typeof n.data?.link === 'string' ? n.data.link : null;
+    return link && link.startsWith('/client/') ? link : null;
+  };
 
   const handleNotifClick = (n: ClientNotification) => {
     if (!n.is_read) {

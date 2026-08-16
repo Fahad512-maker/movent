@@ -837,21 +837,25 @@ const COMPANY_OPTIONS: CompanyOption[] = [
   { label: 'Unlimited', value: null, price_pkr: 2500, price_usd: 10 },
 ];
 
-type CountryOption = { code: string; name: string; dial: string; timezone: string };
+type CountryOption = { code: string; name: string; dial: string; timezone: string; phoneFormat: string };
 
 // USA first — primary target market (mirrors the backend's own
 // America/New_York fallback in Api\PublicController::register()). Drives
 // both the phone field's dial code and the timezone sent at submit —
-// there's no separate timezone picker in the UI.
+// there's no separate timezone picker in the UI. `phoneFormat` is a
+// display-only example of that country's typical local number grouping
+// (shown as the input's placeholder, dial code excluded since that's
+// already shown as its own overlay) — not a mask or validation pattern, the
+// field still accepts free-form text.
 const COUNTRIES: CountryOption[] = [
-  { code: 'US', name: 'United States',        dial: '+1',   timezone: 'America/New_York' },
-  { code: 'CA', name: 'Canada',                dial: '+1',   timezone: 'America/New_York' },
-  { code: 'GB', name: 'United Kingdom',        dial: '+44',  timezone: 'Europe/London' },
-  { code: 'AE', name: 'United Arab Emirates',  dial: '+971', timezone: 'Asia/Dubai' },
-  { code: 'PK', name: 'Pakistan',               dial: '+92',  timezone: 'Asia/Karachi' },
-  { code: 'IN', name: 'India',                  dial: '+91',  timezone: 'Asia/Kolkata' },
-  { code: 'AU', name: 'Australia',              dial: '+61',  timezone: 'Australia/Sydney' },
-  { code: 'SG', name: 'Singapore',              dial: '+65',  timezone: 'Asia/Singapore' },
+  { code: 'US', name: 'United States',        dial: '+1',   timezone: 'America/New_York', phoneFormat: '(555) 000-0000' },
+  { code: 'CA', name: 'Canada',                dial: '+1',   timezone: 'America/New_York', phoneFormat: '(555) 000-0000' },
+  { code: 'GB', name: 'United Kingdom',        dial: '+44',  timezone: 'Europe/London',    phoneFormat: '7400 123456' },
+  { code: 'AE', name: 'United Arab Emirates',  dial: '+971', timezone: 'Asia/Dubai',       phoneFormat: '50 123 4567' },
+  { code: 'PK', name: 'Pakistan',               dial: '+92',  timezone: 'Asia/Karachi',     phoneFormat: '300 1234567' },
+  { code: 'IN', name: 'India',                  dial: '+91',  timezone: 'Asia/Kolkata',     phoneFormat: '98765 43210' },
+  { code: 'AU', name: 'Australia',              dial: '+61',  timezone: 'Australia/Sydney', phoneFormat: '412 345 678' },
+  { code: 'SG', name: 'Singapore',              dial: '+65',  timezone: 'Asia/Singapore',   phoneFormat: '8123 4567' },
 ];
 
 type PwStrength = { label: string; color: string; pct: number };
@@ -1418,7 +1422,7 @@ function RegisterContent() {
                       <input
                         value={phone}
                         onChange={e => setPhone(e.target.value)}
-                        placeholder="(555) 000-0000"
+                        placeholder={selectedCountry.phoneFormat}
                         style={{ ...inputBase, paddingLeft: 56 }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}

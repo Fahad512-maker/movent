@@ -522,6 +522,7 @@ import { SIMPLE_PROJECT_PERMISSIONS } from '@/lib/simplifiedProjectPermissions';
 import { USER_ROLE_TYPE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
 import { CompanyOption } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
+import { getAuthType } from '@/lib/auth';
 import { HiArrowLeft, HiArrowRight, HiCheckCircle, HiClipboard, HiUserGroup, HiCheck } from 'react-icons/hi2';
 
 // availMods (from getAvailableModules) -> { moduleKey: visible permission keys[] },
@@ -549,6 +550,12 @@ interface CreatedInfo { email: string; password: string; loginUrl: string; isLin
 export default function NewUserPage() {
   useAdminGuard();
   const router = useRouter();
+  // This page is reachable both as an actual Company Admin (auto-redirected
+  // to /admin/users/new by useAdminGuard) and as a staff sub-user with
+  // permission to create users, landing directly on /users/new with no
+  // /admin prefix — /admin/users would be the wrong, inapplicable route for
+  // that second case.
+  const usersRoot = getAuthType() === 'admin' ? '/admin/users' : '/users';
 
   // Steps 1-3
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -705,7 +712,7 @@ export default function NewUserPage() {
               <button onClick={() => copy(allText, 'all')} style={{ width: '100%', padding: '12px 0', borderRadius: 9, border: 'none', background: copied === 'all' ? '#059669' : 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
                 <HiClipboard size={17} /> {copied === 'all' ? 'Copied!' : 'Copy Details'}
               </button>
-              <button onClick={() => router.push('/admin/users')} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              <button onClick={() => router.push(usersRoot)} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                 <HiUserGroup size={16} /> View All Users
               </button>
             </div>
@@ -723,7 +730,7 @@ export default function NewUserPage() {
         <button
           onClick={() => {
             if (step > 1) { setError(''); setStep((step === 3 && singleCompany ? 1 : step - 1) as 1 | 2 | 3); }
-            else { router.push('/admin/users'); }
+            else { router.push(usersRoot); }
           }}
           style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> {step > 1 ? 'Back' : 'Back to Users'}

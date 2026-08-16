@@ -39,11 +39,29 @@ class RoleDefaultPermissions
                 'canViewProjectReports', 'canViewTaskReports',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
-                'canViewProjectChat', 'canSendProjectChatMessage', 'canManageProjectChatParticipants', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
+                // canManageProjectChatParticipants deliberately excluded — a
+                // PM manages this project's PEOPLE via "Manage Team" instead
+                // (assignTeam() already syncs each addition into chat, see
+                // ProjectChatService::addTeamMember()); Participants here is
+                // reserved for the Seller-invited PM flow / a company-wide
+                // overseer, never the literal PM (see
+                // Api\User\ProjectMessengerController::canManageParticipants()).
+                'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments', 'canDeleteAnyProjectChatMessage',
                 // Advanced bundle additions.
                 'canAssignProjectSeller', 'canActivateProjects', 'canForceCloseProjects',
                 'canDeleteProjectAttachments', 'canDeleteTaskAttachments', 'canAddSellerToProjectChat',
-                'canViewAllCompanyProjects', 'canViewClosedProjects',
+                // canViewAllCompanyProjects deliberately excluded (reverted
+                // 2026-08-15) — it granted implicit access to EVERY project's
+                // chat company-wide (Api\User\ProjectMessengerController::
+                // isPM()/resolveThreadForViewing()), which defeated the
+                // Seller's own "Invite Project Manager into Project Chat"
+                // feature entirely (nothing to invite into if the PM already
+                // had unconditional access) and let a PM manage chat
+                // Participants on projects they aren't actually assigned to.
+                // A PM now only ever sees/manages projects they're literally
+                // assigned to (project_manager_id or a team member row),
+                // company-wide or Seller-invited access aside.
+                'canViewClosedProjects',
                 'canOverrideProjectCreationBeforePayment',
             ],
             // General Chat (direct/group messaging, not tied to a project) —

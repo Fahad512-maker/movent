@@ -327,9 +327,17 @@ class ClientController extends Controller
     {
         $company = $this->admin()->companies()->findOrFail($id);
 
-        return ApiResponse::success($company->only([
-            'id', 'name', 'currency', 'industry', 'email', 'phone', 'address', 'timezone', 'is_active',
-        ]));
+        return ApiResponse::success(array_merge(
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'is_active']),
+            // Tenant-level currency (company_admins.currency) is what's
+            // actually authoritative for invoices (Company::invoicingProfile()),
+            // not the legacy per-company column below — prefilling this edit
+            // form from that legacy column let a stale value sit there
+            // unnoticed and silently revert a later Settings → Company
+            // currency change the next time this form got saved for some
+            // unrelated edit (see updateCompany()).
+            ['currency' => $this->admin()->currency]
+        ));
     }
 
     // =========================================================================
@@ -364,9 +372,10 @@ class ClientController extends Controller
         // invoices unaffected.
         $this->admin()->update(['currency' => $data['currency']]);
 
-        return ApiResponse::success($company->only([
-            'id', 'name', 'currency', 'industry', 'email', 'phone', 'address', 'timezone',
-        ]), 'Company updated successfully');
+        return ApiResponse::success(array_merge(
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone']),
+            ['currency' => $this->admin()->currency]
+        ), 'Company updated successfully');
     }
 
     // =========================================================================

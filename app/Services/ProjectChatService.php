@@ -130,13 +130,24 @@ class ProjectChatService
             return;
         }
 
+        // The Client (added via addClient()) lives on the Client Portal, a
+        // separate app tree with its own auth cookie — the staff route below
+        // would 401 for them there (no staff session token to send) and trip
+        // the staff axios interceptor's force-logout-on-401 handling. Only
+        // reachable from this shared helper via addClient(); every other
+        // caller (addSeller()/addTaskAssignee()/addTeamMember()) only ever
+        // adds staff, for whom the staff route is correct.
+        $link = User::find($userId)?->role_type === 'client'
+            ? "/client/projects/{$project->id}?tab=chat"
+            : "/projects/{$project->id}/chat";
+
         Notification::create([
             'user_id'    => $userId,
             'company_id' => $project->company_id,
             'type'       => 'project_chat_added',
             'title'      => "Added to project chat — {$project->name}",
             'body'       => "You were added to project chat for '{$project->name}'.",
-            'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => "/projects/{$project->id}/chat"],
+            'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'link' => $link],
         ]);
     }
 

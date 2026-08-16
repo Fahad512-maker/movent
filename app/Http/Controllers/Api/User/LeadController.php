@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\User;
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\Lead;
 use App\Models\LeadTransfer;
 use App\Models\Notification;
@@ -455,6 +456,14 @@ class LeadController extends Controller
         // would never surface that project, even once activated and even
         // after portal access is granted.
         Project::where('lead_id', $lead->id)->whereNull('client_id')->update(['client_id' => $client->id]);
+
+        // Same reasoning as the Project backfill above, for an invoice paid
+        // while this was still a lead (created via /invoices/new?lead_id=...,
+        // client_id null since no Client existed yet) — otherwise the Client
+        // Portal's invoice list (Api\Client\InvoiceController, filtered
+        // strictly on client_id) would never surface it, even after the
+        // lead converts and portal access is granted.
+        Invoice::where('lead_id', $lead->id)->whereNull('client_id')->update(['client_id' => $client->id]);
 
         return ApiResponse::success(['client_id' => $client->id], 'Lead converted to client', 201);
     }

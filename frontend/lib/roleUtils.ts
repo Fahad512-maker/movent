@@ -148,11 +148,14 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
       'canViewProjectReports', 'canViewTaskReports',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
-      'canViewProjectChat', 'canSendProjectChatMessage', 'canManageProjectChatParticipants', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
+      // canManageProjectChatParticipants and canViewAllCompanyProjects
+      // deliberately excluded (reverted 2026-08-15) — see the matching
+      // comment in App\Services\RoleDefaultPermissions::MAP.
+      'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
       // Advanced bundle additions.
       'canAssignProjectSeller', 'canActivateProjects', 'canForceCloseProjects',
       'canDeleteProjectAttachments', 'canDeleteTaskAttachments', 'canAddSellerToProjectChat',
-      'canViewAllCompanyProjects', 'canViewClosedProjects',
+      'canViewClosedProjects',
       'canOverrideProjectCreationBeforePayment',
     ],
     account: ['canUseGeneralChat'],

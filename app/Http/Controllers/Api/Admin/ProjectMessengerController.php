@@ -317,6 +317,14 @@ class ProjectMessengerController extends Controller
 
             if (!$participant->wasRecentlyCreated) continue;
 
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = User::find($userId)?->role_type === 'client'
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
+
             Notification::create([
                 'user_id'    => $userId,
                 'company_id' => $project->company_id,
@@ -326,7 +334,7 @@ class ProjectMessengerController extends Controller
                 'data'       => [
                     'project_id' => $project->id,
                     'thread_id'  => $thread->id,
-                    'link'       => "/projects/{$project->id}/chat",
+                    'link'       => $link,
                 ],
             ]);
         }
@@ -393,22 +401,40 @@ class ProjectMessengerController extends Controller
                 continue;
             }
 
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = $participant->user?->role_type === 'client'
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
+
             Notification::create([
                 'user_id'    => $participant->user_id,
                 'company_id' => $project->company_id,
                 'type'       => 'project_chat_message',
                 'title'      => "New message on {$project->name}",
                 'body'       => "{$senderName}: {$preview}",
-                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => "/projects/{$project->id}/chat"],
+                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => $link],
             ]);
         }
 
         foreach (collect($mentionIds ?? [])->reject(fn ($id) => $id === $actorUserId) as $uid) {
+            $targetIsClient = User::find($uid)?->role_type === 'client';
+
             // Same rule as the general recipient loop above — being
             // @mentioned doesn't override visibility for the Client.
-            if (User::find($uid)?->role_type === 'client' && $message->visibility !== 'client') {
+            if ($targetIsClient && $message->visibility !== 'client') {
                 continue;
             }
+
+            // The Client Portal is a separate app tree with its own auth
+            // cookie — the staff route below would 401 there (no staff
+            // session token to send) and trip the staff axios interceptor's
+            // force-logout-on-401 handling.
+            $link = $targetIsClient
+                ? "/client/projects/{$project->id}?tab=chat"
+                : "/projects/{$project->id}/chat";
 
             Notification::create([
                 'user_id'    => $uid,
@@ -416,7 +442,7 @@ class ProjectMessengerController extends Controller
                 'type'       => 'mentioned_in_project_chat',
                 'title'      => "You were mentioned on {$project->name}",
                 'body'       => "{$senderName}: {$preview}",
-                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => "/projects/{$project->id}/chat"],
+                'data'       => ['project_id' => $project->id, 'thread_id' => $thread->id, 'message_id' => $message->id, 'link' => $link],
             ]);
         }
     }
