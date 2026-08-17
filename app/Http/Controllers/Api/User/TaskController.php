@@ -24,15 +24,23 @@ class TaskController extends Controller
     private function userName(): string { return trim((string) ($this->user()->name ?? '')) ?: 'User'; }
 
     // Tasks can only be assigned to a real user of this staff member's own
-    // company — not any user id in the system. A Seller can never be a task
-    // assignee, full stop.
-    private function assignedToRule()
+    // company who is actually on THIS project's team (added via "Manage
+    // Team" — project_team_members, not just any company user) — a Seller,
+    // Client, or Project Manager can never be a task assignee, full stop.
+    // Applies uniformly regardless of who's doing the assigning: PM/Admin
+    // reassigning, or a Developer/QA/Team Member handing off their OWN task
+    // (the isOwnTask bypass in update() below) — either way, the target must
+    // be a teammate on this specific project.
+    private function assignedToRule(Project $project)
     {
+        $teamMemberIds = $project->teamMembers()->pluck('user_id');
+
         // Rule::exists()->where() only supports 2-arg (column, value) equality
         // — a 3-arg (column, operator, value) call silently misparses, so a
         // closure is required for a "!=" condition.
         return Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)
-            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client']));
+            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client', 'project_manager']))
+            ->whereIn('id', $teamMemberIds->isNotEmpty() ? $teamMemberIds->all() : [0]);
     }
 
     // qa_assigned_to is optional (no dropdown/status-transition requires it
@@ -192,8 +200,12 @@ class TaskController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
+        // project.teamMembers.user is here so the frontend's "Assigned To"
+        // reassignment picker can scope its options to this task's own
+        // project team, instead of every user in the company (same fix
+        // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
-            ->with(['project:id,name', 'assignedBy:id,name', 'assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name'])
+            ->with(['project:id,name,company_id', 'project.teamMembers.user:id,name,role_type', 'assignedBy:id,name', 'assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name'])
             ->withCount('attachments');
 
         $q->where(function ($w) use ($user) {
@@ -254,25 +266,6 @@ class TaskController extends Controller
         return ApiResponse::success($users);
     }
 
-    // GET /user/tasks/assignable-users — every active non-seller user in this
-    // company, for the "reassign to anyone" dropdown ANY role sees on their
-    // OWN task (see the isOwnTask widening of the assigned_to rule in
-    // update() below). Same no-permission-gate reasoning as
-    // qaUsers()/productionUsers() above — Api\User\ProjectController::
-    // companyUsers() stays gated behind canCreateTasks/canEditTasks/
-    // canAssignTeamResources/canViewTeamResources since it also drives
-    // project team management, not just this handoff.
-    public function assignableUsers(): JsonResponse
-    {
-        $users = User::where('company_id', $this->user()->company_id)
-            ->whereNotIn('role_type', ['seller', 'client'])
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name', 'role_type']);
-
-        return ApiResponse::success($users);
-    }
-
     // Cross-project task list across every project the PM/Admin can see —
     // mirrors Admin\TaskController::indexAll(), scoped through visibleProjects()
     // instead of company-wide, since staff visibility is permission-scoped.
@@ -293,8 +286,12 @@ class TaskController extends Controller
         $user = $this->user();
         $visibleProjectIds = $this->visibleProjectIds();
 
+        // project.teamMembers.user is here so the frontend's "Assigned To"
+        // reassignment picker can scope its options to this task's own
+        // project team, instead of every user in the company (same fix
+        // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereIn('project_id', $visibleProjectIds)
-            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue', 'project:id,name'])
+            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue', 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
             ->withCount('attachments');
 
         if (!$canViewAll) {
@@ -453,7 +450,7 @@ class TaskController extends Controller
         $isLinkedOnly = !$canFullCreate;
 
         $validated = $request->validate([
-            'assigned_to'      => ['nullable', 'integer', $this->assignedToRule()],
+            'assigned_to'      => ['nullable', 'integer', $this->assignedToRule($project)],
             'title'            => ['required', 'string', 'max:255'],
             'description'      => ['nullable', 'string'],
             'notes'            => ['nullable', 'string'],
@@ -572,10 +569,11 @@ class TaskController extends Controller
             'comment'                => ['nullable', 'string', 'max:1000'],
             'qa_assigned_to'         => ['nullable', 'integer', $this->qaAssignedToRule()],
             // Optional Production/Deployment handoff when moving to "Ready
-            // for Production" — any non-seller company user, same rule as
-            // assigned_to (not narrowed to role_type='production', since a
-            // developer/designer can just as validly own the production step).
-            'production_assigned_to' => ['nullable', 'integer', $this->assignedToRule()],
+            // for Production" — any non-seller, non-PM project team member,
+            // same rule as assigned_to (not narrowed to role_type='production',
+            // since a developer/designer can just as validly own the
+            // production step).
+            'production_assigned_to' => ['nullable', 'integer', $this->assignedToRule($project)],
         ];
         if ($canEdit) {
             $rules += [
@@ -592,9 +590,10 @@ class TaskController extends Controller
         // without full task-editing rights. ANY role also gets this on their
         // OWN task (no permission needed, no role restriction) — QA,
         // Developer, Team Member, whoever currently holds the task can hand
-        // it off to anyone else in the company.
+        // it off to another teammate on this same project (assignedToRule()
+        // scopes to the project's team either way, not the whole company).
         if ($canEdit || $canAssign || $isOwnTask) {
-            $rules['assigned_to'] = ['nullable', 'integer', $this->assignedToRule()];
+            $rules['assigned_to'] = ['nullable', 'integer', $this->assignedToRule($project)];
         }
 
         $validated = $request->validate($rules);

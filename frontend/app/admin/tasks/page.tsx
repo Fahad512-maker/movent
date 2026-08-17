@@ -174,15 +174,18 @@ export default function AllTasksPage() {
                       <option value="">Unassigned</option>
                       {/* Only this task's own project team is assignable —
                           not every user in the company (same fix already
-                          applied to the Projects listing's PM dropdown). */}
-                      {(t.project?.team_members ?? []).filter(tm => tm.user).map(tm => (
+                          applied to the Projects listing's PM dropdown) —
+                          and never the Project Manager: this is the
+                          developer-side "who can do the work" list. */}
+                      {(t.project?.team_members ?? []).filter(tm => tm.user && tm.user.role_type !== 'project_manager').map(tm => (
                         <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}</option>
                       ))}
                       {/* Keep the current assignee selectable even if they're not
                           a formal team_members row (e.g. since removed from the
-                          team) so the dropdown never silently shows the wrong
-                          selection. */}
-                      {asRelation(t.assigned_to) && !(t.project?.team_members ?? []).some(tm => tm.user_id === asRelation(t.assigned_to)?.id) && (
+                          team), or are the PM (excluded above), so the dropdown
+                          never silently shows blank for an existing assignment —
+                          a single fallback entry, not a normal re-pickable choice. */}
+                      {asRelation(t.assigned_to) && !(t.project?.team_members ?? []).some(tm => tm.user_id === asRelation(t.assigned_to)?.id && tm.user?.role_type !== 'project_manager') && (
                         <option value={asRelation(t.assigned_to)?.id}>{asRelation(t.assigned_to)?.name}</option>
                       )}
                     </select>

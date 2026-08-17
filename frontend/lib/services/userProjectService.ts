@@ -170,10 +170,6 @@ export const userProjectService = {
     // regardless of whether they hold canCreateTasks/canEditTasks/etc.
     qaUsers: async (): Promise<{ id: number; name: string }[]> => (await api.get('/user/tasks/qa-users')).data.data,
     productionUsers: async (): Promise<{ id: number; name: string }[]> => (await api.get('/user/tasks/production-users')).data.data,
-    // No permission gate — a Developer/Team Member reassigning THEIR OWN
-    // task (see the isDevOrTeamAssignee bypass in Api\User\TaskController::
-    // update()) needs the full non-seller company user list.
-    assignableUsers: async (): Promise<{ id: number; name: string; role_type: string }[]> => (await api.get('/user/tasks/assignable-users')).data.data,
   },
 
   team: {

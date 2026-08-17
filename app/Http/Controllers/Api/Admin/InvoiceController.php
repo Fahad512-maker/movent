@@ -375,8 +375,8 @@ class InvoiceController extends Controller
         if (!in_array($invoice->company_id, $this->companyIds())) {
             return ApiResponse::error('Not found', 404);
         }
-        if (in_array($invoice->status, ['draft', 'cancelled'])) {
-            return ApiResponse::error('Only sent or overdue invoices can have a payment link', 422);
+        if ($invoice->status === 'cancelled') {
+            return ApiResponse::error('Cannot share a cancelled invoice', 422);
         }
 
         $data = $request->validate([
@@ -397,6 +397,17 @@ class InvoiceController extends Controller
 
         if ($customerFields) {
             $invoice->update($customerFields);
+        }
+
+        // Auto-mark draft as sent when sharing — same convention as
+        // Api\User\InvoiceController::generateLink(). Previously this
+        // hard-rejected a draft invoice instead, which meant "Create & Copy
+        // Link" (the frontend's shared button for both guards) silently
+        // never sent/notified the client when Company Admin used it, even
+        // though the identical action worked for a Seller.
+        if ($invoice->status === 'draft') {
+            $invoice->update(['status' => 'sent', 'sent_at' => now()]);
+            InvoiceNotificationService::notifyClientInvoiceSent($invoice);
         }
 
         $token = $invoice->generatePublicToken($data['expiry_days'] ?? null);

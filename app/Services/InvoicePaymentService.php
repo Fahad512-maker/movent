@@ -260,6 +260,12 @@ class InvoicePaymentService
                 'url'         => "/admin/invoices/{$invoice->id}",
             ]);
         } catch (\Throwable) {}
+
+        // The Client Portal side of this same event — reached from every
+        // payment-confirmation path via this one method (gateway webhook,
+        // Admin's manual confirm, Seller's manual confirm), so the client is
+        // notified exactly once per confirmed payment regardless of channel.
+        InvoiceNotificationService::notifyClientInvoicePaid($invoice, $payment);
     }
 
     /**

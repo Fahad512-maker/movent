@@ -2,13 +2,18 @@
 
 namespace App\Services;
 
+use App\Mail\ProjectActivatedMail;
+use App\Models\Client;
 use App\Models\CompanyModule;
 use App\Models\Deliverable;
+use App\Models\Notification;
 use App\Models\ProductionQueue;
 use App\Models\Project;
 use App\Models\Revision;
 use App\Models\Task;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 // Shared readiness check for the "Mark as Complete" action, used by both
 // Api\Admin\ProjectController and Api\User\ProjectController so the rule set
@@ -138,5 +143,50 @@ class ProjectCompletionService
             ->whereIn('module_key', ['client_portal', 'clients'])
             ->where('is_enabled', true)
             ->exists();
+    }
+
+    // Called once, right after activate() — the one place this project's
+    // client actually needs to hear about it. Exactly one of two things
+    // happens, never both:
+    //   - A Client Portal login exists (portal_access + a linked users row)
+    //     AND the company still actually has the Client Portal module active
+    //     (clientPortalActive() — a client's row can keep stale portal_access
+    //     after the company later disables the module) → an in-app
+    //     Notification, deep-linking straight to the project.
+    //   - Otherwise → an email instead, to whichever address is actually
+    //     reachable: the Client's own email if one exists without a usable
+    //     portal, or the original Lead's email if this project hasn't been
+    //     converted to a Client at all yet. A project with neither (an
+    //     internal-only project with no counterparty) is silently a no-op.
+    // A failed send here must never fail the activation it rode in on.
+    public function notifyClientOfActivation(Project $project, string $companyName): void
+    {
+        $client = $project->client_id ? Client::find($project->client_id) : null;
+
+        if ($client && $client->portal_access && $client->user_id && $this->clientPortalActive($project)) {
+            Notification::create([
+                'user_id'    => $client->user_id,
+                'company_id' => $project->company_id,
+                'type'       => 'project_activated',
+                'title'      => 'Project activated',
+                'body'       => "\"{$project->name}\" is now active.",
+                'data'       => ['project_id' => $project->id, 'link' => "/client/projects/{$project->id}"],
+            ]);
+
+            return;
+        }
+
+        $recipientEmail = $client?->email ?? $project->lead?->email;
+        $recipientName  = $client?->name ?? $project->lead?->name ?? 'there';
+
+        if (!$recipientEmail) {
+            return;
+        }
+
+        try {
+            Mail::to($recipientEmail)->send(new ProjectActivatedMail($project, $companyName, $recipientName));
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send ProjectActivatedMail: ' . $e->getMessage());
+        }
     }
 }

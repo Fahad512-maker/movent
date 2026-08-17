@@ -881,7 +881,6 @@ Route::prefix('user')->group(function () {
             // Production handoff pickers. See TaskController::qaUsers().
             Route::get('tasks/qa-users',                        [UserTaskController::class, 'qaUsers']);
             Route::get('tasks/production-users',                [UserTaskController::class, 'productionUsers']);
-            Route::get('tasks/assignable-users',                [UserTaskController::class, 'assignableUsers']);
 
             Route::get('projects/{projectId}/tasks/{taskId}/attachments',                [UserTaskAttachmentController::class, 'index']);
             Route::post('projects/{projectId}/tasks/{taskId}/attachments',               [UserTaskAttachmentController::class, 'store']);

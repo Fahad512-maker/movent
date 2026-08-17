@@ -36,13 +36,6 @@ export default function UserTasksPage() {
   // so reading them directly in the render body causes a hydration mismatch.
   const [seeAllTasks, setSeeAllTasks] = useState(false);
   const [ready, setReady] = useState(false);
-  // Every non-seller active company user, for the "Assigned To" reassignment
-  // dropdown — sourced from the ungated assignable-users endpoint (not
-  // ProjectController::companyUsers(), which requires canCreateTasks/
-  // canEditTasks/canAssignTeamResources/canViewTeamResources; a user who
-  // only holds canAssignTasks, like a Developer granted just that, would 403
-  // on that endpoint and see an empty dropdown).
-  const [assignableUsers, setAssignableUsers] = useState<{ id: number; name: string; role_type: string }[]>([]);
 
   const me = getAuthUser() as { id?: number; role_type?: string } | null;
   // Mirrors the backend bypass in TaskStatusService::canTransition() — a
@@ -100,8 +93,16 @@ export default function UserTasksPage() {
     notificationService.markCategoryRead('tasks')
       .then(() => window.dispatchEvent(new Event('nav_badges_refresh')))
       .catch(() => {});
-    userProjectService.tasks.assignableUsers().then(setAssignableUsers).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Who this task can actually be reassigned to: this task's own project
+  // team (added via "Manage Team" — project.team_members, not every company
+  // user), excluding the Project Manager — this is the developer-side "who
+  // can do the work" list (mirrors Api\User\TaskController::assignedToRule()).
+  const assignableUsersFor = (t: Task): { id: number; name: string; role_type?: string }[] =>
+    (t.project?.team_members ?? [])
+      .filter(tm => tm.user && tm.user.role_type !== 'project_manager' && tm.user.role_type !== 'seller' && tm.user.role_type !== 'client')
+      .map(tm => tm.user!);
 
   const load = async () => {
     setLoading(true);
@@ -275,13 +276,22 @@ export default function UserTasksPage() {
                         if (!canEditTasks && !canAssignTasks && !isSelfTask) {
                           return asRelation(t.assigned_to)?.name ?? '—';
                         }
+                        const options = assignableUsersFor(t);
                         return (
                           <select value={currentAssigneeId != null ? String(currentAssigneeId) : ''} onChange={e => updateAssignee(t, e.target.value)}
                             style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value="">Unassigned</option>
-                            {assignableUsers.map(u => (
+                            {options.map(u => (
                               <option key={u.id} value={u.id}>{u.name}</option>
                             ))}
+                            {/* Keep a task's existing assignee showing correctly
+                                even if their role is no longer eligible here, or
+                                they've since left the project team — a single
+                                fallback entry so the select isn't blank, not a
+                                normal re-pickable choice. */}
+                            {currentAssigneeId != null && !options.some(u => u.id === currentAssigneeId) && (
+                              <option value={String(currentAssigneeId)}>{asRelation(t.assigned_to)?.name ?? `User #${currentAssigneeId}`}</option>
+                            )}
                           </select>
                         );
                       })()}

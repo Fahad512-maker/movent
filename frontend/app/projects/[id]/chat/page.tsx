@@ -326,18 +326,6 @@ export default function ProjectChatPage() {
                 </div>
               )}
 
-              {me?.role_type === 'seller' && (
-                <div style={{ padding: '8px 20px', fontSize: 11.5, color: '#b45309', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
-                  You only see your own messages, plain messages from Company Admin, anything Admin tags you or the Project Manager in, and anything the Project Manager tags you in — never the rest of the team.
-                </div>
-              )}
-
-              {me?.role_type !== 'seller' && me?.role_type !== 'client' && !isLiteralPm && (
-                <div style={{ padding: '8px 20px', fontSize: 11.5, color: '#b45309', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
-                  You only see your own messages, the Project Manager's plain messages, and anything anyone tags you in. Your own messages are only ever seen by the Project Manager and Company Admin.
-                </div>
-              )}
-
               {showParticipants && canManageParticipants && (
                 <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>

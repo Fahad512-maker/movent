@@ -79,9 +79,6 @@ export default function UserProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [comments, setComments] = useState<ProjectComment[]>([]);
-  // Every non-seller active company user, for the per-row "Assigned To"
-  // reassignment dropdown — real source of truth (see the fetch below for why).
-  const [assignableUsers, setAssignableUsers] = useState<{ id: number; name: string; role_type: string }[]>([]);
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachmentVisibleToClient, setAttachmentVisibleToClient] = useState(false);
@@ -268,11 +265,6 @@ export default function UserProjectDetailPage() {
     }
     load();
     loadComments();
-    // No permission gate — unlike team.companyUsers() (which requires
-    // canCreateTasks/canEditTasks/canAssignTeamResources/canViewTeamResources
-    // and 403s for e.g. a Developer only granted canAssignTasks), this is the
-    // reassignment dropdown's real source of truth below — always fetched.
-    userProjectService.tasks.assignableUsers().then(setAssignableUsers).catch(() => {});
     if (canViewAttachments) loadAttachments();
     if (hasProductionAccess) loadProduction();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -608,6 +600,13 @@ export default function UserProjectDetailPage() {
 
   const tasks = project.tasks ?? [];
   const team = project.team_members ?? [];
+  // Who a task can actually be reassigned to: this project's own team
+  // (added via "Manage Team"), excluding the Project Manager — this is the
+  // developer-side "who can do the work" list (mirrors
+  // Api\User\TaskController::assignedToRule()).
+  const assignableUsers = team
+    .filter(tm => tm.user && tm.user.role_type !== 'project_manager' && tm.user.role_type !== 'seller' && tm.user.role_type !== 'client')
+    .map(tm => tm.user!);
   const projectManager = project.project_manager;
   const createdByName = asRelation(project.created_by)?.name ?? project.created_by_admin?.name ?? null;
 
@@ -1034,13 +1033,23 @@ export default function UserProjectDetailPage() {
                         if (!canEditTasks && !canAssignTasks && !isSelfTask) {
                           return asRelation(t.assigned_to)?.name ?? '—';
                         }
+                        const currentAssigneeId = asRelation(t.assigned_to)?.id ?? t.assigned_to;
                         return (
-                          <select value={t.assigned_to != null ? String(asRelation(t.assigned_to)?.id ?? t.assigned_to) : ''} onChange={e => updateTaskAssignee(t, e.target.value)}
+                          <select value={currentAssigneeId != null ? String(currentAssigneeId) : ''} onChange={e => updateTaskAssignee(t, e.target.value)}
                             style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value="">Unassigned</option>
                             {assignableUsers.map(u => (
                               <option key={u.id} value={u.id}>{u.name}</option>
                             ))}
+                            {/* Keep a task's existing assignee showing correctly
+                                even if their role is no longer eligible here
+                                (e.g. a Project Manager assigned before that role
+                                was excluded from this list) — a single fallback
+                                entry so the select isn't blank, not a normal
+                                re-pickable choice. */}
+                            {currentAssigneeId != null && !assignableUsers.some(u => u.id === currentAssigneeId) && (
+                              <option value={String(currentAssigneeId)}>{asRelation(t.assigned_to)?.name ?? `User #${currentAssigneeId}`}</option>
+                            )}
                           </select>
                         );
                       })()}

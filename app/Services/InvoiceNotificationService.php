@@ -7,6 +7,7 @@ use App\Models\ClientPortalPermission;
 use App\Models\CompanyModule;
 use App\Models\Invoice;
 use App\Models\Notification;
+use App\Models\Payment;
 use Illuminate\Support\Facades\Log;
 
 class InvoiceNotificationService
@@ -70,6 +71,56 @@ class InvoiceNotificationService
             // A notification must never break the invoice send it rode in on —
             // same swallow-and-log posture as InvoicePaymentService::notifyStakeholders().
             Log::warning('[invoice-notify] Could not create client portal notification for invoice '
+                . $invoice->id . ': ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Fire the Client Portal notification once an invoice is actually paid
+     * (in full or in part) — called from InvoicePaymentService::notifyStakeholders(),
+     * the single choke point reached by every payment-confirmation path
+     * (gateway webhook, Admin's manual confirm, Seller's manual confirm), so
+     * this fires exactly once per confirmed payment regardless of channel.
+     * Same gating as notifyClientInvoiceSent() — no portal login, or the
+     * portal's Invoices section hidden for this client/company, means email
+     * stays the only channel (see InvoicePaymentService::notifyPaymentConfirmedEmails()).
+     */
+    public static function notifyClientInvoicePaid(Invoice $invoice, Payment $payment): void
+    {
+        try {
+            if (!$invoice->client_id) {
+                return;
+            }
+
+            $client = Client::find($invoice->client_id);
+
+            if (!$client || !$client->portal_access || !$client->user_id) {
+                return;
+            }
+
+            if (!self::clientSeesInvoices($client)) {
+                return;
+            }
+
+            $amount = $invoice->currency . ' ' . number_format((float) $invoice->total_amount, 2);
+            $fullyPaid = $invoice->status === 'paid';
+
+            Notification::create([
+                'user_id'    => $client->user_id,
+                'company_id' => $invoice->company_id,
+                'type'       => 'invoice_paid',
+                'title'      => $fullyPaid ? "Invoice {$invoice->invoice_number} paid" : "Payment received — {$invoice->invoice_number}",
+                'body'       => $fullyPaid
+                    ? "Your payment of {$amount} has been received in full."
+                    : 'Your payment towards this invoice has been received — ' . $invoice->currency . ' ' . number_format((float) $payment->amount, 2),
+                'data'       => [
+                    'invoice_id' => $invoice->id,
+                    'payment_id' => $payment->id,
+                    'link'       => "/client/invoices/{$invoice->id}",
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('[invoice-notify] Could not create client portal payment notification for invoice '
                 . $invoice->id . ': ' . $e->getMessage());
         }
     }

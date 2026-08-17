@@ -4,7 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { userService } from '@/lib/services/userService';
 import { getAvailableModules } from '@/lib/moduleCatalog';
-import { SIMPLE_PROJECT_PERMISSIONS } from '@/lib/simplifiedProjectPermissions';
+import { SIMPLE_PROJECT_PERMISSIONS, collapseProjectPermissions } from '@/lib/simplifiedProjectPermissions';
 import { USER_ROLE_TYPE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
 import { CompanyOption, User } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
@@ -22,6 +22,44 @@ function visiblePermsByModule(availMods: ReturnType<typeof getAvailableModules>,
       .map(p => p.key);
   }
   return out;
+}
+
+// The "N permissions selected" badge must count what's actually checked on
+// screen, not raw granular permission keys — mirrors app/users/new/page.tsx's
+// identical fix. Project Management shows simplified bundle checkboxes, each
+// expanding into several granular keys (e.g. "Manage Projects" = 7 keys) —
+// one checked box must count as 1, not 7 (collapseProjectPermissions(), same
+// as the checkbox `checked` state uses). A granted key that isn't currently
+// visible (module not purchased, or hidden by hideIfCatalogKey) has no
+// checkbox to reflect, so it's excluded via the same visiblePermsByModule()
+// filtering the checkboxes themselves use.
+function visibleSelectedCount(
+  companyId: number,
+  perms: Record<number, Record<string, string[]>>,
+  companies: CompanyOption[],
+): number {
+  const modPermsFor = perms[companyId] ?? {};
+  let total = 0;
+
+  const accountPerms = modPermsFor['account'] ?? [];
+  if (accountPerms.includes('canAddUsers')) total += 1;
+  if (accountPerms.includes('canUseGeneralChat')) total += 1;
+
+  const co = companies.find(c => c.id === companyId);
+  const rawDb = co?.modules ?? [];
+  const availMods = getAvailableModules(rawDb);
+  const visible = visiblePermsByModule(availMods, rawDb);
+
+  for (const mod of availMods) {
+    if (mod.key === 'project_management') {
+      total += collapseProjectPermissions(modPermsFor.project_management ?? []).length;
+      continue;
+    }
+    const granted = modPermsFor[mod.key] ?? [];
+    total += (visible[mod.key] ?? []).filter(k => granted.includes(k)).length;
+  }
+
+  return total;
 }
 
 const inp: React.CSSProperties = {
@@ -231,7 +269,7 @@ function EditUserPageContent() {
                   <>
                     {/* Role default-permissions helper text + selected count */}
                     {activeCompanyId !== null && (() => {
-                      const totalSelected = Object.values(perms[activeCompanyId] ?? {}).reduce((sum, arr) => sum + arr.length, 0);
+                      const totalSelected = visibleSelectedCount(activeCompanyId, perms, companies);
                       return (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#f8fafc', borderRadius: 8 }}>
                           <span style={{ fontSize: 12, color: '#64748b' }}>

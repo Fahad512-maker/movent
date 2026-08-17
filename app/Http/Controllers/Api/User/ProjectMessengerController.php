@@ -577,7 +577,20 @@ class ProjectMessengerController extends Controller
             return ApiResponse::error('That user is not an active Project Manager at your company.', 422);
         }
 
-        $existingPm = $project->teamMembers()->where('role_in_project', 'project_manager')->first();
+        // Excludes the project's own Seller — a self-handoff project has
+        // them backfilled into this exact row (role_in_project=
+        // 'project_manager', user_id=seller_id) purely so the "Project
+        // Manager" column shows a name instead of "Unassigned" (see
+        // 2026_08_11_150000_backfill_project_manager_id_from_seller.php and
+        // ProjectSellerAssignmentService::assign()) — cosmetic only, never a
+        // real assignment. Without this exclusion every self-handoff project
+        // would look like it already had a PM and permanently block this
+        // invite, matching the same seller-is-never-a-real-PM rule already
+        // enforced by isProjectPmUser() and invitablePmIds() elsewhere.
+        $existingPm = $project->teamMembers()
+            ->where('role_in_project', 'project_manager')
+            ->where('user_id', '!=', $project->seller_id)
+            ->first();
         if ($existingPm) {
             return ApiResponse::error(
                 $existingPm->user_id === $pmId

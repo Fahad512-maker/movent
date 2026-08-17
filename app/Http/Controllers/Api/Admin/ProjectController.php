@@ -746,6 +746,9 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_activated', 'Project activated', "\"{$project->name}\" was activated by {$this->adminName()}.");
 
+        $companyName = \App\Models\Company::find($project->company_id)?->invoicingProfile()['name'] ?? config('app.name');
+        $this->completionService()->notifyClientOfActivation($project, $companyName);
+
         return ApiResponse::success($project->fresh(), 'Project activated');
     }
 
