@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 interface FormState {
   name: string;
@@ -52,6 +54,7 @@ export default function CreateCompanyPage() {
 
   const submit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!form.name.trim()) { toast.error('Company name is required'); return; }
     if (!/^[A-Za-z0-9]+$/.test(form.name)) {
       toast.error('Company name can only contain letters and numbers');
@@ -83,6 +86,7 @@ export default function CreateCompanyPage() {
 
   return (
     <DashboardLayout title="Add Company">
+      <LoadingOverlay show={saving} message="Creating Account…" />
       {/* Breadcrumb */}
       <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
         <span
@@ -191,18 +195,18 @@ export default function CreateCompanyPage() {
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 20px' }}>
-              <button
-                type="submit"
-                disabled={saving}
+              <SubmitButton
+                loading={saving}
+                loadingText="Creating Account…"
                 style={{
                   width: '100%', padding: '12px 0', background: saving ? '#93c5fd' : '#2563eb',
                   color: '#fff', border: 'none', borderRadius: 8,
-                  fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
+                  fontSize: 14, fontWeight: 700,
                   marginBottom: 10,
                 }}
               >
-                {saving ? 'Creating…' : 'Create Company'}
-              </button>
+                Create Company
+              </SubmitButton>
               <button
                 type="button"
                 onClick={() => router.back()}

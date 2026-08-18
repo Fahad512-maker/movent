@@ -14,6 +14,8 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { HiArrowLeft, HiFolder, HiFolderPlus, HiPlusCircle, HiTrash, HiUserCircle, HiUsers } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -367,6 +369,7 @@ function NewInvoiceForm() {
   };
 
   const handleCreate = async (sendAfter: boolean) => {
+    if (saving || sending || linking) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     const recipientEmail = customerType === 'client'
       ? clients.find(c => c.id === clientId)?.email
       : guestEmail.trim();
@@ -417,6 +420,7 @@ function NewInvoiceForm() {
   // email required, unlike Create & Send) — generateLink already marks the
   // invoice as sent on its own, matching existing invoice-module behavior.
   const handleCreateAndLink = async () => {
+    if (saving || sending || linking) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     setError('');
     setCreatedLink('');
     const payload = buildPayload();
@@ -497,6 +501,10 @@ function NewInvoiceForm() {
 
   return (
     <DashboardLayout title="New Invoice">
+      <LoadingOverlay
+        show={saving || sending || linking}
+        message={sending ? 'Creating & Sending Invoice…' : 'Creating Invoice…'}
+      />
       <div>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
@@ -851,32 +859,38 @@ function NewInvoiceForm() {
                 </div>
               )}
 
-              <button
+              <SubmitButton
                 type="submit"
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={saving}
+                loadingText="Creating Invoice…"
+                disabled={sending || linking || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before creating invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {saving ? 'Creating…' : 'Save as Draft'}
-              </button>
-              <button
+                Save as Draft
+              </SubmitButton>
+              <SubmitButton
                 type="button"
                 onClick={handleCreateAndLink}
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={linking}
+                loadingText="Creating Invoice…"
+                disabled={saving || sending || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before sending invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #0284c7', background: linking ? '#f0f9ff' : '#fff', color: '#0284c7', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #0284c7', background: linking ? '#f0f9ff' : '#fff', color: '#0284c7', fontSize: 15, fontWeight: 700, marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {linking ? 'Creating…' : 'Create Invoice'}
-              </button>
-              <button
+                Create Invoice
+              </SubmitButton>
+              <SubmitButton
                 type="button"
                 onClick={() => handleCreate(true)}
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={sending}
+                loadingText="Creating & Sending…"
+                disabled={saving || linking || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before sending invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #2563eb', background: sending ? '#eff6ff' : '#fff', color: '#2563eb', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #2563eb', background: sending ? '#eff6ff' : '#fff', color: '#2563eb', fontSize: 15, fontWeight: 700, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {sending ? 'Creating & Sending…' : 'Create & Send Invoice'}
-              </button>
+                Create & Send Invoice
+              </SubmitButton>
             </div>
           </div>
         </form>

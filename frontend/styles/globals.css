@@ -21,6 +21,12 @@
   --shadow-dropdown: 0 10px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
 }
 
+/* Used by components/ui/Spinner — the branded spinner shown on every
+   create/submit button while its request is in flight. */
+@keyframes movent-spin {
+  to { transform: rotate(360deg); }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { height: 100%; }

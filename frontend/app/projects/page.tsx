@@ -10,6 +10,8 @@ import { Project } from '@/lib/services/adminProjectService';
 import { notificationService } from '@/lib/services/notificationService';
 import { can } from '@/lib/auth';
 import api from '@/lib/axios';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, inp, lbl } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
@@ -68,6 +70,7 @@ function UserProjectsList() {
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!newName.trim()) { toast.error('Project name is required'); return; }
     setCreating(true);
     try {
@@ -109,6 +112,7 @@ function UserProjectsList() {
 
   return (
     <DashboardLayout title="Projects">
+      <LoadingOverlay show={creating} message="Creating Project…" />
       <div style={{ width: '100%', maxWidth: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
@@ -160,10 +164,10 @@ function UserProjectsList() {
                 <label style={lbl}>Deadline</label>
                 <input type="date" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} style={inp} />
               </div>
-              <button type="submit" disabled={creating} style={{
+              <SubmitButton loading={creating} loadingText="Creating Project…" style={{
                 padding: '9px 20px', borderRadius: 7, border: 'none', background: creating ? '#93c5fd' : '#2563eb',
-                color: '#fff', fontSize: 13, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer',
-              }}>{creating ? 'Creating…' : 'Create'}</button>
+                color: '#fff', fontSize: 13, fontWeight: 600,
+              }}>Create</SubmitButton>
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11, color: '#94a3b8' }}>You&apos;ll be set as project manager. Add a client, team, and other details from the project page after creating it.</p>
           </form>

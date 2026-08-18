@@ -9,6 +9,8 @@ import { getAuthUser } from '@/lib/auth';
 import { adminProjectService } from '@/lib/services/adminProjectService';
 import { adminClientService } from '@/lib/services/adminClientService';
 import { adminLeadService } from '@/lib/services/adminLeadService';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { inp, lbl, card, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
@@ -112,6 +114,7 @@ function CreateProjectForm() {
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!form.company_id)  { toast.error('Select a company'); return; }
     if (!form.name)        { toast.error('Enter a project name'); return; }
 
@@ -158,6 +161,7 @@ function CreateProjectForm() {
 
   return (
     <DashboardLayout title="New Project">
+      <LoadingOverlay show={saving} message="Creating Project…" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -308,12 +312,12 @@ function CreateProjectForm() {
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button type="submit" disabled={saving} style={{
+          <SubmitButton loading={saving} loadingText="Creating Project…" style={{
             padding: '11px 28px', background: saving ? '#93c5fd' : '#2563eb',
             color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
-          }}>{saving ? 'Creating…' : 'Create Project'}</button>
-          <button type="button" onClick={() => router.back()} style={{
+            fontSize: 14, fontWeight: 600,
+          }}>Create Project</SubmitButton>
+          <button type="button" onClick={() => router.back()} disabled={saving} style={{
             padding: '11px 22px', background: '#fff', color: '#64748b',
             border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer',
           }}>Cancel</button>

@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 interface Company { id: number; name: string; currency: string }
 
@@ -53,6 +55,7 @@ export default function CreateClientPage() {
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (form.enable_portal && !form.email) {
       toast.error('Contact Email is required to enable Portal Access — it doubles as the login email.');
       return;
@@ -93,6 +96,7 @@ export default function CreateClientPage() {
 
   return (
     <DashboardLayout title="Add Client">
+      <LoadingOverlay show={saving} message="Creating Client…" />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{
@@ -265,14 +269,14 @@ export default function CreateClientPage() {
 
         {/* Submit */}
         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-          <button type="submit" disabled={saving} style={{
+          <SubmitButton loading={saving} loadingText="Creating Client…" style={{
             padding: '11px 28px', background: saving ? '#93c5fd' : '#2563eb',
             color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
+            fontSize: 14, fontWeight: 600,
           }}>
-            {saving ? 'Creating…' : 'Create Client'}
-          </button>
-          <button type="button" onClick={() => router.back()} style={{
+            Create Client
+          </SubmitButton>
+          <button type="button" onClick={() => router.back()} disabled={saving} style={{
             padding: '11px 22px', background: '#fff', color: '#64748b',
             border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer',
           }}>Cancel</button>
