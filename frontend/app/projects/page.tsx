@@ -7,25 +7,47 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService } from '@/lib/services/userProjectService';
 import { userLeadService } from '@/lib/services/adminLeadService';
 import { Project } from '@/lib/services/adminProjectService';
+import { CompanyUserOption } from '@/lib/services/userProjectService';
 import { notificationService } from '@/lib/services/notificationService';
-import { can } from '@/lib/auth';
+import { can, getAuthUser } from '@/lib/auth';
+import { User } from '@/types';
 import api from '@/lib/axios';
 import { Badge, STATUS_SC, PRIORITY_SC, fmtDate, inp, lbl } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
-const assignedToName = (project: Project): string => {
-  const assignedProjectManager = project.team_members?.find(member => member.user?.role_type === 'project_manager')?.user;
-  return assignedProjectManager?.name ?? project.project_manager?.name ?? '—';
+// A project's own Seller can carry a cosmetic 'project_manager' team row
+// purely so this column shows a name instead of "Unassigned" on a
+// self-run project (see ProjectSellerAssignmentService::assign()) — never
+// treated as a real PM, same exclusion the backend uses.
+const sellerIdOf = (project: Project): number | null => {
+  const s = project.seller_id;
+  if (s == null) return null;
+  return typeof s === 'object' ? s.id : s;
 };
+
+const assignedPm = (project: Project): { id: number; name: string } | null => {
+  const tm = project.team_members?.find(member => member.user?.role_type === 'project_manager');
+  if (tm?.user && tm.user.id !== sellerIdOf(project)) return { id: tm.user.id, name: tm.user.name };
+  return null;
+};
+
+const assignedToName = (project: Project): string =>
+  assignedPm(project)?.name ?? project.project_manager?.name ?? '—';
 
 function UserProjectsList() {
   useAdminGuard();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const me = getAuthUser() as User | null;
   const leadId = searchParams.get('lead_id') ? Number(searchParams.get('lead_id')) : null;
   const invoiceId = searchParams.get('invoice_id') ? Number(searchParams.get('invoice_id')) : null;
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading]   = useState(true);
+  // Project Managers at this Seller's own company — options for the
+  // "Assigned To" dropdown on rows the Seller owns (project.seller_id ===
+  // me.id). Fetched once; every such project is the same company.
+  const [pmOptions, setPmOptions] = useState<CompanyUserOption[]>([]);
+  const [assigningId, setAssigningId] = useState<number | null>(null);
   const [statusF, setStatusF]   = useState('');
 
   // A Seller holding canCreateProjects (granted via the "Manage Projects"
@@ -103,6 +125,29 @@ function UserProjectsList() {
       setProjects(await userProjectService.list(params));
     } catch { toast.error('Failed to load projects'); }
     finally { setLoading(false); }
+  };
+
+  // Only a Seller ever owns a project (seller_id match) here, so only a
+  // Seller ever needs the PM options — skip the fetch for everyone else.
+  useEffect(() => {
+    if (me?.role_type !== 'seller') return;
+    userProjectService.team.companyUsers()
+      .then(users => setPmOptions(users.filter(u => u.role_type === 'project_manager')))
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const assignPm = async (projectId: number, value: string) => {
+    const pmId = value ? Number(value) : null;
+    setAssigningId(projectId);
+    try {
+      await userProjectService.assignProjectManager(projectId, pmId);
+      toast.success(pmId ? 'Project Manager assigned' : 'Project Manager unassigned');
+      await load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update Project Manager');
+    } finally {
+      setAssigningId(null);
+    }
   };
 
   useEffect(() => { load(); }, [statusF]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -192,7 +237,19 @@ function UserProjectsList() {
                   <tr key={p.id} style={{ borderBottom: i < projects.length - 1 ? '1px solid #f8fafc' : 'none', cursor: 'pointer' }} onClick={() => router.push(`/projects/${p.id}`)}>
                     <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{p.name}</td>
                     <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{p.client?.name ?? '—'}</td>
-                    <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{assignedToName(p)}</td>
+                    <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                      {me?.role_type === 'seller' && sellerIdOf(p) === me.id ? (
+                        <select
+                          value={assignedPm(p)?.id ?? ''}
+                          disabled={assigningId === p.id}
+                          onChange={e => assignPm(p.id, e.target.value)}
+                          style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fafafa', maxWidth: 160 }}
+                        >
+                          <option value="">Unassigned (you)</option>
+                          {pmOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      ) : assignedToName(p)}
+                    </td>
                     <td style={{ padding: '13px 14px', color: '#64748b', fontSize: 12 }}>{p.my_role ?? '—'}</td>
                     <td style={{ padding: '13px 14px' }}><Badge label={p.status} sc={STATUS_SC[p.status]} /></td>
                     <td style={{ padding: '13px 14px' }}><Badge label={p.priority} sc={PRIORITY_SC[p.priority]} /></td>

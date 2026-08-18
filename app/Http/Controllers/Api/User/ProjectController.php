@@ -1057,6 +1057,101 @@ class ProjectController extends Controller
         );
     }
 
+    // PATCH /projects/{id}/project-manager — assign, switch, or clear this
+    // project's Project Manager. Own-Seller-only (this project's linked
+    // seller_id must match the caller) — the same ownership gate as
+    // Api\User\ProjectMessengerController::eligiblePms()/invitePm(), but
+    // extended to support SWAPPING to a different PM: those endpoints only
+    // ever supported a first-time assign, erroring on any later change.
+    // Backs the "Assigned To" dropdown on the Seller's own /projects list,
+    // which needs to let them change their pick, not just set it once.
+    public function assignProjectManager(Request $request, int $id): JsonResponse
+    {
+        $project = $this->visibleProjects()->findOrFail($id);
+        $user = $this->user();
+
+        if ($user->role_type !== 'seller' || $project->seller_id !== $user->id) {
+            return ApiResponse::error('Only this project\'s Seller can assign a Project Manager.', 403);
+        }
+
+        if ($project->status === 'closed') {
+            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        }
+
+        $validated = $request->validate([
+            'project_manager_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+        ]);
+        $pmId = $validated['project_manager_id'] ?? null;
+
+        $pm = null;
+        if ($pmId) {
+            $pm = User::where('id', $pmId)
+                ->where('company_id', $project->company_id)
+                ->where('role_type', 'project_manager')
+                ->where('is_active', true)
+                ->first();
+            if (!$pm) {
+                return ApiResponse::error('That user is not an active Project Manager at your company.', 422);
+            }
+        }
+
+        // The project's own Seller can carry a cosmetic 'project_manager'
+        // team row purely so the "Project Manager" column shows a name
+        // instead of "Unassigned" on a self-run project (see
+        // ProjectSellerAssignmentService::assign()) — never treated as a
+        // real PM here, same exclusion invitePm() uses.
+        $existingPm = $project->teamMembers()
+            ->where('role_in_project', 'project_manager')
+            ->where('user_id', '!=', $project->seller_id)
+            ->first();
+
+        if ($existingPm && $existingPm->user_id === $pmId) {
+            return ApiResponse::success($project->fresh(), 'Project Manager unchanged');
+        }
+
+        if ($existingPm) {
+            $removedUserId = $existingPm->user_id;
+            $removedUserName = User::find($removedUserId)?->name ?? 'Unknown';
+            $existingPm->delete();
+            ProjectChatService::removeParticipantIfNoLongerEligible($project, $removedUserId);
+            $project->logActivity('team_member_removed', "{$user->name} removed {$removedUserName} from the project team.", $user->name, [
+                'user_id' => $removedUserId,
+            ]);
+        }
+
+        if ($pm) {
+            $wasAlreadyOnTeam = $project->teamMembers()->where('user_id', $pm->id)->exists();
+            ProjectTeamMember::updateOrCreate(
+                ['project_id' => $project->id, 'user_id' => $pm->id],
+                ['role_in_project' => 'project_manager', 'assigned_by' => $user->id]
+            );
+            ProjectChatService::addTeamMember($project, $pm->id);
+
+            if (!$wasAlreadyOnTeam) {
+                Notification::create([
+                    'user_id'    => $pm->id,
+                    'company_id' => $project->company_id,
+                    'type'       => 'project_team_assigned',
+                    'title'      => 'Added to project team',
+                    'body'       => "{$user->name} added you to project \"{$project->name}\" as Project Manager.",
+                    'data'       => ['project_id' => $project->id, 'link' => "/projects/{$project->id}"],
+                ]);
+            }
+
+            $project->logActivity('team_assigned', "{$user->name} assigned {$pm->name} as Project Manager.", $user->name, [
+                'to' => $pm->id, 'role_in_project' => 'project_manager',
+            ]);
+        }
+
+        // Keep the projects.project_manager_id column in sync with the team
+        // row — Admin's own Edit Project page (and anything else reading
+        // this column directly) would otherwise show "Unassigned" even
+        // after a Seller assigns a PM here.
+        $project->update(['project_manager_id' => $pm?->id]);
+
+        return ApiResponse::success($project->fresh(), $pm ? 'Project Manager assigned' : 'Project Manager unassigned');
+    }
+
     public function companyUsers(): JsonResponse
     {
         if (!$this->anyCan(['canCreateTasks', 'canEditTasks', 'canAssignTeamResources', 'canViewTeamResources'])) {

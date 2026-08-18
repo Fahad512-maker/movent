@@ -9,12 +9,12 @@ import { Project, Task, TaskStatus } from '@/lib/services/adminProjectService';
 import { notificationService } from '@/lib/services/notificationService';
 import { can, getAuthType, getAuthUser, getUserModulePermissions } from '@/lib/auth';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
-import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses, taskStatusRequiresComment } from '@/lib/taskStatusFlow';
+import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses } from '@/lib/taskStatusFlow';
 import toast from 'react-hot-toast';
 
-// Unwraps a relation-or-id field (qa_assigned_to/production_assigned_to come
-// back as the loaded {id,name} relation on GET but must round-trip as a
-// bare id on PUT) into the plain numeric id the update payload expects.
+// Unwraps a relation-or-id field (production_assigned_to comes back as the
+// loaded {id,name} relation on GET but must round-trip as a bare id on PUT)
+// into the plain numeric id the update payload expects.
 function relationId(v: number | { id: number } | null | undefined): number | undefined {
   if (v == null) return undefined;
   return typeof v === 'object' ? v.id : v;
@@ -38,9 +38,6 @@ export default function UserTasksPage() {
   const [ready, setReady] = useState(false);
 
   const me = getAuthUser() as { id?: number; role_type?: string } | null;
-  // Mirrors the backend bypass in TaskStatusService::canTransition() — a
-  // Developer/Team Member gets free rein on their OWN task's status/assignee.
-  const isDevOrTeamRole = me?.role_type === 'developer' || me?.role_type === 'team_member';
   // Display-only — mirrors Api\User\TaskController::isTaskManager(), which
   // canEditTasks/canViewTasks do NOT satisfy (they're default grants on
   // every project role, not a company-wide "see everyone's tasks" signal).
@@ -119,27 +116,19 @@ export default function UserTasksPage() {
 
   const canEditTasks = isTaskManagerTier || can('project_management', 'canEditTasks');
   const canAssignTasks = isTaskManagerTier || can('project_management', 'canAssignTasks');
-  const taskStatusPerms = [
-    isTaskManagerTier && 'canOverrideTaskStatus',
-    can('project_management', 'canEditTasks') && 'canEditTasks',
-    can('project_management', 'canMarkTaskBlocked') && 'canMarkTaskBlocked',
-    can('project_management', 'canVerifyDeliverables') && 'canVerifyDeliverables',
-    can('project_management', 'canAssignProductionTasks') && 'canAssignProductionTasks',
-    can('project_management', 'canCompleteTasks') && 'canCompleteTasks',
-    can('project_management', 'canReopenTasks') && 'canReopenTasks',
-    can('project_management', 'canOverrideTaskStatus') && 'canOverrideTaskStatus',
-  ].filter(Boolean) as string[];
+  const isQa = me?.role_type === 'qa';
+  const canOverrideTaskStatus = can('project_management', 'canOverrideTaskStatus');
 
   const updateStatus = async (task: Task, status: TaskStatus) => {
+    // Optional reason — never required (Jira-style free jump has no
+    // "requires comment" rule), but still worth capturing when offered.
     let comment: string | undefined;
-    if (taskStatusRequiresComment(status)) {
-      const input = window.prompt(status === 'blocked' ? 'Reason for marking this task Blocked:' : 'QA comment / reason for QA Failed:');
-      if (!input || !input.trim()) { toast.error('A comment is required for this status change.'); return; }
-      comment = input.trim();
+    if (status === 'blocked') {
+      const input = window.prompt('Reason for marking this task Blocked (optional):');
+      if (input && input.trim()) comment = input.trim();
     }
-    // No more QA/Production-user prompts here. qa_assigned_to is unused/
-    // optional; production_assigned_to (settable from the project's task
-    // listing) just passes through if already set.
+    // No more QA prompts here. production_assigned_to (settable from the
+    // project's task listing) just passes through if already set.
     const productionAssignedTo = relationId(task.production_assigned_to);
     try {
       await userProjectService.tasks.update(task.project_id, task.id, {
@@ -303,7 +292,7 @@ export default function UserTasksPage() {
                       <select value={t.status} onChange={e => updateStatus(t, e.target.value as TaskStatus)}
                         style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                         <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                        {getAllowedNextTaskStatuses(t.status, { isAssignee: (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id, isPm: isTaskManagerTier, isAdmin: false, perms: taskStatusPerms, isDevOrTeamAssignee: isDevOrTeamRole && (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id }).map(s => (
+                        {getAllowedNextTaskStatuses(t.status, { isAssignee: (asRelation(t.assigned_to)?.id ?? t.assigned_to) === me?.id, isPm: isTaskManagerTier, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
                           <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
                         ))}
                       </select>

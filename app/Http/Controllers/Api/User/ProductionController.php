@@ -6,7 +6,6 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Deliverable;
 use App\Models\Notification;
-use App\Models\ProductionQueue;
 use App\Models\Project;
 use App\Models\Revision;
 use App\Models\SystemAuditLog;
@@ -92,22 +91,15 @@ class ProductionController extends Controller
         ]);
     }
 
-    // Auto-derived progress for a production_queue status — mirrors
+    // Auto-derived task progress for a Deliverable/Revision outcome — mirrors
     // Admin\ProductionController::progressForStatus() (each controller owns
     // its own helpers per this codebase's convention).
     private function progressForStatus(string $status): int
     {
         return match ($status) {
-            'queued'             => 0,
-            'in_progress'        => 25,
-            'blocked'            => 25,
             'revision_requested' => 50,
-            'submitted'          => 75,
             'approved'           => 90,
-            'delivered'          => 95,
-            'completed'          => 100,
             'rejected'           => 25,
-            'cancelled'          => 0,
             default              => 0,
         };
     }
@@ -128,142 +120,6 @@ class ProductionController extends Controller
                   ->orWhereHas('tasks', fn($t) => $t->where('assigned_to', $user->id));
             })
             ->pluck('id')->all();
-    }
-
-    // Production queue items assigned to the current user.
-    public function myQueue(Request $request): JsonResponse
-    {
-        $user = $this->user();
-
-        $q = ProductionQueue::where('assigned_to', $user->id)
-            ->whereHas('task.project', fn($p) => $p->where('company_id', $user->company_id))
-            ->with(['task:id,title,project_id,due_date,priority,progress', 'task.project:id,name', 'assignedTo:id,name']);
-
-        if ($request->filled('status')) $q->where('status', $request->status);
-
-        return ApiResponse::success($q->orderByDesc('id')->get());
-    }
-
-    // PM-oversight view — all production items across the caller's visible
-    // projects (not just their own). Backs the same frontend page as myQueue().
-    public function queue(Request $request): JsonResponse
-    {
-        if (!$this->can('canViewProductionQueue')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
-
-        $q = ProductionQueue::whereHas('task', fn($t) => $t->whereIn('project_id', $this->visibleProjectIds()))
-            ->with([
-                'task:id,title,project_id,due_date,priority,progress',
-                'task.project:id,name',
-                'assignedTo:id,name',
-                // Latest deliverable only — the PM acts on the current
-                // submission, not older superseded versions.
-                'task.deliverables' => fn($d) => $d->orderByDesc('version')->limit(1),
-            ]);
-
-        if ($request->filled('status'))      $q->where('status', $request->status);
-        if ($request->filled('assigned_to')) $q->where('assigned_to', $request->assigned_to);
-
-        return ApiResponse::success($q->orderBy('priority_order')->orderByDesc('id')->get());
-    }
-
-    public function start(int $id): JsonResponse
-    {
-        if (!$this->can('canStartProductionTasks')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
-
-        $item = $this->ownQueueItem($id);
-        // Starting an unclaimed item claims it — otherwise it stays
-        // assigned_to null forever (nothing else ever sets it) and every
-        // later action on it would hit the very same "nobody owns this" gap.
-        $item->update(['status' => 'in_progress', 'started_at' => $item->started_at ?? now(), 'assigned_to' => $item->assigned_to ?? $this->user()->id]);
-        Task::where('id', $item->task_id)->update(['progress' => $this->progressForStatus('in_progress')]);
-
-        $this->logActivity($item->task->project->company_id, 'task_started', 'Task', $item->task_id);
-        $this->logTaskRevision($item->task_id, "{$this->userName()} started work on this task");
-        $this->notifyPm($item->task, 'production_task_started', 'Production task started', "{$this->userName()} started working on task '{$item->task->task_number} - {$item->task->title}'.");
-
-        return ApiResponse::success($item, 'Production task started');
-    }
-
-    public function submit(int $id): JsonResponse
-    {
-        if (!$this->can('canSubmitProductionTasks')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
-
-        $item = $this->ownQueueItem($id);
-        // Same defensive claim as start() — covers an item that reached
-        // 'in_progress' still unassigned (e.g. an Admin moved it there
-        // directly via updateQueueItem() without picking a specific owner).
-        $item->update(['status' => 'submitted', 'submitted_at' => now(), 'assigned_to' => $item->assigned_to ?? $this->user()->id]);
-        Task::where('id', $item->task_id)->update(['progress' => $this->progressForStatus('submitted')]);
-
-        $this->logActivity($item->task->project->company_id, 'task_submitted_for_review', 'Task', $item->task_id);
-        $this->logTaskRevision($item->task_id, "{$this->userName()} submitted this task for review");
-        $this->notifyPm($item->task, 'production_task_submitted', 'Task submitted for review', "{$this->userName()} submitted task '{$item->task->task_number} - {$item->task->title}' for review.");
-
-        return ApiResponse::success($item, 'Production task submitted');
-    }
-
-    // Approves a submitted production queue item DIRECTLY, for the common
-    // case where there's no Deliverable file to review at all (e.g. "the
-    // work is live on the site, nothing to attach") — Submit (above) and
-    // uploading a Deliverable are two entirely separate, unlinked actions in
-    // this app, and every OTHER approval path
-    // (approve()/Api\Admin\ProductionController::verifyDeliverable()) only
-    // ever flips a queue item to 'approved' as a side effect of approving
-    // its linked Deliverable. A task that never gets one had no way to ever
-    // leave 'submitted' — permanently stuck at 75% progress and permanently
-    // blocking "Mark as Complete" (ProjectCompletionService's
-    // pending_production check), with no button anywhere for a PM to clear
-    // it. Mirrors approve()'s side effects exactly (task progress/
-    // approved_at/delivered_at, the 'qa_passed' status transition) — just
-    // keyed off the ProductionQueue id instead of a Deliverable id, and
-    // notifies whoever the item is assigned to instead of a Deliverable's
-    // uploader.
-    public function approveQueueItem(int $id): JsonResponse
-    {
-        if (!$this->can('canApproveDeliverables')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
-
-        $item = $this->visibleQueueItem($id);
-
-        if ($item->status !== 'submitted') {
-            return ApiResponse::error('Only a submitted production task can be approved this way.', 422);
-        }
-
-        $item->update(['status' => 'approved']);
-
-        $task = $item->task;
-        $task->update([
-            'progress'     => $this->progressForStatus('approved'),
-            'approved_at'  => now(),
-            'delivered_at' => now(),
-        ]);
-
-        \App\Services\TaskStatusService::applyTransition($task, 'qa_passed', null, [
-            'type' => 'user', 'id' => $this->user()->id, 'name' => $this->userName(),
-        ]);
-
-        $this->logActivity($task->project->company_id, 'production_task_approved', 'Task', $item->task_id);
-        $this->logTaskRevision($item->task_id, "{$this->userName()} approved this task's production work");
-
-        if ($item->assigned_to && (int) $item->assigned_to !== (int) $this->user()->id) {
-            Notification::create([
-                'user_id'    => $item->assigned_to,
-                'company_id' => $task->project->company_id,
-                'type'       => 'production_task_approved',
-                'title'      => 'Production task approved',
-                'body'       => "Your submitted work on task '{$task->task_number} - {$task->title}' was approved.",
-                'data'       => ['project_id' => $task->project_id, 'link' => "/projects/{$task->project_id}/tasks/{$task->id}"],
-            ]);
-        }
-
-        return ApiResponse::success($item->fresh(), 'Production task approved');
     }
 
     // Mirrors the visibility scope in Api\User\ProjectController::visibleProjects().
@@ -422,17 +278,11 @@ class ProductionController extends Controller
 
         $deliverable->update(['status' => 'revision_requested']);
 
-        // Sync the linked production_queue row so the production user's queue
-        // visibly reflects the revision request (previously never written).
+        // Cosmetic task-progress bookkeeping only — Deliverable/Revision
+        // actions never touch Task.status (see TaskStatusService); status
+        // changes are a separate, explicit action by Developer/QA/PM/Admin.
         if ($deliverable->task_id) {
-            ProductionQueue::where('task_id', $deliverable->task_id)->update(['status' => 'revision_requested']);
-            $task = Task::find($deliverable->task_id);
-            if ($task) {
-                $task->update(['progress' => $this->progressForStatus('revision_requested')]);
-                \App\Services\TaskStatusService::applyTransition($task, 'qa_failed', $validated['feedback'] ?? null, [
-                    'type' => 'user', 'id' => $user->id, 'name' => $this->userName(),
-                ]);
-            }
+            Task::where('id', $deliverable->task_id)->update(['progress' => $this->progressForStatus('revision_requested')]);
         }
 
         $this->logActivity($deliverable->project->company_id, 'revision_requested', $deliverable->task_id ? 'Task' : 'Project', $deliverable->task_id ?? $deliverable->project_id, ['deliverable_id' => $deliverable->id, 'revision_id' => $revision->id]);
@@ -451,11 +301,10 @@ class ProductionController extends Controller
         return ApiResponse::success($revision->load('requestedBy:id,name'), 'Revision requested', 201);
     }
 
-    // PM approves a submitted deliverable — closes the loop across all three
-    // entities: Deliverable, ProductionQueue, Task. Under the QA pipeline
-    // (see TaskStatusService), approving a deliverable now means "QA Passed"
-    // rather than auto-completing the task outright — PM/QA/Admin must still
-    // explicitly move it Ready for Production -> In Production -> Done.
+    // PM approves a submitted deliverable — updates the Deliverable's own
+    // status and the task's cosmetic progress percentage only. Task.status
+    // itself is untouched (see TaskStatusService) — moving the task forward
+    // (e.g. to Ready for Production) is a separate, explicit action.
     public function approve(int $id): JsonResponse
     {
         if (!$this->can('canApproveDeliverables')) {
@@ -469,18 +318,12 @@ class ProductionController extends Controller
             $deliverable->update(['status' => 'approved', 'approved_at' => now()]);
 
             if ($deliverable->task_id) {
-                ProductionQueue::where('task_id', $deliverable->task_id)->update(['status' => 'approved']);
-
                 $task = Task::find($deliverable->task_id);
                 if ($task) {
                     $task->update([
                         'progress'     => $this->progressForStatus('approved'),
                         'approved_at'  => now(),
                         'delivered_at' => now(),
-                    ]);
-
-                    \App\Services\TaskStatusService::applyTransition($task, 'qa_passed', null, [
-                        'type' => 'user', 'id' => $this->user()->id, 'name' => $this->userName(),
                     ]);
                 }
             }
@@ -524,14 +367,7 @@ class ProductionController extends Controller
             $deliverable->update(['status' => 'rejected']);
 
             if ($deliverable->task_id) {
-                ProductionQueue::where('task_id', $deliverable->task_id)->update(['status' => 'rejected']);
-                $task = Task::find($deliverable->task_id);
-                if ($task) {
-                    $task->update(['progress' => $this->progressForStatus('rejected')]);
-                    \App\Services\TaskStatusService::applyTransition($task, 'qa_failed', $validated['feedback'] ?? null, [
-                        'type' => 'user', 'id' => $this->user()->id, 'name' => $this->userName(),
-                    ]);
-                }
+                Task::where('id', $deliverable->task_id)->update(['progress' => $this->progressForStatus('rejected')]);
             }
 
             if (!empty($validated['feedback'])) {
@@ -573,51 +409,4 @@ class ProductionController extends Controller
         return ApiResponse::success($deliverable->revisions()->with('requestedBy:id,name')->orderByDesc('id')->get());
     }
 
-    // A queue item reaches here if: it's already claimed by this exact user,
-    // it's still unclaimed (assigned_to null — e.g. TaskStatusService::
-    // applyTransition() created it with no specific handoff target, so it
-    // broadcast to every production_user team member instead of one person),
-    // OR the caller is PM-tier for this item's project (canViewAllCompanyProjects,
-    // or literally that project's own project_manager_id) — the same
-    // oversight authority queue() itself is gated on. Without that last
-    // clause, a PM viewing the full oversight queue() list (which shows
-    // every item across their visible projects, whoever claimed it) would
-    // hit "No query results for model [ProductionQueue]" clicking
-    // Start/Submit on an item a production teammate had already claimed —
-    // a perfectly valid row, just excluded by an ownership check that only
-    // ever anticipated a plain production teammate acting on their own work.
-    private function ownQueueItem(int $id): ProductionQueue
-    {
-        $user = $this->user();
-
-        // company_id must stay in this column list — start()/submit() read
-        // $item->task->project->company_id afterward, and this eager-load's
-        // column-limited relation means that access can never fall back to
-        // a fresh lazy-load if it's missing here (it silently returns null
-        // instead, which then blew up logActivity()'s int $companyId param).
-        $item = ProductionQueue::whereHas('task.project', fn ($p) => $p->where('company_id', $user->company_id))
-            ->with('task.project:id,company_id,project_manager_id')
-            ->findOrFail($id);
-
-        $isPmTier = $this->can('canViewAllCompanyProjects')
-            || (int) $item->task->project->project_manager_id === (int) $user->id;
-
-        if (!$isPmTier && $item->assigned_to !== null && (int) $item->assigned_to !== (int) $user->id) {
-            abort(404, 'Production queue item not found or not assigned to you.');
-        }
-
-        return $item;
-    }
-
-    // For approveQueueItem() — approving is a review action, not "my own
-    // work," so it's scoped by project visibility (same oversight scope
-    // queue() itself lists items under) rather than ownQueueItem()'s
-    // self-assigned-or-unclaimed rule: the approver is typically NOT the
-    // person who did the work.
-    private function visibleQueueItem(int $id): ProductionQueue
-    {
-        return ProductionQueue::whereHas('task.project', fn ($p) => $p->whereIn('id', $this->visibleProjectIds()))
-            ->with('task.project:id,company_id,project_manager_id')
-            ->findOrFail($id);
-    }
 }

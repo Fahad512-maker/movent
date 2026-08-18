@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Deliverable;
 use App\Models\Notification;
 use App\Models\Project;
-use App\Models\ProductionQueue;
 use App\Models\Revision;
 use App\Models\SystemAuditLog;
 use App\Models\Task;
@@ -16,12 +15,6 @@ use Illuminate\Http\Request;
 
 class ProductionController extends Controller
 {
-    // Mirrors the production_queue.status enum — widened to cover the full
-    // production task flow (Assigned/In Progress/Blocked/Submitted/Revision
-    // Requested/Approved/Delivered/Completed/Cancelled). 'queued' == Assigned,
-    // 'rejected' kept only for backward compatibility with any existing rows.
-    private const QUEUE_STATUSES = 'queued,in_progress,blocked,submitted,revision_requested,approved,delivered,completed,rejected,cancelled';
-
     private function admin()   { return auth('admin')->user(); }
     private function adminName(): string { return trim((string) ($this->admin()->name ?? '')) ?: 'Admin'; }
     private function companyIds(): array
@@ -47,149 +40,14 @@ class ProductionController extends Controller
         ]);
     }
 
-    // Auto-derived progress for a production_queue status — no manual UI
-    // input, just a stored percentage read-only in the Production Queue UI.
+    // Auto-derived task progress for a Deliverable/Revision outcome.
     private function progressForStatus(string $status): int
     {
         return match ($status) {
-            'queued'             => 0,
-            'in_progress'        => 25,
-            'blocked'            => 25,
             'revision_requested' => 50,
-            'submitted'          => 75,
             'approved'           => 90,
-            'delivered'          => 95,
-            'completed'          => 100,
-            'rejected'           => 25,
-            'cancelled'          => 0,
             default              => 0,
         };
-    }
-
-    // GET /admin/production/queue — all production tasks across the admin's companies
-    public function queue(Request $request): JsonResponse
-    {
-        $q = ProductionQueue::whereHas('task.project', fn($p) => $p->whereIn('company_id', $this->companyIds()))
-            ->with(['task:id,title,project_id,due_date,priority,progress', 'task.project:id,name', 'assignedTo:id,name']);
-
-        if ($request->filled('status'))      $q->where('status', $request->status);
-        if ($request->filled('assigned_to')) $q->where('assigned_to', $request->assigned_to);
-
-        return ApiResponse::success($q->orderBy('priority_order')->orderByDesc('id')->get());
-    }
-
-    public function updateQueueItem(Request $request, int $id): JsonResponse
-    {
-        $item = ProductionQueue::whereHas('task.project', fn($p) => $p->whereIn('company_id', $this->companyIds()))
-            ->findOrFail($id);
-
-        $validated = $request->validate([
-            'status'         => ['sometimes', 'in:' . self::QUEUE_STATUSES],
-            'assigned_to'    => ['nullable', 'integer', 'exists:users,id'],
-            'priority_order' => ['sometimes', 'integer'],
-        ]);
-
-        if (($validated['status'] ?? null) === 'in_progress' && !$item->started_at) {
-            $validated['started_at'] = now();
-        }
-        if (($validated['status'] ?? null) === 'submitted') {
-            $validated['submitted_at'] = now();
-        }
-
-        $wasStatus = $item->status;
-        $wasAssignee = $item->assigned_to;
-        $item->update($validated);
-
-        if (isset($validated['assigned_to']) && $validated['assigned_to'] !== $wasAssignee) {
-            // Notification.user_id is NOT NULL — unassigning (new value
-            // null) must never reach Notification::create, or it throws a
-            // DB constraint violation.
-            if ($validated['assigned_to']) {
-                Notification::create([
-                    'user_id'    => $validated['assigned_to'],
-                    'company_id' => $item->task->project->company_id,
-                    'type'       => 'production_task_assigned',
-                    'title'      => 'Production task assigned',
-                    'body'       => "You were assigned production task {$item->task->task_number} - \"{$item->task->title}\".",
-                    'data'       => ['task_id' => $item->task_id, 'link' => "/projects/{$item->task->project_id}/tasks/{$item->task_id}"],
-                ]);
-            }
-
-            $oldName = $wasAssignee ? (\App\Models\User::find($wasAssignee)?->name ?? 'someone') : null;
-            $newName = $validated['assigned_to'] ? (\App\Models\User::find($validated['assigned_to'])?->name ?? 'someone') : null;
-            $description = $newName
-                ? ($oldName ? "Production task reassigned from {$oldName} to {$newName}" : "Production task assigned to {$newName}")
-                : "Production task unassigned from {$oldName}";
-            Task::find($item->task_id)?->logActivity('assigned', $description, $this->adminName(), ['from' => $wasAssignee, 'to' => $validated['assigned_to']]);
-        }
-
-        if (isset($validated['status']) && $validated['status'] !== $wasStatus) {
-            Task::where('id', $item->task_id)->update(['progress' => $this->progressForStatus($validated['status'])]);
-
-            SystemAuditLog::create([
-                'company_id'  => $item->task->project->company_id,
-                'user_id'     => null, // Company Admin actor isn't a User row
-                'action'      => 'production_' . $validated['status'],
-                'module_key'  => 'project_management',
-                'entity_type' => 'Task',
-                'entity_id'   => $item->task_id,
-                'new_values'  => ['status' => $validated['status']],
-            ]);
-
-            Task::find($item->task_id)?->logActivity(
-                'revision',
-                "{$this->adminName()} updated production status to " . str_replace('_', ' ', $validated['status']),
-                $this->adminName()
-            );
-
-            // Real-time notification to the PM — this status change (start/
-            // submit/blocked/etc.) previously had no Notification at all,
-            // only the SystemAuditLog/History entries above.
-            $task = $item->task;
-            $projectManagerId = $task?->project?->project_manager_id;
-            if ($task && $projectManagerId) {
-                \App\Services\NotificationService::send([
-                    'company_id'         => $task->project->company_id,
-                    'recipient_user_id'  => $projectManagerId,
-                    'actor_admin_id'     => $this->admin()->id,
-                    'module'             => 'project_management',
-                    'type'               => 'production_status_changed',
-                    'title'              => 'Production task updated',
-                    'message'            => "{$this->adminName()} updated production status of task '{$task->task_number} - {$task->title}' to " . str_replace('_', ' ', $validated['status']) . ".",
-                    'entity_type'        => 'Task',
-                    'entity_id'          => $task->id,
-                    'url'                => "/projects/{$task->project_id}/tasks/{$task->id}",
-                ]);
-            }
-        }
-
-        return ApiResponse::success($item->fresh(['task', 'assignedTo']), 'Production item updated');
-    }
-
-    // GET /admin/production/dashboard — summary counts across the admin's companies
-    public function dashboard(): JsonResponse
-    {
-        $base = ProductionQueue::whereHas('task.project', fn ($p) => $p->whereIn('company_id', $this->companyIds()));
-
-        $counts = (clone $base)->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
-
-        $overdue = (clone $base)
-            ->whereHas('task', fn ($q) => $q->whereNotNull('due_date')->where('due_date', '<', now()->toDateString()))
-            ->whereNotIn('status', ['completed', 'cancelled', 'approved', 'delivered'])
-            ->count();
-
-        return ApiResponse::success([
-            'assigned'           => $counts['queued'] ?? 0,
-            'in_progress'        => $counts['in_progress'] ?? 0,
-            'blocked'            => $counts['blocked'] ?? 0,
-            'submitted'          => $counts['submitted'] ?? 0,
-            'revision_requested' => $counts['revision_requested'] ?? 0,
-            'approved'           => $counts['approved'] ?? 0,
-            'delivered'          => $counts['delivered'] ?? 0,
-            'completed'          => $counts['completed'] ?? 0,
-            'cancelled'          => $counts['cancelled'] ?? 0,
-            'overdue'            => $overdue,
-        ]);
     }
 
     // GET /admin/projects/{id}/deliverables
@@ -256,21 +114,12 @@ class ProductionController extends Controller
 
         $deliverable->update(['status' => 'approved', 'approved_at' => now()]);
 
-        // Under the QA pipeline (see TaskStatusService), approving a
-        // deliverable means "QA Passed" rather than silently leaving the
-        // task's own status untouched as before — PM/QA/Admin must still
-        // explicitly move it Ready for Production -> In Production -> Done.
+        // Deliverable approval never touches Task.status (see
+        // TaskStatusService) — cosmetic task-progress bookkeeping only.
+        // status changes are a separate, explicit action by
+        // Developer/QA/PM/Admin.
         if ($deliverable->task_id) {
-            ProductionQueue::where('task_id', $deliverable->task_id)->update(['status' => 'approved']);
-
-            $task = Task::find($deliverable->task_id);
-            if ($task) {
-                $task->update(['progress' => $this->progressForStatus('approved'), 'approved_at' => now(), 'delivered_at' => now()]);
-
-                \App\Services\TaskStatusService::applyTransition($task, 'qa_passed', null, [
-                    'type' => 'admin', 'id' => $this->admin()->id, 'name' => $this->adminName(),
-                ]);
-            }
+            Task::where('id', $deliverable->task_id)->update(['progress' => $this->progressForStatus('approved'), 'approved_at' => now(), 'delivered_at' => now()]);
         }
 
         $this->logDeliverableActivity($deliverable, 'deliverable_approved', ['deliverable_id' => $deliverable->id]);
@@ -313,12 +162,7 @@ class ProductionController extends Controller
         $deliverable->update(['status' => 'revision_requested']);
 
         if ($deliverable->task_id) {
-            $task = Task::find($deliverable->task_id);
-            if ($task) {
-                \App\Services\TaskStatusService::applyTransition($task, 'qa_failed', $validated['feedback'] ?? null, [
-                    'type' => 'admin', 'id' => $this->admin()->id, 'name' => $this->adminName(),
-                ]);
-            }
+            Task::where('id', $deliverable->task_id)->update(['progress' => $this->progressForStatus('revision_requested')]);
         }
 
         $this->logDeliverableActivity($deliverable, 'revision_requested', [

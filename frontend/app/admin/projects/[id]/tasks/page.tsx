@@ -8,8 +8,8 @@ import { adminProjectService, Task, ProjectTaskAttachment } from '@/lib/services
 import { userService } from '@/lib/services/userService';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import Link from 'next/link';
-import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, PRODUCTION_SC, PRODUCTION_LABEL, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
-import { TASK_STATUS_LABELS, taskStatusRequiresComment, promptForQaUser, promptForOptionalProductionUser } from '@/lib/taskStatusFlow';
+import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
+import { TASK_STATUS_LABELS, promptForOptionalProductionUser } from '@/lib/taskStatusFlow';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
 
@@ -199,17 +199,12 @@ export default function ProjectTasksPage() {
   };
 
   const updateStatus = async (t: Task, status: string) => {
+    // Optional reason — never required (Jira-style free jump has no
+    // "requires comment" rule), but still worth capturing when offered.
     let comment: string | undefined;
-    if (taskStatusRequiresComment(status)) {
-      const input = window.prompt(status === 'blocked' ? 'Reason for marking this task Blocked:' : 'QA comment / reason for QA Failed:');
-      if (!input || !input.trim()) { toast.error('A comment is required for this status change.'); return; }
-      comment = input.trim();
-    }
-    let qaAssignedTo: number | undefined;
-    if (status === 'ready_for_qa') {
-      const picked = promptForQaUser(users.filter(u => u.role_type === 'qa'));
-      if (!picked) return;
-      qaAssignedTo = picked;
+    if (status === 'blocked') {
+      const input = window.prompt('Reason for marking this task Blocked (optional):');
+      if (input && input.trim()) comment = input.trim();
     }
     let productionAssignedTo: number | undefined;
     if (status === 'ready_for_production') {
@@ -219,7 +214,6 @@ export default function ProjectTasksPage() {
       await adminProjectService.tasks.update(projectId, t.id, {
         status: status as never,
         ...(comment ? { comment } : {}),
-        ...(qaAssignedTo ? { qa_assigned_to: qaAssignedTo } : {}),
         ...(productionAssignedTo ? { production_assigned_to: productionAssignedTo } : {}),
       });
       load();
@@ -445,11 +439,6 @@ export default function ProjectTasksPage() {
                     <div style={{ display: 'flex', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
                       {t.task_type && t.task_type !== 'general' && <Badge label={TASK_TYPE_LABEL[t.task_type] ?? t.task_type} />}
                       {!!t.attachments_count && <Badge label={`📎 ${t.attachments_count}`} />}
-                      {t.production_queue && (
-                        <Link href={`/admin/projects/production?project_id=${t.project_id}`} style={{ textDecoration: 'none' }}>
-                          <Badge label={`🏭 ${PRODUCTION_LABEL[t.production_queue.status] ?? t.production_queue.status}`} sc={PRODUCTION_SC[t.production_queue.status]} />
-                        </Link>
-                      )}
                     </div>
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: '#64748b' }}>{asRelation(t.assigned_to)?.name ?? '—'}</td>

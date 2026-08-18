@@ -155,7 +155,6 @@ export default function UserProfilePage() {
                 { label: 'Managed Projects', count: activity.managed_projects?.length ?? 0 },
                 { label: 'Member Of', count: activity.member_projects?.length ?? 0 },
                 { label: 'Assigned Tasks', count: activity.assigned_tasks?.length ?? 0 },
-                { label: 'Production Tasks', count: activity.production_tasks?.length ?? 0 },
                 { label: 'Timesheets', count: activity.timesheets?.length ?? 0 },
                 { label: 'Deliverables', count: activity.deliverables?.length ?? 0 },
               ].map(s => (

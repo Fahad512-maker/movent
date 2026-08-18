@@ -8,7 +8,7 @@ import { adminProjectService, Task, TaskActivity, ProjectComment, ProjectTaskAtt
 import { getAuthUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
-import { card, lbl, inp, Badge, ThumbIcon, TASK_SC, PRIORITY_SC, PRODUCTION_SC, PRODUCTION_LABEL, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, asRelation } from '@/components/admin/projects/shared';
+import { card, lbl, inp, Badge, ThumbIcon, TASK_SC, PRIORITY_SC, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, asRelation } from '@/components/admin/projects/shared';
 
 const TASK_TYPE_LABEL: Record<string, string> = {
   general: 'General', production: 'Production', client_request: 'Client Request', internal: 'Internal',
@@ -309,7 +309,6 @@ export default function AdminTaskDetailPage() {
 
   const assignedTo = asRelation(task.assigned_to);
   const assignedByLabel = asRelation(task.assigned_by)?.name ?? 'Company Admin';
-  const productionQueue = task.production_queue;
 
   return (
     <DashboardLayout title="Task">
@@ -352,9 +351,6 @@ export default function AdminTaskDetailPage() {
               <Badge label={task.status} sc={TASK_SC[task.status]} />
               <Badge label={task.priority} sc={PRIORITY_SC[task.priority]} />
               {task.task_type && <Badge label={TASK_TYPE_LABEL[task.task_type] ?? task.task_type} />}
-              {productionQueue && (
-                <Badge label={PRODUCTION_LABEL[productionQueue.status] ?? productionQueue.status} sc={PRODUCTION_SC[productionQueue.status]} />
-              )}
             </div>
           </div>
 

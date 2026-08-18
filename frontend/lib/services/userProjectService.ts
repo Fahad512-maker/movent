@@ -1,7 +1,7 @@
 import api from '@/lib/axios';
 import {
   Project, Task, TeamMember, Timesheet, Deliverable, Revision,
-  ProductionQueueItem, ProjectStatus, Priority, TaskStatus, TeamRole, ProjectComment,
+  ProjectStatus, Priority, TaskStatus, TeamRole, ProjectComment,
   ProjectAttachment, ProjectTaskAttachment, ChatMessage, TaskActivity, CompletionStatus,
   MentionableUser, ProjectCommentAttachment,
 } from './adminProjectService';
@@ -38,7 +38,6 @@ export interface TaskPayload {
   task_type?: 'general' | 'production' | 'client_request' | 'internal';
   // Update-only fields — not part of task creation.
   comment?: string;
-  qa_assigned_to?: number | null;
   production_assigned_to?: number | null;
 }
 
@@ -75,6 +74,14 @@ export const userProjectService = {
 
   update: async (id: number, payload: ProjectPayload): Promise<Project> => {
     const res = await api.put(`/user/projects/${id}`, payload);
+    return res.data.data;
+  },
+
+  // Own-Seller-only (project.seller_id must match the caller) — assigns,
+  // switches, or clears (pass null) this project's Project Manager. See
+  // Api\User\ProjectController::assignProjectManager().
+  assignProjectManager: async (id: number, projectManagerId: number | null): Promise<Project> => {
+    const res = await api.patch(`/user/projects/${id}/project-manager`, { project_manager_id: projectManagerId });
     return res.data.data;
   },
 
@@ -166,9 +173,8 @@ export const userProjectService = {
       return res.data.data;
     },
     // No permission gate (unlike team.companyUsers() below) — every
-    // task-status actor needs these for the QA/Production handoff pickers,
-    // regardless of whether they hold canCreateTasks/canEditTasks/etc.
-    qaUsers: async (): Promise<{ id: number; name: string }[]> => (await api.get('/user/tasks/qa-users')).data.data,
+    // task-status actor needs this for the optional Production handoff
+    // picker, regardless of whether they hold canCreateTasks/canEditTasks/etc.
     productionUsers: async (): Promise<{ id: number; name: string }[]> => (await api.get('/user/tasks/production-users')).data.data,
   },
 
@@ -302,34 +308,6 @@ export const userProjectService = {
     },
   },
 
-  production: {
-    myQueue: async (params?: Record<string, string>): Promise<ProductionQueueItem[]> => {
-      const res = await api.get('/user/production/my-queue', { params });
-      return res.data.data;
-    },
-    queue: async (params?: Record<string, string>): Promise<ProductionQueueItem[]> => {
-      const res = await api.get('/user/production/queue', { params });
-      return res.data.data;
-    },
-    start: async (id: number): Promise<ProductionQueueItem> => {
-      const res = await api.patch(`/user/production/${id}/start`);
-      return res.data.data;
-    },
-    submit: async (id: number): Promise<ProductionQueueItem> => {
-      const res = await api.patch(`/user/production/${id}/submit`);
-      return res.data.data;
-    },
-    // Approves a submitted queue item directly — for a task with no
-    // Deliverable file to review at all (see
-    // Api\User\ProductionController::approveQueueItem()). Distinct from
-    // deliverables.approve()/reject() below, which operate on a Deliverable
-    // id, not a queue item id.
-    approveItem: async (id: number): Promise<ProductionQueueItem> => {
-      const res = await api.patch(`/user/production/${id}/approve`);
-      return res.data.data;
-    },
-  },
-
   deliverables: {
     list: async (projectId: number): Promise<Deliverable[]> => {
       const res = await api.get(`/user/projects/${projectId}/deliverables`);
@@ -433,4 +411,4 @@ export const userProjectService = {
   },
 };
 
-export type { Project, Task, TeamMember, Timesheet, Deliverable, Revision, ProductionQueueItem, ProjectAttachment, ProjectTaskAttachment };
+export type { Project, Task, TeamMember, Timesheet, Deliverable, Revision, ProjectAttachment, ProjectTaskAttachment };

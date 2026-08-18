@@ -494,12 +494,6 @@ Route::prefix('admin')->group(function () {
             Route::post('deliverables/{id}/request-revision',       [AdminProductionController::class, 'requestRevision']);
             Route::get('deliverables/{deliverableId}/revisions',    [AdminProductionController::class, 'revisions']);
             Route::patch('revisions/{id}/resolve',                  [AdminProductionController::class, 'resolveRevision']);
-
-            // Production — folded into Project Management, not a separate module.
-            // Active whenever `projects` is active; no standalone `module:production` gate.
-            Route::get('production/dashboard',                      [AdminProductionController::class, 'dashboard']);
-            Route::get('production/queue',                          [AdminProductionController::class, 'queue']);
-            Route::patch('production/queue/{id}',                   [AdminProductionController::class, 'updateQueueItem']);
         });
 
         // Tasks — requires tasks module
@@ -794,6 +788,7 @@ Route::prefix('user')->group(function () {
             Route::get('projects/{id}',                         [UserProjectController::class, 'show']);
             Route::put('projects/{id}',                         [UserProjectController::class, 'update']);
             Route::patch('projects/{id}/seller',                [UserProjectController::class, 'assignSeller']);
+            Route::patch('projects/{id}/project-manager',       [UserProjectController::class, 'assignProjectManager']);
             Route::put('projects/{id}/team',                    [UserProjectController::class, 'assignTeam']);
             Route::delete('projects/{id}/team/{memberId}',      [UserProjectController::class, 'removeTeamMember']);
             Route::get('projects/{id}/completion-status',       [UserProjectController::class, 'completionStatus']);
@@ -876,10 +871,9 @@ Route::prefix('user')->group(function () {
             Route::put('projects/{projectId}/tasks/{id}',       [UserTaskController::class, 'update']);
             Route::get('projects/{projectId}/tasks/{id}/activity', [UserTaskController::class, 'activity']);
             Route::get('my-tasks',                              [UserTaskController::class, 'myTasks']);
-            // No permission gate — every task-status actor (regardless of
-            // canCreateTasks/canEditTasks/etc.) needs these for the QA/
-            // Production handoff pickers. See TaskController::qaUsers().
-            Route::get('tasks/qa-users',                        [UserTaskController::class, 'qaUsers']);
+            // No permission gate — every task-status actor needs this for
+            // the optional Production handoff picker. See
+            // TaskController::productionUsers().
             Route::get('tasks/production-users',                [UserTaskController::class, 'productionUsers']);
 
             Route::get('projects/{projectId}/tasks/{taskId}/attachments',                [UserTaskAttachmentController::class, 'index']);
@@ -894,19 +888,6 @@ Route::prefix('user')->group(function () {
             Route::patch('timesheets/{id}/approve',             [UserTimesheetController::class, 'approve']);
         });
 
-        // Production is a section inside Project Management, not a separate
-        // module — gated on 'projects' only, matching the Admin side's routes
-        // (see the admin production/deliverables group above).
-        Route::middleware('module:projects')->group(function () {
-            Route::get('production/queue',                      [UserProductionController::class, 'queue']);
-            Route::get('production/my-queue',                   [UserProductionController::class, 'myQueue']);
-            Route::patch('production/{id}/start',               [UserProductionController::class, 'start']);
-            Route::patch('production/{id}/submit',              [UserProductionController::class, 'submit']);
-            // Approves a submitted queue item directly when it has no
-            // Deliverable file to review — see ProductionController::
-            // approveQueueItem()'s own doc comment.
-            Route::patch('production/{id}/approve',             [UserProductionController::class, 'approveQueueItem']);
-        });
     });
 });
 

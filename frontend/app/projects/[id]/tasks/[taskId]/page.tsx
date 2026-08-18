@@ -8,7 +8,7 @@ import { Task, TaskActivity, ProjectComment, ProjectTaskAttachment, MentionableU
 import { can, getAuthUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
-import { Badge, ThumbIcon, TASK_SC, PRIORITY_SC, PRODUCTION_SC, PRODUCTION_LABEL, card, inp, lbl, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB } from '@/components/admin/projects/shared';
+import { Badge, ThumbIcon, TASK_SC, PRIORITY_SC, card, inp, lbl, fmtDate, fmtFileSize, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 
 const TASK_TYPE_LABEL: Record<string, string> = {
@@ -346,7 +346,6 @@ export default function UserTaskDetailPage() {
 
   const assignedTo = asRelation(task.assigned_to);
   const assignedByLabel = asRelation(task.assigned_by)?.name ?? 'Company Admin';
-  const productionQueue = task.production_queue;
 
   return (
     <DashboardLayout title="Task">
@@ -390,9 +389,6 @@ export default function UserTaskDetailPage() {
                 <Badge label={task.status} sc={TASK_SC[task.status]} />
                 <Badge label={task.priority} sc={PRIORITY_SC[task.priority]} />
                 {task.task_type && <Badge label={TASK_TYPE_LABEL[task.task_type] ?? task.task_type} />}
-                {productionQueue && (
-                  <Badge label={PRODUCTION_LABEL[productionQueue.status] ?? productionQueue.status} sc={PRODUCTION_SC[productionQueue.status]} />
-                )}
               </div>
             </div>
           </div>

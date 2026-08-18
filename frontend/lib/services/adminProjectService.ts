@@ -6,14 +6,10 @@ import api from '@/lib/axios';
 export type ProjectStatus = 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
-  | 'todo' | 'in_progress' | 'blocked' | 'ready_for_qa' | 'in_qa'
-  | 'qa_failed' | 'qa_passed' | 'ready_for_production' | 'in_production'
+  | 'todo' | 'in_progress' | 'blocked' | 'ready_for_production' | 'in_production'
   | 'review' | 'completed' | 'cancelled';
 export type TeamRole = 'project_manager' | 'production_user' | 'team_member' | 'reviewer';
 export type TimesheetStatus = 'pending' | 'approved' | 'rejected';
-export type ProductionQueueStatus =
-  | 'queued' | 'in_progress' | 'blocked' | 'submitted' | 'revision_requested'
-  | 'approved' | 'delivered' | 'completed' | 'rejected' | 'cancelled';
 export type DeliverableStatus = 'draft' | 'delivered' | 'approved' | 'revision_requested' | 'submitted' | 'rejected';
 export type RevisionStatus = 'open' | 'in_progress' | 'resolved';
 
@@ -97,17 +93,6 @@ export interface Project {
   updated_at: string;
 }
 
-export interface ProductionQueueItem {
-  id: number;
-  task_id: number;
-  assigned_to: number | { id: number; name: string } | null;
-  status: ProductionQueueStatus;
-  priority_order: number;
-  started_at: string | null;
-  submitted_at: string | null;
-  task?: { id: number; title: string; task_number?: string | null; project_id: number; due_date: string | null; priority?: Priority; progress?: number; project?: { id: number; name: string; company_id?: number }; deliverables?: Deliverable[] };
-}
-
 export interface Deliverable {
   id: number;
   project_id: number;
@@ -182,12 +167,9 @@ export interface Task {
   // it), raw scalar id otherwise — Eloquent serializes assignedTo()/
   // assignedBy() to these exact snake_case keys, same as the raw columns.
   assigned_to: number | { id: number; name: string; email?: string } | null;
-  // The QA user this task was handed off to when it entered "Ready for QA" —
-  // required by the backend at that transition (see TaskStatusService).
-  qa_assigned_to?: number | { id: number; name: string; email?: string } | null;
   // Optional Production/Deployment handoff when the task enters "Ready for
-  // Production" — unlike qa_assigned_to, null is a valid "not assigned to
-  // anyone specific" state, not a missing-field error.
+  // Production" — null is a valid "not assigned to anyone specific" state,
+  // not a missing-field error.
   production_assigned_to?: number | { id: number; name: string; email?: string } | null;
   assigned_by: number | { id: number; name: string } | null;
   created_by: number | null;
@@ -204,7 +186,6 @@ export interface Task {
   due_date: string | null;
   completed_at: string | null;
   project?: { id: number; name: string; company_id: number; team_members?: TeamMember[] };
-  production_queue?: ProductionQueueItem | null;
   deliverables?: Deliverable[];
   attachments_count?: number;
   created_at: string;
@@ -349,7 +330,6 @@ export interface CompletionStatus {
   ready: boolean;
   blockers: {
     pending_tasks: CompletionBlockerItem[];
-    pending_production: CompletionBlockerItem[];
     pending_deliverables: CompletionBlockerItem[];
     pending_revisions: CompletionBlockerItem[];
     overdue_tasks: CompletionBlockerItem[];
@@ -390,13 +370,9 @@ export interface TaskPayload {
   description?: string | null;
   notes?: string | null;
   status?: TaskStatus;
-  // Required by the backend when status is 'blocked' or 'qa_failed' (see
-  // App\Services\TaskStatusService) — the reason/QA feedback, logged to the
-  // task's activity history.
+  // Optional context logged to the task's activity history alongside a
+  // status change (e.g. a Blocked reason) — never required.
   comment?: string;
-  // Required by the backend when status is being set to 'ready_for_qa' —
-  // which QA user this task is handed off to.
-  qa_assigned_to?: number | null;
   // Optional — Production/Deployment handoff when status is being set to
   // 'ready_for_production'.
   production_assigned_to?: number | null;
@@ -689,26 +665,6 @@ export const adminProjectService = {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    },
-  },
-
-  // Production — a section inside Project Management, gated on the `projects`
-  // module key only (no separate `production` purchase/permission gate).
-  production: {
-    dashboard: async (): Promise<{
-      assigned: number; in_progress: number; blocked: number; submitted: number;
-      revision_requested: number; approved: number; delivered: number; completed: number;
-      cancelled: number; overdue: number;
-    }> => (await api.get('/admin/production/dashboard')).data.data,
-
-    queue: async (params?: Record<string, string>): Promise<ProductionQueueItem[]> => {
-      const res = await api.get('/admin/production/queue', { params });
-      return res.data.data;
-    },
-
-    updateItem: async (id: number, payload: { status?: ProductionQueueStatus; assigned_to?: number | null; priority_order?: number }): Promise<ProductionQueueItem> => {
-      const res = await api.patch(`/admin/production/queue/${id}`, payload);
-      return res.data.data;
     },
   },
 

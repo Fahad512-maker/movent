@@ -30,11 +30,10 @@ class RoleDefaultPermissions
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
                 'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-                'canCompleteTasks', 'canReopenTasks', 'canOverrideTaskStatus',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+                'canOverrideTaskStatus',
                 'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',
-                'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-                'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+                'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canViewTimesheets', 'canApproveTimesheets',
                 'canViewProjectReports', 'canViewTaskReports',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
@@ -72,9 +71,8 @@ class RoleDefaultPermissions
         'production' => [ // "Production User"
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-                'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-                'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+                'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -83,9 +81,8 @@ class RoleDefaultPermissions
         'developer' => [
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-                'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-                'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+                'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -94,9 +91,8 @@ class RoleDefaultPermissions
         'designer' => [
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-                'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-                'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+                'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -108,8 +104,8 @@ class RoleDefaultPermissions
         'qa' => [
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-                'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+                'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -124,7 +120,7 @@ class RoleDefaultPermissions
         'team_member' => [
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
+                'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
                 'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
                 'canAddClientFacingComment',
                 'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',

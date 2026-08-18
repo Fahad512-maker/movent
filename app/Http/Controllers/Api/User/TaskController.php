@@ -43,15 +43,6 @@ class TaskController extends Controller
             ->whereIn('id', $teamMemberIds->isNotEmpty() ? $teamMemberIds->all() : [0]);
     }
 
-    // qa_assigned_to is optional (no dropdown/status-transition requires it
-    // anymore) — but whenever it IS set, it must be a real QA-role user of
-    // this company.
-    private function qaAssignedToRule()
-    {
-        return Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)
-            ->where('role_type', 'qa');
-    }
-
     private function can(string $permKey): bool
     {
         $user = $this->user();
@@ -151,7 +142,7 @@ class TaskController extends Controller
 
         $project = $this->project($projectId);
 
-        $q = Task::where('project_id', $project->id)->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue'])->withCount('attachments');
+        $q = Task::where('project_id', $project->id)->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name'])->withCount('attachments');
 
         if (!$canViewAll) {
             $q->where('created_by', $this->user()->id);
@@ -162,17 +153,8 @@ class TaskController extends Controller
             } else {
                 // Own regular assigned tasks, plus any task specifically
                 // handed to this user for Production/Deployment (any role).
-                // QA additionally sees anything handed to them for QA — but
-                // only while it's still actually in the QA stage; once moved
-                // on to Ready for Production/etc. it must drop out of their
-                // queue (qa_assigned_to is a historical record, not active-
-                // queue membership).
                 $q->where(function ($w) use ($userId) {
                     $w->where('assigned_to', $userId)->orWhere('production_assigned_to', $userId);
-                    if ($this->user()->role_type === 'qa') {
-                        $w->orWhere(fn ($qa) => $qa->where('qa_assigned_to', $userId)->whereIn('status', ['ready_for_qa', 'in_qa']))
-                          ->orWhere(fn ($qa) => $qa->whereIn('status', ['ready_for_qa', 'in_qa'])->whereNull('qa_assigned_to'));
-                    }
                 });
             }
         }
@@ -205,50 +187,19 @@ class TaskController extends Controller
         // project team, instead of every user in the company (same fix
         // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
-            ->with(['project:id,name,company_id', 'project.teamMembers.user:id,name,role_type', 'assignedBy:id,name', 'assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name'])
+            ->with(['project:id,name,company_id', 'project.teamMembers.user:id,name,role_type', 'assignedBy:id,name', 'assignedTo:id,name', 'productionAssignedTo:id,name'])
             ->withCount('attachments');
 
         $q->where(function ($w) use ($user) {
             // Own regular assigned tasks, plus any task specifically handed
-            // to this user for the Production/Deployment step (any role —
-            // not just QA can be picked as production_assigned_to).
+            // to this user for the Production/Deployment step (any role).
             $w->where('assigned_to', $user->id)
               ->orWhere('production_assigned_to', $user->id);
-
-            // QA additionally sees anything handed to them for QA — but ONLY
-            // while it's still actually in the QA stage: once the task moves
-            // on to Ready for Production/etc., it must drop out of this
-            // QA's queue, not linger forever just because qa_assigned_to
-            // still points at them (that column is a historical record, not
-            // an active-queue membership).
-            if ($user->role_type === 'qa') {
-                $visibleProjectIds = $this->visibleProjectIds();
-                $w->orWhere(fn ($qa) => $qa->where('qa_assigned_to', $user->id)->whereIn('status', ['ready_for_qa', 'in_qa']))
-                  ->orWhere(fn ($qa) => $qa->whereIn('status', ['ready_for_qa', 'in_qa'])->whereNull('qa_assigned_to')->whereIn('project_id', $visibleProjectIds));
-            }
         });
 
         if ($request->filled('status')) $q->where('status', $request->status);
 
         return ApiResponse::success($q->orderBy('due_date')->get());
-    }
-
-    // GET /user/tasks/qa-users — every active QA-role user in this staff
-    // member's own company, for the "hand this task off to QA" picker when
-    // moving a task to Ready for QA. Deliberately has NO permission gate
-    // (unlike ProjectController::companyUsers(), which requires
-    // canCreateTasks/canEditTasks/canAssignTeamResources/canViewTeamResources)
-    // — a plain Developer/Designer/Production/Team Member who has none of
-    // those still needs to see this list to hand off their own task.
-    public function qaUsers(): JsonResponse
-    {
-        $users = User::where('company_id', $this->user()->company_id)
-            ->where('role_type', 'qa')
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        return ApiResponse::success($users);
     }
 
     // GET /user/tasks/production-users — every active Production/Developer/
@@ -291,7 +242,7 @@ class TaskController extends Controller
         // project team, instead of every user in the company (same fix
         // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereIn('project_id', $visibleProjectIds)
-            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue', 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
+            ->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
             ->withCount('attachments');
 
         if (!$canViewAll) {
@@ -305,10 +256,6 @@ class TaskController extends Controller
                 $w->whereHas('project', fn ($p) => $p->where('project_manager_id', $user->id))
                   ->orWhere('assigned_to', $user->id)
                   ->orWhere('production_assigned_to', $user->id);
-                if ($user->role_type === 'qa') {
-                    $w->orWhere(fn ($qa) => $qa->where('qa_assigned_to', $user->id)->whereIn('status', ['ready_for_qa', 'in_qa']))
-                      ->orWhere(fn ($qa) => $qa->whereIn('status', ['ready_for_qa', 'in_qa'])->whereNull('qa_assigned_to'));
-                }
             });
         } elseif ($request->filled('assigned_to')) {
             $q->where('assigned_to', $request->assigned_to);
@@ -495,13 +442,6 @@ class TaskController extends Controller
 
         $task = $this->createTaskWithNumber($project, $validated);
 
-        if ($isProduction) {
-            $task->productionQueue()->create([
-                'assigned_to' => $task->assigned_to,
-                'status'      => 'queued',
-            ]);
-        }
-
         if ($task->assigned_to) {
             Notification::create([
                 'user_id'    => $task->assigned_to,
@@ -525,7 +465,7 @@ class TaskController extends Controller
             $task->logActivity('assigned', "Task assigned to {$assigneeName}", $this->userName(), ['to' => $task->assigned_to]);
         }
 
-        return ApiResponse::success($task->fresh(['assignedTo', 'qaAssignedTo', 'productionAssignedTo', 'assignedBy', 'productionQueue']), 'Task created', 201);
+        return ApiResponse::success($task->fresh(['assignedTo', 'productionAssignedTo', 'assignedBy']), 'Task created', 201);
     }
 
     public function update(Request $request, int $projectId, int $id): JsonResponse
@@ -549,25 +489,22 @@ class TaskController extends Controller
         $isPmTier  = $this->isTaskManager($project);
         $canEdit   = $isPmTier || $this->can('canEditTasks');
         $canAssign = $isPmTier || $this->can('canAssignTasks');
-        // A QA/reviewer-tier user is neither the assignee nor granted
+        $isQaRole  = $this->user()->role_type === 'qa';
+        $canOverrideTaskStatus = $this->can('canOverrideTaskStatus');
+        // A QA user is neither the assignee nor necessarily granted
         // canEditTasks/canAssignTasks, but must still be able to reach the
-        // status-only path below (Ready for QA -> In QA -> QA
-        // Failed/Passed -> Ready for Production) — gated for real by
-        // TaskStatusService::canTransition() further down, not here. $rules
-        // only adds title/assigned_to when $canEdit/$canAssign are true, so
-        // this broadened gate still can't let a QA-only user touch anything
-        // but status/comment.
-        $hasTaskStatusPerm = $isPmTier || $this->can('canMarkTaskBlocked') || $this->can('canVerifyDeliverables')
-            || $this->can('canAssignProductionTasks') || $this->can('canCompleteTasks')
-            || $this->can('canReopenTasks') || $this->can('canOverrideTaskStatus');
-        if (!$isOwnTask && !$canEdit && !$canAssign && !$hasTaskStatusPerm) {
+        // status-only path below (a free jump to any status) — gated for
+        // real by TaskStatusService::canChangeTaskStatus() further down, not
+        // here. $rules only adds title/assigned_to when $canEdit/$canAssign
+        // are true, so this broadened gate still can't let a QA-only user
+        // touch anything but status/comment.
+        if (!$isOwnTask && !$canEdit && !$canAssign && !$isQaRole && !$canOverrideTaskStatus) {
             return ApiResponse::error('Permission denied', 403);
         }
 
         $rules = [
             'status'                 => ['sometimes', 'in:' . implode(',', Task::ALL_STATUSES)],
             'comment'                => ['nullable', 'string', 'max:1000'],
-            'qa_assigned_to'         => ['nullable', 'integer', $this->qaAssignedToRule()],
             // Optional Production/Deployment handoff when moving to "Ready
             // for Production" — any non-seller, non-PM project team member,
             // same rule as assigned_to (not narrowed to role_type='production',
@@ -613,10 +550,6 @@ class TaskController extends Controller
         $comment = $validated['comment'] ?? null;
         unset($validated['comment']);
 
-        $qaAssignedToProvided = array_key_exists('qa_assigned_to', $validated);
-        $qaAssignedTo = $validated['qa_assigned_to'] ?? null;
-        unset($validated['qa_assigned_to']);
-
         $productionAssignedToProvided = array_key_exists('production_assigned_to', $validated);
         $productionAssignedTo = $validated['production_assigned_to'] ?? null;
         unset($validated['production_assigned_to']);
@@ -625,18 +558,15 @@ class TaskController extends Controller
         $statusChanging = $newStatus !== null && $newStatus !== $wasStatus;
         unset($validated['status']);
 
-        // Standalone QA/Production handoff — the listing's dedicated
-        // dropdowns let an actor (re)assign who owns the next pipeline step
-        // without necessarily changing status in the same request. When the
-        // status IS changing into ready_for_qa/ready_for_production here,
+        // Standalone Production handoff — the listing's dedicated dropdown
+        // lets an actor (re)assign who owns the production step without
+        // necessarily changing status in the same request. When the status
+        // IS changing into ready_for_production here,
         // TaskStatusService::applyTransition() below already owns stamping
-        // these columns (plus its own notification) — skip merging here so
+        // this column (plus its own notification) — skip merging here so
         // that path doesn't double-write/double-notify.
-        $wasQaAssignedTo = $task->qa_assigned_to;
         $wasProductionAssignedTo = $task->production_assigned_to;
-        $qaHandoffStandalone = $qaAssignedToProvided && !($statusChanging && $newStatus === 'ready_for_qa');
         $productionHandoffStandalone = $productionAssignedToProvided && !($statusChanging && $newStatus === 'ready_for_production');
-        if ($qaHandoffStandalone) $validated['qa_assigned_to'] = $qaAssignedTo;
         if ($productionHandoffStandalone) $validated['production_assigned_to'] = $productionAssignedTo;
 
         if ($statusChanging) {
@@ -647,31 +577,18 @@ class TaskController extends Controller
                 'is_pm'       => $isPmTier,
                 'is_assignee' => $isOwnTask,
                 'role_type'   => $this->user()->role_type,
-                'perms'       => array_values(array_filter([
-                    $isPmTier ? 'canOverrideTaskStatus' : null,
-                    $canEdit ? 'canEditTasks' : null,
-                    $this->can('canMarkTaskBlocked') ? 'canMarkTaskBlocked' : null,
-                    $this->can('canVerifyDeliverables') ? 'canVerifyDeliverables' : null,
-                    $this->can('canAssignProductionTasks') ? 'canAssignProductionTasks' : null,
-                    $this->can('canCompleteTasks') ? 'canCompleteTasks' : null,
-                    $this->can('canReopenTasks') ? 'canReopenTasks' : null,
-                    $this->can('canOverrideTaskStatus') ? 'canOverrideTaskStatus' : null,
-                ])),
+                'perms'       => $canOverrideTaskStatus ? ['canOverrideTaskStatus'] : [],
             ];
 
-            $check = \App\Services\TaskStatusService::canTransition($task, $newStatus, $actor);
-            if (!$check['allowed']) {
-                return ApiResponse::error($check['reason'], 422);
-            }
-            if ($check['requires_comment'] && !$comment) {
-                return ApiResponse::error('A comment is required for this status change.', 422);
+            if (!\App\Services\TaskStatusService::canChangeTaskStatus($task, $actor)) {
+                return ApiResponse::error("You don't have permission to change this task's status.", 422);
             }
         }
 
         $task->update($validated);
 
         if ($statusChanging) {
-            \App\Services\TaskStatusService::applyTransition($task, $newStatus, $comment, $actor, $qaAssignedTo, $productionAssignedTo);
+            \App\Services\TaskStatusService::applyTransition($task, $newStatus, $comment, $actor, $productionAssignedTo);
         }
 
         if (isset($validated['assigned_to']) && $validated['assigned_to'] !== $wasAssignee) {
@@ -699,28 +616,6 @@ class TaskController extends Controller
             }
             if ($wasAssignee) {
                 \App\Services\ProjectChatService::removeParticipantIfNoLongerEligible($project, $wasAssignee);
-            }
-        }
-
-        if ($qaHandoffStandalone && $qaAssignedTo !== $wasQaAssignedTo) {
-            $this->logActivity($project->company_id, 'task_qa_assigned', 'Task', $task->id, ['qa_assigned_to' => $qaAssignedTo]);
-
-            $oldName = $wasQaAssignedTo ? (User::find($wasQaAssignedTo)?->name ?? 'someone') : null;
-            $newName = $qaAssignedTo ? (User::find($qaAssignedTo)?->name ?? 'someone') : null;
-            $description = $newName
-                ? ($oldName ? "QA handoff reassigned from {$oldName} to {$newName}" : "Task handed to {$newName} for QA")
-                : "QA handoff removed from {$oldName}";
-            $task->logActivity('qa_status_changed', $description, $this->userName(), ['from' => $wasQaAssignedTo, 'to' => $qaAssignedTo]);
-
-            if ($qaAssignedTo && $qaAssignedTo !== $this->user()->id) {
-                Notification::create([
-                    'user_id'    => $qaAssignedTo,
-                    'company_id' => $project->company_id,
-                    'type'       => 'task_ready_for_qa',
-                    'title'      => 'Task handed to you for QA',
-                    'body'       => "You were handed task {$task->task_number} - \"{$task->title}\" for QA.",
-                    'data'       => ['project_id' => $project->id, 'task_id' => $task->id, 'link' => "/projects/{$project->id}/tasks/{$task->id}"],
-                ]);
             }
         }
 
@@ -768,6 +663,6 @@ class TaskController extends Controller
             $task->logActivity('updated', "{$this->userName()} updated {$changedLabels}", $this->userName(), ['fields' => $changedFields->values()->all()]);
         }
 
-        return ApiResponse::success($task->fresh(['assignedTo', 'assignedBy', 'qaAssignedTo', 'productionAssignedTo']), 'Task updated');
+        return ApiResponse::success($task->fresh(['assignedTo', 'assignedBy', 'productionAssignedTo']), 'Task updated');
     }
 }

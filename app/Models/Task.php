@@ -5,16 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Task extends Model
 {
     protected $fillable = [
-        'project_id', 'parent_task_id', 'assigned_to', 'qa_assigned_to', 'production_assigned_to', 'assigned_by', 'created_by',
+        'project_id', 'parent_task_id', 'assigned_to', 'production_assigned_to', 'assigned_by', 'created_by',
         'title', 'description', 'notes', 'status', 'priority', 'progress', 'task_type', 'is_production_task',
         'estimated_hours', 'start_date', 'due_date', 'completed_at', 'submitted_at', 'approved_at', 'delivered_at',
         'task_number', 'task_sequence',
-        'qa_status', 'ready_for_qa_at', 'qa_started_at', 'qa_completed_at', 'ready_for_production_at',
+        'ready_for_production_at',
         'status_changed_by_user_id', 'status_changed_by_admin_id',
     ];
 
@@ -28,34 +27,26 @@ class Task extends Model
         'delivered_at'       => 'datetime',
         'is_production_task' => 'boolean',
         'progress'           => 'integer',
-        'ready_for_qa_at'         => 'datetime',
-        'qa_started_at'           => 'datetime',
-        'qa_completed_at'         => 'datetime',
         'ready_for_production_at' => 'datetime',
     ];
 
     // Canonical ordered pipeline — 'review' and 'cancelled' are legacy/side
     // states (Seller-linked-task pending-PM-review, and cancellation) kept
-    // legal but outside this main flow; see TaskStatusService for the
-    // transition matrix that governs movement between these.
+    // legal but outside this main flow. Movement between any of these is a
+    // free jump for an allowed actor — see TaskStatusService.
     public const STATUS_FLOW = [
-        'todo', 'in_progress', 'blocked', 'ready_for_qa', 'in_qa',
-        'qa_failed', 'qa_passed', 'ready_for_production', 'in_production', 'completed',
+        'todo', 'in_progress', 'blocked', 'ready_for_production', 'in_production', 'completed',
     ];
 
     // Every legal db value — STATUS_FLOW plus the legacy 'review'/'cancelled'
     // side states — the single source of truth for both guards' validation
-    // 'in:' rule (matches the widened tasks.status enum exactly).
+    // 'in:' rule (matches the tasks.status enum exactly).
     public const ALL_STATUSES = [...self::STATUS_FLOW, 'review', 'cancelled'];
 
     public const STATUS_LABELS = [
         'todo'                  => 'To Do',
         'in_progress'           => 'In Progress',
         'blocked'               => 'Blocked',
-        'ready_for_qa'          => 'Ready for QA',
-        'in_qa'                 => 'In QA / Testing',
-        'qa_failed'             => 'QA Failed / Revision Required',
-        'qa_passed'             => 'QA Passed',
         'ready_for_production'  => 'Ready for Production',
         'in_production'         => 'In Production',
         'completed'             => 'Done / Completed',
@@ -83,11 +74,6 @@ class Task extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
-    public function qaAssignedTo(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'qa_assigned_to');
-    }
-
     public function productionAssignedTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'production_assigned_to');
@@ -106,11 +92,6 @@ class Task extends Model
     public function timesheets(): HasMany
     {
         return $this->hasMany(Timesheet::class);
-    }
-
-    public function productionQueue(): HasOne
-    {
-        return $this->hasOne(ProductionQueue::class);
     }
 
     public function deliverables(): HasMany

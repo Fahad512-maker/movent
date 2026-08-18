@@ -7,7 +7,6 @@ use App\Models\Client;
 use App\Models\CompanyModule;
 use App\Models\Deliverable;
 use App\Models\Notification;
-use App\Models\ProductionQueue;
 use App\Models\Project;
 use App\Models\Revision;
 use App\Models\Task;
@@ -36,11 +35,6 @@ class ProjectCompletionService
         $overdueTasks = $pendingTasks->filter(function (Task $task) {
             return $task->due_date && Carbon::parse($task->due_date)->isPast();
         })->values();
-
-        $pendingProduction = ProductionQueue::whereIn('task_id', Task::where('project_id', $project->id)->pluck('id'))
-            ->whereNotIn('status', ['approved'])
-            ->with('task:id,title')
-            ->get(['id', 'task_id', 'status']);
 
         // Re-submitting a task-tied deliverable (e.g. after a revision
         // request) always INSERTs a new row at the next version rather than
@@ -79,10 +73,6 @@ class ProjectCompletionService
                 'id' => $t->id, 'title' => $t->title, 'status' => $t->status,
                 'overdue' => (bool) ($t->due_date && Carbon::parse($t->due_date)->isPast()),
             ])->values(),
-            'pending_production' => $pendingProduction->map(fn (ProductionQueue $q) => [
-                'id' => $q->id, 'task_id' => $q->task_id,
-                'task_title' => $q->task?->title, 'status' => $q->status,
-            ])->values(),
             'pending_deliverables' => $pendingDeliverables->map(fn (Deliverable $d) => [
                 'id' => $d->id, 'title' => $d->title, 'status' => $d->status,
             ])->values(),
@@ -99,7 +89,6 @@ class ProjectCompletionService
         ];
 
         $ready = $blockers['pending_tasks']->isEmpty()
-            && $blockers['pending_production']->isEmpty()
             && $blockers['pending_deliverables']->isEmpty()
             && $blockers['pending_revisions']->isEmpty();
 

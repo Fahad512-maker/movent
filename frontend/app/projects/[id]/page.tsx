@@ -5,13 +5,13 @@ import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService, ProjectAttachment } from '@/lib/services/userProjectService';
-import { Project, Task, TaskStatus, ProjectStatus, Priority, ProjectComment, ProductionQueueItem, MentionableUser, ProjectCommentAttachment } from '@/lib/services/adminProjectService';
+import { Project, Task, TaskStatus, ProjectStatus, Priority, ProjectComment, MentionableUser, ProjectCommentAttachment } from '@/lib/services/adminProjectService';
 import { can, getAuthUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
-import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, PRODUCTION_SC, PRODUCTION_LABEL, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
+import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
-import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses, taskStatusRequiresComment } from '@/lib/taskStatusFlow';
+import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses } from '@/lib/taskStatusFlow';
 import toast from 'react-hot-toast';
 
 const TASK_TYPE_LABEL: Record<string, string> = {

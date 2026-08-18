@@ -132,11 +132,10 @@ class ModuleCatalog
                     'canExportProjectReports', 'canViewTaskReports', 'canExportTaskReports',
                     'canViewProjectDocuments', 'canUploadProjectDocuments',
                     'canShareProjectDocuments',
-                    'canViewProductionDashboard', 'canViewProductionQueue', 'canAssignProductionTasks',
-                    'canStartProductionTasks', 'canSubmitProductionTasks', 'canCreateRevisions',
+                    'canCreateRevisions',
                     'canResolveRevisions', 'canUploadDeliverables', 'canDeliverDeliverables',
-                    'canVerifyDeliverables', 'canViewProductionReports',
-                    'canViewProductionTasks', 'canUpdateProductionTasks', 'canMarkTaskBlocked',
+                    'canViewProductionReports',
+                    'canUpdateProductionTasks',
                     'canViewDeliverables', 'canReviseDeliverables', 'canApproveDeliverables',
                     'canAddProductionNotes',
                     'canUploadProjectAttachments', 'canViewProjectAttachments',
@@ -169,11 +168,14 @@ class ModuleCatalog
                     // check). NOT granted to any role by default — same convention as
                     // canAssignProjectSeller/canForceCloseProjects.
                     'canActivateProjects',
-                    // Task-level status-workflow lifecycle — distinct from the
-                    // project-level Complete/Close/Reopen keys above. See
-                    // App\Services\TaskStatusService for the full transition
-                    // matrix these gate.
-                    'canCompleteTasks', 'canReopenTasks', 'canOverrideTaskStatus',
+                    // Task status changes are a simple, unguarded free-jump for
+                    // any allowed actor (Developer/Team Member on their own
+                    // task, QA, PM, Company Admin) — see
+                    // App\Services\TaskStatusService::canChangeTaskStatus().
+                    // canOverrideTaskStatus is the one remaining manual escape
+                    // hatch (a Company Admin grant of free status-change rights
+                    // to a non-PM/QA user).
+                    'canOverrideTaskStatus',
                     // Project-wise messenger: one conversation per project.
                     // Group/direct project chat actions were retired with the
                     // single-thread ProjectMessengerController flow.

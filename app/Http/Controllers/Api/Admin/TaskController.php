@@ -37,15 +37,6 @@ class TaskController extends Controller
             ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client']));
     }
 
-    // qa_assigned_to is optional (no dropdown/status-transition requires it
-    // anymore) — but whenever it IS set, it must be a real QA-role user of
-    // this company.
-    private function qaAssignedToRule()
-    {
-        return Rule::exists('users', 'id')->whereIn('company_id', $this->companyIds())
-            ->where('role_type', 'qa');
-    }
-
     private function project(int $projectId): Project
     {
         return Project::whereIn('company_id', $this->companyIds())->findOrFail($projectId);
@@ -55,7 +46,7 @@ class TaskController extends Controller
     {
         $project = $this->project($projectId);
 
-        $q = Task::where('project_id', $project->id)->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue'])->withCount('attachments');
+        $q = Task::where('project_id', $project->id)->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name'])->withCount('attachments');
 
         if ($request->filled('status'))      $q->where('status', $request->status);
         if ($request->filled('priority'))    $q->where('priority', $request->priority);
@@ -82,7 +73,7 @@ class TaskController extends Controller
         // project team, instead of every user in the company (same fix
         // already applied to the Projects listing's PM dropdown).
         $q = Task::whereHas('project', fn ($q) => $q->whereIn('company_id', $companyIds))
-            ->with(['assignedTo:id,name', 'qaAssignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'productionQueue',
+            ->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name',
                 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
             ->withCount('attachments');
 
@@ -182,13 +173,6 @@ class TaskController extends Controller
 
         $task = $this->createTaskWithNumber($project, $validated);
 
-        if ($isProduction) {
-            $task->productionQueue()->create([
-                'assigned_to' => $task->assigned_to,
-                'status'      => 'queued',
-            ]);
-        }
-
         if ($task->assigned_to) {
             Notification::create([
                 'user_id'    => $task->assigned_to,
@@ -217,7 +201,7 @@ class TaskController extends Controller
             $task->logActivity('assigned', "Task assigned to {$assigneeName}", $this->adminName(), ['to' => $task->assigned_to]);
         }
 
-        return ApiResponse::success($task->fresh(['assignedTo', 'qaAssignedTo', 'productionAssignedTo', 'assignedBy', 'productionQueue']), 'Task created', 201);
+        return ApiResponse::success($task->fresh(['assignedTo', 'productionAssignedTo', 'assignedBy']), 'Task created', 201);
     }
 
     public function update(Request $request, int $projectId, int $id): JsonResponse
@@ -235,7 +219,6 @@ class TaskController extends Controller
             'description'      => ['nullable', 'string'],
             'status'           => ['sometimes', 'in:' . implode(',', Task::ALL_STATUSES)],
             'comment'          => ['nullable', 'string', 'max:1000'],
-            'qa_assigned_to'   => ['nullable', 'integer', $this->qaAssignedToRule()],
             'production_assigned_to' => ['nullable', 'integer', $this->assignedToRule()],
             'priority'         => ['sometimes', 'in:low,medium,high,urgent'],
             'estimated_hours'  => ['nullable', 'numeric', 'min:0'],
@@ -256,9 +239,6 @@ class TaskController extends Controller
         $comment = $validated['comment'] ?? null;
         unset($validated['comment']);
 
-        $qaAssignedTo = $validated['qa_assigned_to'] ?? null;
-        unset($validated['qa_assigned_to']);
-
         $productionAssignedTo = $validated['production_assigned_to'] ?? null;
         unset($validated['production_assigned_to']);
 
@@ -268,24 +248,17 @@ class TaskController extends Controller
 
         // Admin has no permission gate on this guard today (any Company
         // Admin who owns the project can change any status) — kept as-is,
-        // matching "Company Admin: can change any task status, can override
-        // status if needed".
+        // matching "Company Admin: can change any task status, always".
         $actor = ['type' => 'admin', 'id' => $this->admin()->id, 'name' => $this->adminName(), 'is_pm' => false, 'is_assignee' => false, 'perms' => []];
 
-        if ($statusChanging) {
-            $check = \App\Services\TaskStatusService::canTransition($task, $newStatus, $actor);
-            if (!$check['allowed']) {
-                return ApiResponse::error($check['reason'], 422);
-            }
-            if ($check['requires_comment'] && !$comment) {
-                return ApiResponse::error('A comment is required for this status change.', 422);
-            }
+        if ($statusChanging && !\App\Services\TaskStatusService::canChangeTaskStatus($task, $actor)) {
+            return ApiResponse::error("You don't have permission to change this task's status.", 422);
         }
 
         $task->update($validated);
 
         if ($statusChanging) {
-            \App\Services\TaskStatusService::applyTransition($task, $newStatus, $comment, $actor, $qaAssignedTo, $productionAssignedTo);
+            \App\Services\TaskStatusService::applyTransition($task, $newStatus, $comment, $actor, $productionAssignedTo);
         }
 
         if (isset($validated['assigned_to']) && $validated['assigned_to'] !== $wasAssignee) {
@@ -366,7 +339,7 @@ class TaskController extends Controller
             'new_values'  => $statusChanging ? array_merge($validated, ['status' => $newStatus]) : $validated,
         ]);
 
-        return ApiResponse::success($task->fresh(['assignedTo', 'qaAssignedTo', 'productionAssignedTo', 'assignedBy', 'productionQueue']), 'Task updated');
+        return ApiResponse::success($task->fresh(['assignedTo', 'productionAssignedTo', 'assignedBy']), 'Task updated');
     }
 
     public function destroy(int $projectId, int $id): JsonResponse

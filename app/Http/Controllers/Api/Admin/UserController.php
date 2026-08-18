@@ -9,7 +9,6 @@ use App\Models\Company;
 use App\Models\CompanyUserAssignment;
 use App\Models\Deliverable;
 use App\Models\Project;
-use App\Models\ProductionQueue;
 use App\Models\SystemAuditLog;
 use App\Models\Task;
 use App\Models\Timesheet;
@@ -733,11 +732,6 @@ class UserController extends Controller
                 ->whereHas('teamMembers', fn ($q) => $q->where('user_id', $user->id))
                 ->select('id', 'name', 'status')
                 ->get();
-
-            $result['production_tasks'] = ProductionQueue::where('assigned_to', $user->id)
-                ->whereHas('task.project', fn ($q) => $q->where('company_id', $companyId))
-                ->select('id', 'task_id', 'status')
-                ->limit(50)->get();
 
             $result['timesheets'] = Timesheet::where('user_id', $user->id)
                 ->whereHas('task.project', fn ($q) => $q->where('company_id', $companyId))
