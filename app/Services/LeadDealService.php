@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Lead;
 use App\Models\Notification;
@@ -52,6 +53,18 @@ class LeadDealService
                     throw $e;
                 }
             }
+        }
+
+        // The invoice may have been raised against an EXISTING client (picked
+        // in the invoice form) rather than a fresh guest/lead-only entity —
+        // in that case the Lead itself never got linked back to it, so
+        // $lead->client (the "Convert to Client" button's own !lead.client_id
+        // gate) stays null even though a client clearly already exists.
+        // Only claims an unclaimed client — never steals one already linked
+        // to a different lead. Mirrors LeadController::convert()'s own
+        // whereNull()-guarded backfill for the same reason.
+        if ($invoice->client_id) {
+            Client::where('id', $invoice->client_id)->whereNull('lead_id')->update(['lead_id' => $lead->id]);
         }
 
         // Reflects the invoice/payment state that triggered this, rather than
