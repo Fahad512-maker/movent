@@ -21,8 +21,9 @@ class AdminResource extends JsonResource
             'trial_ends_at'         => $this->trial_ends_at?->toDateTimeString(),
             'subscription_ends_at'  => $this->subscription_ends_at?->toDateTimeString(),
             'is_active'             => $this->is_active,
-            // Set in Settings → Company tab — authoritative for every invoice
-            // this admin issues (see Company::invoicingProfile()).
+            // Set on My Profile (Api\Admin\ProfileController::update()) —
+            // authoritative for every invoice this admin issues (see
+            // Company::invoicingProfile()).
             'currency'              => $this->currency,
             // Raw per-admin override columns (null = use package default /
             // unlimited) — lets the frontend reflect a seat/company upgrade

@@ -12,8 +12,8 @@ export interface Admin {
   modules?: string[];
   max_users_per_company?: number | null;
   max_companies?: number | null;
-  // Set in Settings → Company tab — authoritative for every invoice this
-  // admin issues, across any of their companies (see Company::invoicingProfile()).
+  // Set on My Profile — authoritative for every invoice this admin issues,
+  // across any of their companies (see Company::invoicingProfile()).
   currency?: string;
 }
 

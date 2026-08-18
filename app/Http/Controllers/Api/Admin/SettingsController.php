@@ -60,7 +60,6 @@ class SettingsController extends Controller
                 'phone'    => $admin->business_phone,
                 'address'  => $admin->address,
                 'timezone' => $admin->timezone,
-                'currency' => $admin->currency,
                 'logo_url' => $admin->logo_path
                     ? Storage::url($admin->logo_path)
                     : null,
@@ -111,7 +110,6 @@ class SettingsController extends Controller
             'phone'    => ['nullable', 'string', 'max:30'],
             'address'  => ['nullable', 'string', 'max:500'],
             'timezone' => ['nullable', 'string', 'max:60'],
-            'currency' => ['nullable', 'in:PKR,USD,EUR,GBP,AED,SAR'],
         ]);
 
         $admin = $this->admin();
@@ -122,7 +120,6 @@ class SettingsController extends Controller
             'business_phone' => $validated['phone']    ?? null,
             'address'        => $validated['address']  ?? null,
             'timezone'       => $validated['timezone']  ?? 'Asia/Karachi',
-            'currency'       => $validated['currency']  ?? 'USD',
         ]);
 
         return ApiResponse::success(null, 'Company profile updated');

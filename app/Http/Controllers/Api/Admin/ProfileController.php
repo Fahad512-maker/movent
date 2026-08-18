@@ -37,8 +37,15 @@ class ProfileController extends Controller
         $admin = $this->admin();
 
         $validated = $request->validate([
-            'name'  => ['required', 'string', 'max:150'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'name'     => ['required', 'string', 'max:150'],
+            'phone'    => ['nullable', 'string', 'max:30'],
+            // Deliberate, scoped exception to the "never touch Settings'
+            // business profile" rule above — currency moved onto My Profile
+            // per 2026-08-15 request, since it's the one setting Admin
+            // wanted here rather than buried in a Settings tab. Everything
+            // else that SettingsController owns (industry/email/timezone/
+            // invoice prefix/bank details/etc.) still lives there only.
+            'currency' => ['nullable', 'in:PKR,USD,EUR,GBP,AED,SAR'],
         ]);
 
         $old = $admin->only(['name', 'phone']);

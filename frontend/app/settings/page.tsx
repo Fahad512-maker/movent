@@ -11,7 +11,7 @@ import { moduleUpgradeService, ModuleCatalog } from '@/lib/services/moduleUpgrad
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface CompanySettings {
   name: string; industry: string; email: string; phone: string;
-  address: string; timezone: string; currency: string; logo_url: string | null;
+  address: string; timezone: string; logo_url: string | null;
 }
 interface InvoiceSettings {
   prefix: string; tax_rate: number; payment_terms: number; notes: string;
@@ -42,7 +42,6 @@ const cardHead: React.CSSProperties = { padding: '16px 24px', borderBottom: '1px
 const cardBody: React.CSSProperties = { padding: 24 };
 
 const TIMEZONES   = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Karachi', 'Asia/Kolkata', 'UTC'];
-const CURRENCIES  = [{ v: 'PKR', l: 'PKR — Pakistani Rupee' }, { v: 'USD', l: 'USD — US Dollar' }, { v: 'EUR', l: 'EUR — Euro' }, { v: 'GBP', l: 'GBP — British Pound' }, { v: 'AED', l: 'AED — UAE Dirham' }, { v: 'SAR', l: 'SAR — Saudi Riyal' }];
 const INDUSTRIES  = ['Technology', 'Finance', 'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction', 'Real Estate', 'Consulting', 'Marketing', 'Legal', 'Hospitality', 'Other'];
 
 // Gateway config field definitions
@@ -106,7 +105,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', currency: 'USD', logo_url: null });
+  const [company,  setCompany]  = useState<CompanySettings>({ name: '', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', logo_url: null });
   const [invoice,  setInvoice]  = useState<InvoiceSettings>({ prefix: 'INV', tax_rate: 0, payment_terms: 30, notes: '' });
   const [bank,     setBank]     = useState<BankSettings>({ bank_name: '', account_name: '', account_number: '', iban: '', swift: '' });
   const [gateways, setGateways] = useState<GatewayAccount[]>([]);
@@ -209,7 +208,6 @@ export default function SettingsPage() {
         industry: company.industry || null,
         email: company.email || null, phone: company.phone || null,
         address: company.address || null, timezone: company.timezone,
-        currency: company.currency,
       });
       showToast('Company profile saved', 'success');
     } catch (err: unknown) {
@@ -433,12 +431,6 @@ export default function SettingsPage() {
                     <label style={lbl}>Timezone</label>
                     <select style={inp} value={company.timezone} onChange={e => setCompany(p => ({ ...p, timezone: e.target.value }))}>
                       {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={lbl}>Currency</label>
-                    <select style={inp} value={company.currency} onChange={e => setCompany(p => ({ ...p, currency: e.target.value }))}>
-                      {CURRENCIES.map(c => <option key={c.v} value={c.v}>{c.l}</option>)}
                     </select>
                   </div>
                 </div>

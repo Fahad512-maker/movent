@@ -14,6 +14,15 @@ const ROLE_TYPE_LABEL: Record<string, string> = {
   viewer: 'Viewer',
 };
 
+// Company Admin only — the tenant-wide default currency every invoice is
+// raised in (see Company::invoicingProfile()). Never shown/sent for a
+// sub-user's own profile.
+const CURRENCIES = [
+  { v: 'PKR', l: 'PKR — Pakistani Rupee' }, { v: 'USD', l: 'USD — US Dollar' },
+  { v: 'EUR', l: 'EUR — Euro' }, { v: 'GBP', l: 'GBP — British Pound' },
+  { v: 'AED', l: 'AED — UAE Dirham' }, { v: 'SAR', l: 'SAR — Saudi Riyal' },
+];
+
 function errorMessage(err: unknown, fallback: string): string {
   const ex = err as { response?: { data?: { message?: string } } };
   return ex.response?.data?.message ?? fallback;
@@ -28,6 +37,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Admin | User | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [currency, setCurrency] = useState('USD');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +51,7 @@ export default function ProfilePage() {
     setProfile(p);
     setName(p.name);
     setPhone(p.phone ?? '');
+    if (isAdmin) setCurrency((p as Admin).currency ?? 'USD');
     // Refresh the cached session so the Navbar/Sidebar reflect the change
     // immediately, without waiting for the 60s background poll. The profile
     // API returns a lightweight self-profile, so merge it into the existing
@@ -64,7 +75,7 @@ export default function ProfilePage() {
     if (!name.trim()) { toast.error('Name is required'); return; }
     setSaving(true);
     try {
-      const updated = await svc.update({ name: name.trim(), phone: phone.trim() || null });
+      const updated = await svc.update({ name: name.trim(), phone: phone.trim() || null, currency: isAdmin ? currency : undefined });
       applyProfile(updated);
       toast.success('Profile updated');
     } catch (err: unknown) {
@@ -177,6 +188,17 @@ export default function ProfilePage() {
                 <label style={lbl}>Role</label>
                 <input value={roleLabel} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }} />
               </div>
+              {/* Company-wide default currency — Admin only. Every invoice
+                  this admin issues, across any of their companies, uses this
+                  (see Company::invoicingProfile()). */}
+              {isAdmin && (
+                <div>
+                  <label style={lbl}>Currency</label>
+                  <select value={currency} onChange={e => setCurrency(e.target.value)} style={inp}>
+                    {CURRENCIES.map(c => <option key={c.v} value={c.v}>{c.l}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             {isAdmin ? (
               <div style={{ marginBottom: 18 }}>
