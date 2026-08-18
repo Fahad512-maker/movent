@@ -185,7 +185,7 @@ export default function UserEditProjectPage() {
 
   return (
     <DashboardLayout title="Edit Project">
-      <div style={{ maxWidth: 760 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <button onClick={() => router.push(`/projects/${projectId}`)} style={{
             background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -206,7 +206,7 @@ export default function UserEditProjectPage() {
               <textarea value={form.description} onChange={e => setF('description', e.target.value)} rows={4} style={{ ...inp, resize: 'vertical' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Status</label>
                 <select value={form.status} onChange={e => setF('status', e.target.value)} style={inp}>
@@ -231,7 +231,7 @@ export default function UserEditProjectPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
               <div>
                 <label style={lbl}>Start Date</label>
                 <input type="date" value={form.start_date} onChange={e => setF('start_date', e.target.value)} style={inp} />
