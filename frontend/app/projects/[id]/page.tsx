@@ -7,7 +7,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService, ProjectAttachment } from '@/lib/services/userProjectService';
 import { Project, Task, TaskStatus, ProjectStatus, Priority, ProjectComment, MentionableUser, ProjectCommentAttachment } from '@/lib/services/adminProjectService';
 import { can, getAuthUser } from '@/lib/auth';
-import { ROLE_LABELS } from '@/lib/roleUtils';
+import { ROLE_LABELS, roleDisplayLabel } from '@/lib/roleUtils';
 import { User } from '@/types';
 import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
@@ -599,7 +599,7 @@ export default function UserProjectDetailPage() {
             <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 12, color: '#64748b' }}>
               <span>Due: <strong style={{ color: '#334155' }}>{fmtDate(project.deadline)}</strong></span>
               <span>Manager: <strong style={{ color: '#334155' }}>
-                {projectManager ? `${projectManager.name}${projectManager.role_type ? ` (${ROLE_LABELS[projectManager.role_type] ?? projectManager.role_type})` : ''}` : '—'}
+                {projectManager ? `${projectManager.name}${projectManager.role_type ? ` (${roleDisplayLabel(projectManager)})` : ''}` : '—'}
               </strong></span>
               <span>Created by: <strong style={{ color: '#334155' }}>{createdByName ?? '—'}</strong></span>
               <span>Created: <strong style={{ color: '#334155' }}>{fmtDate(project.created_at)}</strong></span>
@@ -957,7 +957,7 @@ export default function UserProjectDetailPage() {
                             style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value="">Unassigned</option>
                             {assignableUsers.map(u => (
-                              <option key={u.id} value={u.id}>{u.name}</option>
+                              <option key={u.id} value={u.id}>{u.name}{u.role_type ? ` (${roleDisplayLabel(u)})` : ''}</option>
                             ))}
                             {/* Keep a task's existing assignee showing correctly
                                 even if their role is no longer eligible here

@@ -208,15 +208,14 @@ class ProjectMessengerController extends Controller
     }
 
     // Users formally tied to the project: PM, project team members, task
-    // assignees, and each task's production-queue assignee. Sellers are
+    // assignees, and each task's production handoff assignee. Sellers are
     // handled separately (see eligibleParticipants/blockedSellerIds) since
     // manually adding any company Seller is itself a valid path.
     private function projectMemberIds(Project $project)
     {
         $teamIds = $project->teamMembers()->pluck('user_id');
         $taskAssigneeIds = $project->tasks()->whereNotNull('assigned_to')->pluck('assigned_to');
-        $productionAssigneeIds = $project->tasks()->with('productionQueue')->get()
-            ->pluck('productionQueue.assigned_to')->filter();
+        $productionAssigneeIds = $project->tasks()->whereNotNull('production_assigned_to')->pluck('production_assigned_to');
 
         return collect([$project->project_manager_id])
             ->merge($teamIds)->merge($taskAssigneeIds)->merge($productionAssigneeIds)

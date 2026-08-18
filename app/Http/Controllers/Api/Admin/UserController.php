@@ -281,6 +281,11 @@ class UserController extends Controller
             'email'                             => ['required', 'email'],
             'password'                          => ['nullable', 'string', 'min:8'],
             'role_type'                         => ['nullable', 'string', 'in:' . implode(',', self::VALID_ROLES)],
+            // Display-only override for a "Custom Role" (e.g. "Marketing
+            // Lead") — role_type above still carries the real permission/
+            // behavior bucket this custom role is based on; this is purely
+            // what gets shown instead of the generic role_type label.
+            'custom_role_label'                 => ['nullable', 'string', 'max:100'],
             'company_assignments'               => ['nullable', 'array'],
             'company_assignments.*.company_id'   => ['required', 'integer', 'in:' . implode(',', $companyIds)],
             'company_assignments.*.permissions'  => ['nullable', 'array'],
@@ -354,13 +359,14 @@ class UserController extends Controller
         }
 
         $user = User::create([
-            'company_id' => $defaultCompId,
-            'name'       => $validated['name'],
-            'email'      => $validated['email'],
-            'password'   => $validated['password'],
-            'role_type'  => $validated['role_type'] ?? $this->roleTypeFromAssignments($assignments),
-            'is_active'  => true,
-            'status'     => 'active',
+            'company_id'        => $defaultCompId,
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => $validated['password'],
+            'role_type'         => $validated['role_type'] ?? $this->roleTypeFromAssignments($assignments),
+            'custom_role_label' => $validated['custom_role_label'] ?? null,
+            'is_active'         => true,
+            'status'            => 'active',
         ]);
 
         $this->saveAssignments($user, $assignments);
@@ -385,6 +391,7 @@ class UserController extends Controller
             'name'                              => ['required', 'string', 'max:150'],
             'email'                             => ['required', 'email'],
             'role_type'                         => ['nullable', 'string', 'in:' . implode(',', self::VALID_ROLES)],
+            'custom_role_label'                 => ['nullable', 'string', 'max:100'],
             'company_assignments'               => ['nullable', 'array'],
             'company_assignments.*.company_id'   => ['required', 'integer', 'in:' . implode(',', $companyIds)],
             'company_assignments.*.permissions'  => ['nullable', 'array'],
@@ -450,6 +457,7 @@ class UserController extends Controller
             'email'                => $validated['email'],
             'password'             => Hash::make(Str::random(32)),
             'role_type'            => $validated['role_type'] ?? $this->roleTypeFromAssignments($assignments),
+            'custom_role_label'    => $validated['custom_role_label'] ?? null,
             'is_active'            => false,
             'status'               => 'invited',
             'invite_token'         => Str::random(64),
@@ -610,10 +618,11 @@ class UserController extends Controller
                     }
                 },
             ],
-            'password'  => ['nullable', 'string', 'min:8'],
-            'role_type' => ['sometimes', 'string', 'in:' . implode(',', self::VALID_ROLES)],
-            'phone'     => ['nullable', 'string', 'max:30'],
-            'is_active' => ['sometimes', 'boolean'],
+            'password'          => ['nullable', 'string', 'min:8'],
+            'role_type'         => ['sometimes', 'string', 'in:' . implode(',', self::VALID_ROLES)],
+            'custom_role_label' => ['nullable', 'string', 'max:100'],
+            'phone'             => ['nullable', 'string', 'max:30'],
+            'is_active'         => ['sometimes', 'boolean'],
         ]);
 
         if (empty($validated['password'])) unset($validated['password']);

@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { userService } from '@/lib/services/userService';
 import { getAvailableModules } from '@/lib/moduleCatalog';
 import { SIMPLE_PROJECT_PERMISSIONS, collapseProjectPermissions } from '@/lib/simplifiedProjectPermissions';
-import { USER_ROLE_TYPE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
+import { USER_ROLE_TYPE_OPTIONS, CUSTOM_ROLE_SENTINEL, CUSTOM_ROLE_BASE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
 import { CompanyOption, User } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { HiArrowLeft } from 'react-icons/hi2';
@@ -85,6 +85,13 @@ function EditUserPageContent() {
 
   // Basic info
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role_type: '' });
+  // What the Role <select> itself shows — either a real role_type, or the
+  // "+ Custom Role…" sentinel when this user has a custom_role_label. form's
+  // own role_type always holds the real structural bucket ("behaves like")
+  // regardless of which mode this is in — see roleUtils.CUSTOM_ROLE_SENTINEL.
+  const [roleSelectValue, setRoleSelectValue] = useState('');
+  const [customRoleLabel, setCustomRoleLabel] = useState('');
+  const isCustomRole = roleSelectValue === CUSTOM_ROLE_SENTINEL;
 
   // Permissions: companyId → moduleKey → permKey[]
   const [perms, setPerms]                 = useState<Record<number, Record<string, string[]>>>({});
@@ -98,6 +105,8 @@ function EditUserPageContent() {
     Promise.all([userService.getOne(id), userService.listCompanyOptions()])
       .then(([user, cos]: [User, CompanyOption[]]) => {
         setForm({ name: user.name, email: user.email, password: '', phone: user.phone ?? '', role_type: user.role_type ?? '' });
+        setCustomRoleLabel(user.custom_role_label ?? '');
+        setRoleSelectValue(user.custom_role_label ? CUSTOM_ROLE_SENTINEL : (user.role_type ?? ''));
 
         const assignments = user.company_assignments ?? [];
         const ids = assignments.map(a => a.company_id);
@@ -168,7 +177,23 @@ function EditUserPageContent() {
     setPerms(nextPerms);
   };
 
+  // The Role <select> itself — picking "+ Custom Role…" just switches the UI
+  // into custom mode (reveals the name + "Behaves like" fields) without
+  // touching form.role_type/permissions yet; picking any real role exits
+  // custom mode (clearing the custom label) and runs the normal
+  // confirm-then-apply-defaults flow via handleRoleChange().
+  const handleRoleSelectChange = (value: string) => {
+    setRoleSelectValue(value);
+    if (value === CUSTOM_ROLE_SENTINEL) return;
+    setCustomRoleLabel('');
+    handleRoleChange(value);
+  };
+
   const handleSave = async () => {
+    if (isCustomRole && !customRoleLabel.trim()) {
+      setError('Please enter a name for this custom role.');
+      return;
+    }
     setSaving(true); setError('');
     try {
       // Update basic info
@@ -178,6 +203,7 @@ function EditUserPageContent() {
         password:  form.password || undefined,
         phone:     form.phone || null,
         role_type: form.role_type || undefined,
+        custom_role_label: isCustomRole ? (customRoleLabel.trim() || null) : null,
       });
 
       // Update permissions per company
@@ -245,13 +271,33 @@ function EditUserPageContent() {
                 </div>
                 <div>
                   <label style={lbl}>Role</label>
-                  <select style={inp} value={form.role_type} onChange={e => handleRoleChange(e.target.value)}>
+                  <select style={inp} value={roleSelectValue} onChange={e => handleRoleSelectChange(e.target.value)}>
                     <option value="">Auto-detect from assigned modules</option>
                     {USER_ROLE_TYPE_OPTIONS.map(r => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
+                    <option value={CUSTOM_ROLE_SENTINEL}>+ Custom Role…</option>
                   </select>
                 </div>
+                {isCustomRole && (
+                  <>
+                    <div>
+                      <label style={lbl}>Custom Role Name *</label>
+                      <input style={inp} value={customRoleLabel} onChange={e => setCustomRoleLabel(e.target.value)} placeholder="e.g. Marketing Lead" maxLength={100} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Behaves Like *</label>
+                      <select style={inp} value={form.role_type || 'team_member'} onChange={e => handleRoleChange(e.target.value)}>
+                        {CUSTOM_ROLE_BASE_OPTIONS.map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                        Determines this custom role&apos;s real permissions/behavior — the name above is just what&apos;s shown.
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

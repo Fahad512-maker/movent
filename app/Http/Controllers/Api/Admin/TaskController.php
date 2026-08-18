@@ -27,14 +27,17 @@ class TaskController extends Controller
 
     // Production/general tasks can only be assigned to a real user of this
     // admin's own company/companies — not any user id in the system. A
-    // Seller can never be a task assignee, full stop.
+    // Seller or the Project Manager can never be a task assignee, full stop
+    // — matches Api\User\TaskController::assignedToRule() exactly, so the
+    // Admin guard can't be used to bypass the "PM never appears in the
+    // Assign To list" rule the frontend now enforces on both guards.
     private function assignedToRule()
     {
         // Rule::exists()->where() only supports 2-arg (column, value) equality
         // — a 3-arg (column, operator, value) call silently misparses, so a
         // closure is required for a "!=" condition.
         return Rule::exists('users', 'id')->whereIn('company_id', $this->companyIds())
-            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client']));
+            ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client', 'project_manager']));
     }
 
     private function project(int $projectId): Project
@@ -74,7 +77,7 @@ class TaskController extends Controller
         // already applied to the Projects listing's PM dropdown).
         $q = Task::whereHas('project', fn ($q) => $q->whereIn('company_id', $companyIds))
             ->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name',
-                'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
+                'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type,custom_role_label'])
             ->withCount('attachments');
 
         if ($request->filled('status'))      $q->where('status', $request->status);

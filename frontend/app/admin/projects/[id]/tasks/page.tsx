@@ -10,7 +10,7 @@ import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import Link from 'next/link';
 import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
 import { TASK_STATUS_LABELS, promptForOptionalProductionUser } from '@/lib/taskStatusFlow';
-import { ROLE_LABELS } from '@/lib/roleUtils';
+import { roleDisplayLabel } from '@/lib/roleUtils';
 import { User } from '@/types';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -21,7 +21,7 @@ const hasProjectManagementAccess = (u: User) =>
 const TASK_TYPE_LABEL: Record<string, string> = {
   general: 'General', production: 'Production', client_request: 'Client Request', internal: 'Internal',
 };
-const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client'];
+const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client', 'project_manager'];
 
 const EMPTY_FORM = {
   title: '', description: '', assigned_to: '', priority: 'medium', status: 'todo',
@@ -271,7 +271,7 @@ export default function ProjectTasksPage() {
                 <option value="">Unassigned</option>
                 {users.map(u => (
                   <option key={u.id} value={u.id}>
-                    {u.name} — {ROLE_LABELS[u.role_type] ?? u.role_type}{hasProjectManagementAccess(u) ? '' : ' — no Project Management access'}
+                    {u.name} ({roleDisplayLabel(u)}){hasProjectManagementAccess(u) ? '' : ' — no Project Management access'}
                   </option>
                 ))}
               </select>

@@ -115,6 +115,34 @@ export const USER_ROLE_TYPE_OPTIONS: RoleOption[] = [
   { value: 'viewer',          label: ROLE_LABELS.viewer },
 ];
 
+// Sentinel value for the "Select Role" dropdown's trailing "+ Custom Role…"
+// entry — never sent to the backend as-is. Picking it reveals a free-text
+// label input (users.custom_role_label) plus this "behaves like" picker,
+// since role_type stays a real structural bucket underneath (see
+// 2026_08_18_100000_add_custom_role_label_to_users_table.php) — dozens of
+// controllers key real permission/visibility behavior off exact role_type
+// string comparisons, so a custom role must still inherit one of these
+// buckets' behavior, it just DISPLAYS under the typed-in label instead.
+export const CUSTOM_ROLE_SENTINEL = '__custom__';
+
+// The "behaves like" choices offered once "+ Custom Role…" is picked —
+// every USER_ROLE_TYPE_OPTIONS entry, plus Team Member (hidden from the
+// main picker above per an earlier explicit request, but still the
+// intended generic/least-privilege default base for a brand-new custom role).
+export const CUSTOM_ROLE_BASE_OPTIONS: RoleOption[] = [
+  { value: 'team_member', label: ROLE_LABELS.team_member },
+  ...USER_ROLE_TYPE_OPTIONS,
+];
+
+// What to actually show for a user's role anywhere in the UI — the custom
+// label they were given takes priority over the generic bucket name.
+export function roleDisplayLabel(user: { role_type?: string | null; custom_role_label?: string | null } | null | undefined): string {
+  if (!user) return '—';
+  const custom = user.custom_role_label?.trim();
+  if (custom) return custom;
+  return (user.role_type && ROLE_LABELS[user.role_type]) || user.role_type || '—';
+}
+
 // ── Role default permissions ─────────────────────────────────────────────────
 // Mirrors App\Services\RoleDefaultPermissions::MAP exactly — every key here
 // is a real, currently-enforced ModuleCatalog permission (never invented).

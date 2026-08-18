@@ -12,6 +12,9 @@ export interface UserPayload {
   email: string;
   password?: string;
   role_type?: string;
+  // Display-only "Custom Role" name — role_type still carries the real
+  // permission/behavior bucket. See roleUtils.CUSTOM_ROLE_SENTINEL.
+  custom_role_label?: string | null;
   phone?: string | null;
   is_active?: boolean;
   company_id?: number;
@@ -22,6 +25,7 @@ export interface InvitePayload {
   name: string;
   email: string;
   role_type?: string;
+  custom_role_label?: string | null;
   phone?: string | null;
   company_id?: number;
   company_assignments?: CompanyAssignmentPayload[];

@@ -8,6 +8,7 @@ import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, Task, Project } from '@/lib/services/adminProjectService';
 import { adminNotificationService } from '@/lib/services/adminNotificationService';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
+import { roleDisplayLabel } from '@/lib/roleUtils';
 
 export default function AllTasksPage() {
   useModuleGuard('tasks');
@@ -178,7 +179,7 @@ export default function AllTasksPage() {
                           and never the Project Manager: this is the
                           developer-side "who can do the work" list. */}
                       {(t.project?.team_members ?? []).filter(tm => tm.user && tm.user.role_type !== 'project_manager').map(tm => (
-                        <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}</option>
+                        <option key={tm.user_id} value={tm.user_id}>{tm.user!.name}{tm.user!.role_type ? ` (${roleDisplayLabel(tm.user!)})` : ''}</option>
                       ))}
                       {/* Keep the current assignee selectable even if they're not
                           a formal team_members row (e.g. since removed from the

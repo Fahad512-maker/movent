@@ -108,15 +108,6 @@ class PaymentProjectStartService
             return $project;
         }
 
-        // Legacy fallback: invoices raised before this feature (or via
-        // "Existing Project" mode with no project_title) never got a
-        // placeholder — create the draft fresh, exactly as before.
-
-        // A pure guest / external invoice has no counterparty to own the work.
-        if (!$invoice->client_id && !$invoice->lead_id) {
-            return null;
-        }
-
         $creator = self::activeUser($invoice->created_by, $invoice->company_id);
 
         $project = Project::create([
