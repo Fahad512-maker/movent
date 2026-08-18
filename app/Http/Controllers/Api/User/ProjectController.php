@@ -90,15 +90,17 @@ class ProjectController extends Controller
         $user = $this->user();
         $base = Project::where('company_id', $user->company_id);
 
-        // Draft projects are name-only stubs auto-created by a client's payment
-        // (App\Services\PaymentProjectStartService) and are reserved for whoever
-        // can actually act on them — Company Admin (a different guard entirely)
-        // or a sub-user granted canActivateProjects. Everyone else never sees
-        // one, in any list or by id, until it's activated. Applied before the
-        // canViewAllCompanyProjects shortcut below so that broad grant doesn't
-        // leak drafts.
+        // Draft (and still-unpaid placeholder) projects are name-only stubs —
+        // auto-created either the moment an invoice is raised ('unpaid') or
+        // once a client's payment lands (promoted to 'draft') via
+        // App\Services\PaymentProjectStartService — and are reserved for
+        // whoever can actually act on them — Company Admin (a different guard
+        // entirely) or a sub-user granted canActivateProjects. Everyone else
+        // never sees one, in any list or by id, until it's activated. Applied
+        // before the canViewAllCompanyProjects shortcut below so that broad
+        // grant doesn't leak drafts.
         if (!$this->can('canActivateProjects')) {
-            $base->where('status', '!=', 'draft');
+            $base->whereNotIn('status', ['draft', 'unpaid']);
         }
 
         if ($this->can('canViewAllCompanyProjects')) {
@@ -1434,9 +1436,10 @@ class ProjectController extends Controller
         $project = $this->visibleProjects()->findOrFail($id);
         $user = $this->user();
 
-        // A draft has no work to complete — it must be activated first.
-        if ($project->status === 'draft') {
-            return ApiResponse::error('Activate this draft project before completing it.', 422);
+        // A draft (or still-unpaid placeholder) has no work to complete — it
+        // must be activated first.
+        if ($project->isDraft()) {
+            return ApiResponse::error("Activate this project before completing it — it is currently {$project->status}.", 422);
         }
 
         if (in_array($project->status, ['completed', 'closed'])) {
@@ -1482,9 +1485,10 @@ class ProjectController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
-        // A never-activated draft isn't something to "close" — it's a stub.
-        if ($project->status === 'draft') {
-            return ApiResponse::error('Activate this draft project before closing it.', 422);
+        // A never-activated draft (or still-unpaid placeholder) isn't
+        // something to "close" — it's a stub.
+        if ($project->isDraft()) {
+            return ApiResponse::error("Activate this project before closing it — it is currently {$project->status}.", 422);
         }
 
         if ($project->status === 'closed') {

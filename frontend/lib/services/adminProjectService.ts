@@ -1,9 +1,11 @@
 import api from '@/lib/axios';
 
-// 'draft' is only ever reached by auto-creation from a client's invoice payment
-// (App\Services\PaymentProjectStartService) and only ever left via the activate
-// endpoint — it is deliberately absent from the create/update status whitelists.
-export type ProjectStatus = 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
+// 'unpaid' and 'draft' are only ever reached automatically — 'unpaid' the
+// moment an invoice is raised in "New Project" mode, promoted to 'draft' once
+// a qualifying payment lands (App\Services\PaymentProjectStartService) — and
+// 'draft' is only ever left via the activate endpoint. Both are deliberately
+// absent from the create/update status whitelists.
+export type ProjectStatus = 'unpaid' | 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
   | 'todo' | 'in_progress' | 'blocked' | 'ready_for_production' | 'in_production'
@@ -12,6 +14,17 @@ export type TeamRole = 'project_manager' | 'production_user' | 'team_member' | '
 export type TimesheetStatus = 'pending' | 'approved' | 'rejected';
 export type DeliverableStatus = 'draft' | 'delivered' | 'approved' | 'revision_requested' | 'submitted' | 'rejected';
 export type RevisionStatus = 'open' | 'in_progress' | 'resolved';
+
+// One row per time a project's final package was delivered — see the
+// Delivery tab, distinct from the per-task Deliverable/DeliverableStatus above.
+export interface DeliverySubmission {
+  id: number;
+  file_name: string;
+  file_type?: string | null;
+  file_size?: number | null;
+  delivered_at: string;
+  delivered_by?: string | null;
+}
 
 export interface ProjectInvoice {
   id: number;
@@ -488,8 +501,38 @@ export const adminProjectService = {
     return res.data.data;
   },
 
+  // Company Admin's own upload — no Project Manager to submit-for-review
+  // first, goes straight to delivered_to_client.
+  uploadAndDeliver: async (id: number, file: File): Promise<Project> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await api.post(`/admin/projects/${id}/upload-and-deliver`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  },
+
   downloadDelivery: async (id: number, fileName: string): Promise<void> => {
     const res = await api.get(`/admin/projects/${id}/delivery/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  // Every time this project's final package was delivered — see the
+  // Delivery tab (frontend/app/admin/projects/[id]/delivery/page.tsx).
+  deliveryHistory: async (id: number): Promise<DeliverySubmission[]> => {
+    const res = await api.get(`/admin/projects/${id}/deliveries`);
+    return res.data.data;
+  },
+
+  downloadDeliverySubmission: async (id: number, deliveryId: number, fileName: string): Promise<void> => {
+    const res = await api.get(`/admin/projects/${id}/deliveries/${deliveryId}/download`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement('a');
     a.href = url;

@@ -8,6 +8,7 @@ use App\Models\CompanyUserAssignment;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\ProjectComment;
+use App\Models\ProjectDeliverySubmission;
 use App\Models\ProjectFolder;
 use App\Models\ProjectTeamMember;
 use App\Models\SystemAuditLog;
@@ -31,6 +32,12 @@ class ProjectController extends Controller
         'documents', 'tasks', 'production', 'compliance', 'invoices',
         'client-files', 'internal-notes', 'deliverables', 'revisions', 'timesheets',
     ];
+
+    // Mirrors Api\User\ProjectController's own DELIVERY_MIMES/DELIVERY_MAX_KB
+    // — same allowed file types/size for the final package, whichever side
+    // uploads it.
+    private const DELIVERY_MIMES = 'zip,pdf,doc,docx,xls,xlsx,png,jpg,jpeg';
+    private const DELIVERY_MAX_KB = 51200;
 
     private function admin()   { return auth('admin')->user(); }
     private function adminName(): string { return $this->admin()->name ?? 'Admin'; }
@@ -192,16 +199,19 @@ class ProjectController extends Controller
 
         $counts = (clone $base)->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
 
-        // A draft carries a deadline from nobody — and isn't started work — so it
-        // must not be counted overdue alongside completed/cancelled.
+        // A draft/unpaid carries a deadline from nobody — and isn't started
+        // work — so it must not be counted overdue alongside completed/cancelled.
         $overdue = (clone $base)->where('deadline', '<', now())
-            ->whereNotIn('status', ['draft', 'completed', 'cancelled'])
+            ->whereNotIn('status', ['draft', 'unpaid', 'completed', 'cancelled'])
             ->count();
 
         $assignedToMe = (clone $base)->where('project_manager_id', $this->admin()->id ?? 0)->count();
 
         return ApiResponse::success([
             'total'        => (clone $base)->count(),
+            // Invoiced but not yet paid at all — see
+            // App\Services\PaymentProjectStartService::createUnpaidPlaceholder().
+            'unpaid'       => $counts['unpaid'] ?? 0,
             // Payment-started projects awaiting activation — see
             // App\Services\PaymentProjectStartService.
             'draft'        => $counts['draft'] ?? 0,
@@ -782,9 +792,10 @@ class ProjectController extends Controller
     {
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
 
-        // A draft has no work to complete — it must be activated first.
-        if ($project->status === 'draft') {
-            return ApiResponse::error('Activate this draft project before completing it.', 422);
+        // A draft (or still-unpaid placeholder) has no work to complete — it
+        // must be activated first.
+        if ($project->isDraft()) {
+            return ApiResponse::error("Activate this project before completing it — it is currently {$project->status}.", 422);
         }
 
         if (in_array($project->status, ['completed', 'closed'])) {
@@ -844,11 +855,12 @@ class ProjectController extends Controller
             return ApiResponse::error('No project delivery is pending admin review.', 422);
         }
 
-        if (!$project->client_id) {
-            return ApiResponse::error('Attach a client to this project before sending the delivery.', 422);
-        }
-
-        if (!$project->client?->portal_access || !$project->client?->user_id) {
+        // A client-linked project needs a real portal to deliver into. A guest
+        // project (no client_id at all — e.g. a "New Project" invoice paid
+        // by someone with no Client record) has no portal, but does have the
+        // public payment-link page (Api\PublicInvoiceController) as its
+        // delivery channel instead — see downloadDelivery() there.
+        if ($project->client_id && (!$project->client?->portal_access || !$project->client?->user_id)) {
             return ApiResponse::error('Enable client portal access before sending this delivery.', 422);
         }
 
@@ -860,6 +872,16 @@ class ProjectController extends Controller
             'delivery_status'               => 'delivered_to_client',
             'delivery_approved_at'          => now(),
             'delivery_approved_by_admin_id' => $this->admin()->id,
+        ]);
+
+        ProjectDeliverySubmission::create([
+            'project_id'            => $project->id,
+            'file_path'             => $project->delivery_file_path,
+            'file_name'             => $project->delivery_file_name,
+            'file_type'             => $project->delivery_file_type,
+            'file_size'             => $project->delivery_file_size,
+            'delivered_by_admin_id' => $this->admin()->id,
+            'delivered_at'          => now(),
         ]);
 
         $project->logActivity('project_delivery_approved', "{$this->adminName()} approved the final project package and delivered it to the client.", $this->adminName(), [
@@ -915,6 +937,134 @@ class ProjectController extends Controller
         return ApiResponse::success($this->presentProject($project->fresh()), 'Project delivered to client');
     }
 
+    // Company Admin has no Project Manager to hand delivery review to — this
+    // is the direct one-step counterpart to Api\User\ProjectController::
+    // submitDelivery() + approveDelivery() above, for a company with no
+    // sub-users (or an Admin who simply wants to deliver something
+    // themselves): upload the final file and it goes straight to
+    // 'delivered_to_client', skipping the pending-review state entirely,
+    // since Admin is already the final authority that review step exists to
+    // reach. Works for a guest project too (client_id null) — see
+    // approveDelivery()'s comment above on the public payment link being that
+    // client's delivery channel instead of a portal.
+    public function uploadAndDeliver(Request $request, int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())
+            ->with(['client:id,name,user_id,portal_access'])
+            ->findOrFail($id);
+
+        if ($project->status !== 'completed') {
+            return ApiResponse::error('Only a completed project can be delivered to the client.', 422);
+        }
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:' . self::DELIVERY_MIMES, 'max:' . self::DELIVERY_MAX_KB],
+        ]);
+
+        $file = $validated['file'];
+        // Previous deliveries are kept on disk — see ProjectDeliverySubmission
+        // below, which needs this exact file_path to still resolve so its
+        // entry in the delivery history stays downloadable. Only the
+        // projects.delivery_* columns (the "current" pointer) move to the
+        // new file; nothing is deleted.
+        $path = $file->store("project-deliveries/{$project->id}");
+        $project->update([
+            'delivery_status'               => 'delivered_to_client',
+            'delivery_file_path'            => $path,
+            'delivery_file_name'            => $file->getClientOriginalName(),
+            'delivery_file_type'            => $file->getClientMimeType(),
+            'delivery_file_size'            => $file->getSize(),
+            'delivery_submitted_at'         => now(),
+            'delivery_submitted_by'         => null,
+            'delivery_approved_at'          => now(),
+            'delivery_approved_by_admin_id' => $this->admin()->id,
+        ]);
+
+        ProjectDeliverySubmission::create([
+            'project_id'            => $project->id,
+            'file_path'             => $path,
+            'file_name'             => $project->delivery_file_name,
+            'file_type'             => $project->delivery_file_type,
+            'file_size'             => $project->delivery_file_size,
+            'delivered_by_admin_id' => $this->admin()->id,
+            'delivered_at'          => now(),
+        ]);
+
+        $project->logActivity('project_delivery_approved', "{$this->adminName()} uploaded and delivered the final project package to the client.", $this->adminName(), [
+            'file_name' => $project->delivery_file_name,
+        ]);
+
+        SystemAuditLog::create([
+            'company_id' => $project->company_id, 'user_id' => null,
+            'action' => 'project_delivery_approved', 'module_key' => 'project_management',
+            'entity_type' => 'Project', 'entity_id' => $project->id,
+            'new_values' => ['file_name' => $project->delivery_file_name],
+        ]);
+
+        if ($project->client?->user_id) {
+            Notification::create([
+                'user_id'        => $project->client->user_id,
+                'actor_admin_id' => $this->admin()->id,
+                'company_id'     => $project->company_id,
+                'module'         => 'client_portal',
+                'type'           => 'project_delivered',
+                'title'          => 'Project delivered',
+                'body'           => "\"{$project->name}\" is ready to download.",
+                'entity_type'    => 'Project',
+                'entity_id'      => $project->id,
+                'url'            => "/client/projects/{$project->id}",
+                'data'           => ['project_id' => $project->id, 'link' => "/client/projects/{$project->id}"],
+            ]);
+        }
+
+        ProjectComment::create([
+            'company_id'      => $project->company_id,
+            'project_id'      => $project->id,
+            'author_admin_id' => $this->admin()->id,
+            'body'            => "Final project package uploaded and delivered to the client.",
+            'visibility'      => 'client',
+        ]);
+
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project delivered to client');
+    }
+
+    // GET /admin/projects/{id}/deliveries — full history of every time this
+    // project's final package was delivered (see ProjectDeliverySubmission).
+    public function deliveryHistory(int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        $history = $project->deliverySubmissions()
+            ->with('deliveredByAdmin:id,name')
+            ->get()
+            ->map(fn ($d) => [
+                'id'           => $d->id,
+                'file_name'    => $d->file_name,
+                'file_type'    => $d->file_type,
+                'file_size'    => $d->file_size,
+                'delivered_at' => $d->delivered_at?->toIso8601String(),
+                'delivered_by' => $d->deliveredByAdmin?->name,
+            ]);
+
+        return ApiResponse::success($history);
+    }
+
+    // GET /admin/projects/{id}/deliveries/{deliveryId}/download — a specific
+    // past version, not just the current one (Storage::exists() guards a
+    // version whose file was pruned outside the app, e.g. manual disk cleanup).
+    public function downloadDeliverySubmission(int $id, int $deliveryId): StreamedResponse|JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        $delivery = $project->deliverySubmissions()->findOrFail($deliveryId);
+
+        if (!Storage::exists($delivery->file_path)) {
+            return ApiResponse::error('This delivery file is missing from storage.', 422);
+        }
+
+        return Storage::download($delivery->file_path, $delivery->file_name ?? "{$project->name}-delivery.zip");
+    }
+
     public function close(Request $request, int $id): JsonResponse
     {
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
@@ -926,9 +1076,10 @@ class ProjectController extends Controller
         ]);
         $force = (bool) ($validated['force'] ?? false);
 
-        // A never-activated draft isn't something to "close" — it's a stub.
-        if ($project->status === 'draft') {
-            return ApiResponse::error('Activate this draft project before closing it.', 422);
+        // A never-activated draft (or still-unpaid placeholder) isn't
+        // something to "close" — it's a stub.
+        if ($project->isDraft()) {
+            return ApiResponse::error("Activate this project before closing it — it is currently {$project->status}.", 422);
         }
 
         if ($project->status === 'closed') {

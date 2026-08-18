@@ -6,26 +6,33 @@ export const inp: React.CSSProperties = {
 };
 export const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 };
 
-// Shown on every control a draft project disables — tasks, timesheets,
-// files, comments and chat. Matches Project::DRAFT_BLOCKED_MESSAGE, which is
-// what the server answers if one of those is called anyway.
-export const DRAFT_HINT = 'This project is still a draft. Activate it first — tasks, timesheets, files, comments and chat all open up once it is active.';
+// Shown on every control a draft (or still-unpaid) project disables — tasks,
+// timesheets, files, comments and chat. Matches Project::DRAFT_BLOCKED_MESSAGE,
+// which is what the server answers if one of those is called anyway.
+export const DRAFT_HINT = 'Activate it first — tasks, timesheets, files, comments and chat all open up once it is active.';
 
 // The banner that explains a disabled page, rather than leaving the user to
-// guess why everything is greyed out.
-export function DraftNotice({ style }: { style?: React.CSSProperties }) {
+// guess why everything is greyed out. Wording matches whichever pre-activation
+// status the project is actually in (see Project::isDraft() — 'unpaid' means
+// the client hasn't paid at all yet; 'draft' means they have and it's just
+// waiting to be activated).
+export function DraftNotice({ status, style }: { status?: string; style?: React.CSSProperties }) {
+  const unpaid = status === 'unpaid';
   return (
     <div style={{
       padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a',
       borderRadius: 8, fontSize: 12.5, color: '#92400e', ...style,
     }}>
-      📝 <strong>Draft project.</strong> {DRAFT_HINT}
+      {unpaid ? '💳' : '📝'} <strong>{unpaid ? 'Unpaid — awaiting client payment.' : 'Draft project.'}</strong> {DRAFT_HINT}
     </div>
   );
 }
 export const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '24px 28px', marginBottom: 20 };
 
 export const STATUS_SC: Record<string, { bg: string; color: string }> = {
+  // Raised on the invoice but not paid yet at all — one step before 'draft'.
+  // Amber so it reads as "waiting on the client", distinct from draft's grey.
+  unpaid:    { bg: '#fffbeb', color: '#b45309' },
   // Auto-created by a client's invoice payment, name-only until activated —
   // deliberately grey so it never reads as live work in a list.
   draft:     { bg: '#f8fafc', color: '#64748b' },

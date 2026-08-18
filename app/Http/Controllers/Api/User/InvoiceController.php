@@ -15,6 +15,7 @@ use App\Models\Notification;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Services\InvoiceNotificationService;
+use App\Services\PaymentProjectStartService;
 use App\Models\SystemAuditLog;
 use App\Models\UserCompanyPermission;
 use App\Support\PermissionDebug;
@@ -347,6 +348,13 @@ class InvoiceController extends Controller
                 'total'       => $item['total'],
                 'sort_order'  => $i,
             ]);
+        }
+
+        // "New Project" mode (project_title set, no existing project_id) —
+        // raise the real Project now, status 'unpaid', promoted to 'draft' by
+        // PaymentProjectStartService once a qualifying payment lands.
+        if (!empty($invoice->project_title) && empty($invoice->project_id)) {
+            PaymentProjectStartService::createUnpaidPlaceholder($invoice);
         }
 
         // Only a user holding canSelectInvoiceGateway may restrict/override

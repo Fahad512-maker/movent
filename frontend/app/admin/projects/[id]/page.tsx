@@ -317,13 +317,14 @@ export default function ProjectOverviewPage() {
   if (loading) return (<DashboardLayout title="Project"><div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>);
   if (!project) return (<DashboardLayout title="Project"><div style={{ padding: 60, textAlign: 'center', color: '#dc2626' }}>Project not found.</div></DashboardLayout>);
 
-  // See the Seller-side twin (app/projects/[id]/page.tsx) — a draft only
-  // allows SETUP; everything that produces work stays disabled until Activate.
-  const isDraft = project.status === 'draft';
+  // See the Seller-side twin (app/projects/[id]/page.tsx) — a draft (or
+  // still-unpaid placeholder) only allows SETUP; everything that produces
+  // work stays disabled until Activate.
+  const isDraft = project.status === 'draft' || project.status === 'unpaid';
 
   return (
     <DashboardLayout title="Project">
-      {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
+      {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 16 }} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <button onClick={() => router.push('/admin/projects')} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -337,12 +338,14 @@ export default function ProjectOverviewPage() {
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>{project.client?.name ?? 'No client linked'}</p>
         </div>
+        {/* Delivery actions (approve / upload & deliver / download / history)
+            live on the Delivery tab now, not as header buttons — see
+            /admin/projects/[id]/delivery. */}
         <ProjectLifecycleActions
           projectId={Number(id)}
           status={project.status}
           service={adminProjectService}
           canComplete canClose canReopen canForceClose canActivate
-          canApproveDelivery
           deliveryStatus={project.delivery_status}
           deliveryFileName={project.delivery_file_name}
           onUpdated={updated => setProject(updated)}
@@ -648,7 +651,7 @@ export default function ProjectOverviewPage() {
 
             {/* Composer — pinned below the thread, like a chat input bar */}
             <form onSubmit={addComment} style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
-              {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
+              {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 10 }} />}
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <input

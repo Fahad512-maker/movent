@@ -546,13 +546,13 @@ export default function UserProjectDetailPage() {
   if (loading) return <DashboardLayout title="Project"><div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>;
   if (!project) return null;
 
-  // A draft is a name-only stub that nobody has activated yet, so nothing
-  // that PRODUCES work is available on it — no tasks, files, comments or
-  // chat. Setting it up (edit, PM, team, seller, invoices) stays open, since
-  // that is exactly what happens before Activate. Mirrors the server-side
-  // guards (Project::isDraft()); everything here re-enables by itself the
-  // moment the project is activated.
-  const isDraft = project.status === 'draft';
+  // A draft (or still-unpaid placeholder) is a name-only stub that nobody has
+  // activated yet, so nothing that PRODUCES work is available on it — no
+  // tasks, files, comments or chat. Setting it up (edit, PM, team, seller,
+  // invoices) stays open, since that is exactly what happens before Activate.
+  // Mirrors the server-side guards (Project::isDraft()); everything here
+  // re-enables by itself the moment the project is activated.
+  const isDraft = project.status === 'draft' || project.status === 'unpaid';
 
   const tasks = project.tasks ?? [];
   const team = project.team_members ?? [];
@@ -583,7 +583,7 @@ export default function UserProjectDetailPage() {
     <DashboardLayout title={project.name}>
       <LoadingOverlay show={invoiceBusy} message="Creating Invoice…" />
       <div style={{ width: '100%', maxWidth: 'none' }}>
-        {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
+        {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 16 }} />}
         {/* ── Header ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -1277,7 +1277,7 @@ export default function UserProjectDetailPage() {
 
           {/* Composer — pinned below the thread, like a chat input bar */}
           <form onSubmit={addComment} style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
-            {isDraft && <DraftNotice style={{ marginBottom: 10 }} />}
+            {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 10 }} />}
             <div style={{ display: 'flex', gap: 10, position: 'relative' }}>
               <div style={{ flex: 1, position: 'relative' }}>
                 <input value={commentBody} onChange={e => handleCommentBodyChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Comments open up once the project is activated' : 'Add a comment… (@ to mention)'} style={{ ...inp, borderRadius: 20, background: isDraft ? '#f8fafc' : '#fff' }} />

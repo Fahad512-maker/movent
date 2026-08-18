@@ -9,6 +9,7 @@ interface LifecycleService {
   complete: (id: number) => Promise<Project>;
   submitDelivery?: (id: number, file: File) => Promise<Project>;
   approveDelivery?: (id: number) => Promise<Project>;
+  uploadAndDeliver?: (id: number, file: File) => Promise<Project>;
   downloadDelivery?: (id: number, fileName: string) => Promise<void>;
   close: (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }) => Promise<Project>;
   reopen: (id: number, reason: string) => Promise<Project>;
@@ -30,6 +31,9 @@ interface Props {
   canActivate: boolean;
   canSubmitDelivery?: boolean;
   canApproveDelivery?: boolean;
+  // Company Admin's own direct upload — no Project Manager involved, skips
+  // straight to delivered_to_client (see uploadAndDeliver on the service).
+  canUploadAndDeliver?: boolean;
   deliveryStatus?: Project['delivery_status'];
   deliveryFileName?: string | null;
   onUpdated: (project: Project) => void;
@@ -74,9 +78,9 @@ function BlockerGroup({ title, items, render }: { title: string; items: { id: nu
 
 export default function ProjectLifecycleActions({
   projectId, status, service, canComplete, canClose, canReopen, canForceClose, canActivate,
-  canSubmitDelivery = false, canApproveDelivery = false, deliveryStatus, deliveryFileName, onUpdated,
+  canSubmitDelivery = false, canApproveDelivery = false, canUploadAndDeliver = false, deliveryStatus, deliveryFileName, onUpdated,
 }: Props) {
-  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | 'submitDelivery' | null>(null);
+  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | 'submitDelivery' | 'uploadDeliver' | null>(null);
   const [loadingCheck, setLoadingCheck] = useState(false);
   const [checklist, setChecklist] = useState<CompletionStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -163,6 +167,25 @@ export default function ProjectLifecycleActions({
     } finally { setSubmitting(false); }
   };
 
+  const openUploadDeliver = () => {
+    setDeliveryFile(null);
+    setMode('uploadDeliver');
+  };
+
+  const submitUploadDeliver = async () => {
+    if (!service.uploadAndDeliver) { toast.error('Delivery upload is not available'); return; }
+    if (!deliveryFile) { toast.error('Please choose the final project file'); return; }
+    setSubmitting(true);
+    try {
+      const updated = await service.uploadAndDeliver(projectId, deliveryFile);
+      toast.success('Project delivered to client');
+      onUpdated(updated);
+      close();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to deliver project');
+    } finally { setSubmitting(false); }
+  };
+
   const approveDelivery = async () => {
     if (!service.approveDelivery) { toast.error('Delivery approval is not available'); return; }
     if (!confirm('Approve this delivery and make it available to the client?')) return;
@@ -226,9 +249,13 @@ export default function ProjectLifecycleActions({
 
   return (
     <>
-      {/* A draft is pre-lifecycle: activating it is the ONLY action available,
-          so none of the complete/close/reopen buttons render alongside it. */}
-      {status === 'draft' ? (canActivate && (
+      {/* Unpaid is pre-pre-lifecycle: nothing to do here but wait for the
+          client's payment (Project::activate() itself only accepts a
+          'draft' project, so there is no action to offer at all — not even
+          Activate). A draft is pre-lifecycle: activating it is the ONLY
+          action available, so none of the complete/close/reopen buttons
+          render alongside it either. */}
+      {status === 'unpaid' ? null : status === 'draft' ? (canActivate && (
         <button onClick={submitActivate} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#2563eb', '#fff')}>
           {submitting ? 'Activating…' : 'Activate Project'}
         </button>
@@ -263,6 +290,13 @@ export default function ProjectLifecycleActions({
         <button onClick={approveDelivery} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#0d9488', '#fff')}>
           {submitting ? 'Approving…' : 'Approve & Deliver to Client'}
         </button>
+      )}
+      {/* Admin's own direct upload — no Project Manager to submit for review
+          first. Deliberately hidden while a PM submission is already
+          pending review, so Admin approves that one instead of silently
+          overwriting it with a fresh upload. */}
+      {status === 'completed' && canUploadAndDeliver && service.uploadAndDeliver && deliveryStatus !== 'delivered_to_client' && deliveryStatus !== 'pending_admin_review' && (
+        <button onClick={openUploadDeliver} style={btn('#0d9488', '#fff')}>Upload &amp; Deliver</button>
       )}
       </>
       )}
@@ -355,6 +389,30 @@ export default function ProjectLifecycleActions({
                 opacity: (submitting || !deliveryFile) ? 0.5 : 1,
                 cursor: (submitting || !deliveryFile) ? 'not-allowed' : 'pointer',
               }}>{submitting ? 'Submitting…' : 'Submit to Admin'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'uploadDeliver' && (
+        <div style={overlay} onClick={close}>
+          <div style={modalCard} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Upload &amp; Deliver to Client</h3>
+            <div style={{ fontSize: 12, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+              This delivers immediately — no review step. The client can download it right away (via the client portal, or the payment link for a guest customer).
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Final project file <span style={{ color: '#dc2626' }}>*</span></label>
+              <input type="file" onChange={e => setDeliveryFile(e.target.files?.[0] ?? null)} style={inp} />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>Allowed: zip, pdf, doc, docx, xls, xlsx, png, jpg, jpeg. Max 50MB.</div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={close} style={secondaryBtn}>Cancel</button>
+              <button onClick={submitUploadDeliver} disabled={submitting || !deliveryFile} style={{
+                ...btn('#0d9488', '#fff'),
+                opacity: (submitting || !deliveryFile) ? 0.5 : 1,
+                cursor: (submitting || !deliveryFile) ? 'not-allowed' : 'pointer',
+              }}>{submitting ? 'Delivering…' : 'Deliver to Client'}</button>
             </div>
           </div>
         </div>

@@ -58,6 +58,8 @@ interface PublicProjectSummary {
   reference?: string | null;
   status: string;
   progress: number;
+  delivery_status?: string | null;
+  delivery_file_name?: string | null;
   is_main_invoice: boolean;
   invoice_count: number;
   portal_active: boolean;
@@ -213,6 +215,25 @@ function PublicInvoicePayContent() {
             <div style={{ width: `${Math.max(0, Math.min(100, p.progress))}%`, height: '100%', background: 'linear-gradient(135deg, #2563eb, #10b981)' }} />
           </div>
         </div>
+
+        {/* A guest customer has no client-portal login — this link is their
+            only way to reach the delivered file (see
+            PublicInvoiceController::downloadDelivery(), keyed off the same
+            payment token this page already runs on). */}
+        {p.delivery_status === 'delivered_to_client' && (
+          <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 10, background: '#f0fdfa', border: '1px solid #99f6e4', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f766e' }}>Your project is ready! 🎉</div>
+              {p.delivery_file_name && <div style={{ fontSize: 12, color: '#0f766e', marginTop: 2 }}>{p.delivery_file_name}</div>}
+            </div>
+            <a
+              href={`${base}/public/invoices/${token}/delivery/download`}
+              style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              Download Deliverable
+            </a>
+          </div>
+        )}
 
         {full && (
           <>

@@ -40,26 +40,33 @@ class Project extends Model
         'delivery_approved_at' => 'datetime',
     ];
 
-    // A 'draft' project is the name-only stub auto-created when a client's
-    // invoice payment starts one (App\Services\PaymentProjectStartService). It
-    // isn't work yet — nobody has filled it in or activated it — so the Client
-    // Portal must never surface one. Keeping the rule here means every
-    // Api\Client\* query states the same thing the same way.
+    // Statuses that mean "not real work yet" — a 'draft' is the name-only stub
+    // auto-created when a client's invoice payment starts one, and 'unpaid' is
+    // the same stub one step earlier: created the moment an invoice is raised
+    // in "New Project" mode, before the client has paid anything at all (see
+    // App\Services\PaymentProjectStartService::createUnpaidPlaceholder(), which
+    // promotes it to 'draft' once a qualifying payment lands). Neither is work
+    // yet, so the Client Portal must never surface either one. Keeping the
+    // rule here means every Api\Client\* query states the same thing the same
+    // way.
+    private const PRE_ACTIVATION_STATUSES = ['draft', 'unpaid'];
+
     public function scopeNotDraft($query)
     {
-        return $query->where('status', '!=', 'draft');
+        return $query->whereNotIn('status', self::PRE_ACTIVATION_STATUSES);
     }
 
-    // A draft isn't work yet, so nothing that PRODUCES work may happen on it:
-    // no tasks, timesheets, files, deliverables, comments or chat messages
-    // (see the isDraft() guards across Api\User\* and Api\Admin\*). Setting
-    // the project UP is still allowed — editing it, naming a PM, assigning a
-    // team or seller, linking invoices — since that is exactly what someone
-    // does before pressing Activate. Everything blocked here opens up the
-    // moment the project becomes active; no separate switch to flip.
+    // A draft (or unpaid) isn't work yet, so nothing that PRODUCES work may
+    // happen on it: no tasks, timesheets, files, deliverables, comments or
+    // chat messages (see the isDraft() guards across Api\User\* and
+    // Api\Admin\*). Setting the project UP is still allowed — editing it,
+    // naming a PM, assigning a team or seller, linking invoices — since that
+    // is exactly what someone does before pressing Activate. Everything
+    // blocked here opens up the moment the project becomes active; no
+    // separate switch to flip.
     public function isDraft(): bool
     {
-        return $this->status === 'draft';
+        return in_array($this->status, self::PRE_ACTIVATION_STATUSES, true);
     }
 
     // One wording for every guard, so a draft explains itself the same way
@@ -182,6 +189,13 @@ class Project extends Model
     public function deliverables(): HasMany
     {
         return $this->hasMany(Deliverable::class);
+    }
+
+    // History of the project-level "final package" handoff — distinct from
+    // deliverables() above (task-level production QA submissions).
+    public function deliverySubmissions(): HasMany
+    {
+        return $this->hasMany(ProjectDeliverySubmission::class)->orderByDesc('delivered_at');
     }
 
     public function folders(): HasMany

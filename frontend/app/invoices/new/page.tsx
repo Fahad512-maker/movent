@@ -761,6 +761,9 @@ function NewInvoiceForm() {
                           💡 This invoice&apos;s amount comes from the Line Items below, pre-filled from the deal — adjust them if needed.
                         </div>
                       )}
+                      <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 12px' }}>
+                        💳 The project is created right away with status <strong>Unpaid</strong>. It switches to <strong>Draft</strong> — ready to activate — once the client pays.
+                      </div>
                     </div>
                   )}
                 </div>

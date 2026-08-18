@@ -15,7 +15,9 @@ use App\Services\PaymentGateways\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PublicInvoiceController extends Controller
 {
@@ -101,6 +103,45 @@ class PublicInvoiceController extends Controller
         ]);
     }
 
+    // GET /public/invoices/{token}/delivery/download — the guest-customer
+    // counterpart to Api\Client\ProjectController::downloadDelivery(). A
+    // guest invoice (no client_id, so no portal account exists at all) has
+    // no other way to reach the delivered file, so this reuses the same
+    // payment_token this page already runs on, guarded the same way show()
+    // is: an invalid or expired link still 404s/410s here, and the file is
+    // only ever served once Admin has actually approved the delivery.
+    public function downloadDelivery(string $token): StreamedResponse|JsonResponse
+    {
+        $invoice = Invoice::where('payment_token', $token)->first();
+
+        if (!$invoice) {
+            return ApiResponse::error('Invalid payment link', 404);
+        }
+
+        if ($invoice->token_expires_at && $invoice->token_expires_at->isPast()) {
+            return ApiResponse::error('Payment link has expired', 410);
+        }
+
+        $project = $invoice->project
+            ?: Project::where('company_id', $invoice->company_id)
+                ->where('invoice_id', $invoice->id)
+                ->first();
+
+        if (!$project) {
+            return ApiResponse::error('No project is linked to this invoice.', 404);
+        }
+
+        if ($project->delivery_status !== 'delivered_to_client' || !$project->delivery_file_path) {
+            return ApiResponse::error('No project delivery is available yet.', 422);
+        }
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            return ApiResponse::error('The delivery file is missing from storage.', 422);
+        }
+
+        return Storage::download($project->delivery_file_path, $project->delivery_file_name ?? "{$project->name}-delivery.zip");
+    }
+
     private function projectSummary(Invoice $invoice): ?array
     {
         $project = $invoice->project
@@ -145,6 +186,12 @@ class PublicInvoiceController extends Controller
             'reference'          => $project->reference,
             'status'             => $project->status,
             'progress'           => $progress,
+            // Whether the final package is ready — surfaced here so the pay
+            // page can offer a Download button even for a guest customer
+            // with no client portal to log into (see downloadDelivery()
+            // below, keyed off this same payment_token).
+            'delivery_status'    => $project->delivery_status,
+            'delivery_file_name' => $project->delivery_status === 'delivered_to_client' ? $project->delivery_file_name : null,
             'is_main_invoice'    => $isMainInvoice,
             'invoice_count'      => $projectInvoices->count(),
             'portal_active'      => $portalActive,

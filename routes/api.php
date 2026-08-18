@@ -175,6 +175,11 @@ Route::prefix('public')->group(function () {
     Route::get('invoices/{token}',      [PublicInvoiceController::class, 'show']);
     Route::post('invoices/{token}/pay', [PublicInvoiceController::class, 'pay']);
 
+    // Guest-customer delivery download — the counterpart to Client\
+    // ProjectController::downloadDelivery() for an invoice with no client
+    // portal account at all (see PublicInvoiceController::downloadDelivery()).
+    Route::get('invoices/{token}/delivery/download', [PublicInvoiceController::class, 'downloadDelivery']);
+
     // Real gateway checkout (Stripe/PayPal/Authorize.net hosted pages) —
     // finalization itself happens via the gateway's webhook, not here.
     // Superseded by the inline endpoints below for the public pay page's own
@@ -436,6 +441,9 @@ Route::prefix('admin')->group(function () {
             Route::post('projects/{id}/complete',                   [AdminProjectController::class, 'complete']);
             Route::get('projects/{id}/delivery/download',           [AdminProjectController::class, 'downloadDelivery']);
             Route::post('projects/{id}/approve-delivery',           [AdminProjectController::class, 'approveDelivery']);
+            Route::post('projects/{id}/upload-and-deliver',         [AdminProjectController::class, 'uploadAndDeliver']);
+            Route::get('projects/{id}/deliveries',                  [AdminProjectController::class, 'deliveryHistory']);
+            Route::get('projects/{id}/deliveries/{deliveryId}/download', [AdminProjectController::class, 'downloadDeliverySubmission']);
             Route::post('projects/{id}/close',                      [AdminProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                     [AdminProjectController::class, 'reopen']);
             Route::post('projects/{id}/invoices/link',              [AdminProjectController::class, 'linkInvoice']);

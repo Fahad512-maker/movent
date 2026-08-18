@@ -15,6 +15,7 @@ const TABS: { key: string; label: string; suffix: string; draftLocked?: boolean 
   { key: 'timesheets',  label: 'Timesheets',  suffix: '/timesheets',   draftLocked: true },
   { key: 'attachments', label: 'Attachments', suffix: '/attachments',  draftLocked: true },
   { key: 'chat',        label: 'Chat',        suffix: '/chat',         draftLocked: true },
+  { key: 'delivery',    label: 'Delivery',    suffix: '/delivery',     draftLocked: true },
   { key: 'activity',    label: 'Activity',    suffix: '/activity' },
 ];
 

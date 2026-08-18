@@ -12,6 +12,7 @@ import { adminLeadService } from '@/lib/services/adminLeadService';
 import { inp, lbl, card, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
+import SubmitButton from '@/components/ui/SubmitButton';
 
 interface Company {
     id: number;
@@ -572,11 +573,11 @@ function CreateProjectForm() {
                 </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button type="submit" disabled={saving} style={{
+          <SubmitButton loading={saving} loadingText="Creating…" style={{
             padding: '11px 28px', background: saving ? '#93c5fd' : '#2563eb',
             color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
-          }}>{saving ? 'Creating…' : 'Create Project'}</button>
+            fontSize: 14, fontWeight: 600,
+          }}>Create Project</SubmitButton>
           <button type="button" onClick={() => router.back()} style={{
             padding: '11px 22px', background: '#fff', color: '#64748b',
             border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer',

@@ -50,7 +50,7 @@ export default function UserEditProjectPage() {
   const canUploadAttachments = isSeller
     ? can('project_management', 'canUploadProjectAttachments')
     : isProjectPmTier && (canEditProjects || can('project_management', 'canUploadProjectAttachments'));
-  const isDraft = project?.status === 'draft';
+  const isDraft = project?.status === 'draft' || project?.status === 'unpaid';
 
   const setF = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -218,6 +218,7 @@ export default function UserEditProjectPage() {
                   {form.status === 'completed' && <option value="completed" disabled>Completed</option>}
                   {form.status === 'closed' && <option value="closed" disabled>Closed</option>}
                   {form.status === 'draft' && <option value="draft" disabled>Draft</option>}
+                  {form.status === 'unpaid' && <option value="unpaid" disabled>Unpaid</option>}
                 </select>
               </div>
               <div>

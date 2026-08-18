@@ -21,19 +21,23 @@ use Illuminate\Support\Facades\Mail;
  * workflow" half of App\Services\InvoicePaymentService, kept separate so the
  * payment service stays about money and this stays about project kickoff.
  *
- * Driven entirely by the tenant's Deal Workflow setting, which offers exactly
- * two mutually exclusive options (CompanyDealSettings::TRIGGERS):
+ * The Project itself may already exist by the time a payment arrives:
+ * createUnpaidPlaceholder() below is called straight from invoice creation
+ * ("New Project" mode) and raises it immediately with status 'unpaid'. What
+ * happens here is promoting that same row to 'draft' — never creating a
+ * second Project — driven entirely by the tenant's Deal Workflow setting,
+ * which offers exactly two mutually exclusive options
+ * (CompanyDealSettings::TRIGGERS):
  *
  * AFTER PARTIAL PAYMENT (project_creation_trigger = 'partial_payment')
- *   Any payment — part or full — starts the project: a draft Project is created
- *   carrying only its name. Everything else is filled in by hand afterwards,
- *   and it stays a draft until Company Admin (or a sub-user holding
- *   canActivateProjects) activates it.
+ *   Any payment — part or full — promotes the project to 'draft'. Everything
+ *   else is filled in by hand afterwards, and it stays a draft until Company
+ *   Admin (or a sub-user holding canActivateProjects) activates it.
  *
  * AFTER FULL PAYMENT (project_creation_trigger = 'full_payment', the default)
- *   The same draft project, but only once the invoice is settled in full. A part
- *   payment starts nothing and instead emails the client that the project begins
- *   after the balance is cleared.
+ *   The same promotion, but only once the invoice is settled in full. A part
+ *   payment leaves the project sitting at 'unpaid' and instead emails the
+ *   client that the project begins after the balance is cleared.
  */
 class PaymentProjectStartService
 {
@@ -77,13 +81,36 @@ class PaymentProjectStartService
 
     private static function createDraftProject(Invoice $invoice): ?Project
     {
-        // Idempotency: invoices.project_id is the "already started" flag, and it
-        // is the same predicate notifyStakeholders() tests for its handoff nudge.
-        // Every payment path can therefore call this freely — a second payment
-        // on the same invoice will not raise a second project.
+        // The common case now: an "unpaid" placeholder was already created the
+        // moment this invoice was raised (see createUnpaidPlaceholder(),
+        // called from Api\Admin\InvoiceController::store() / Api\User\
+        // InvoiceController::store()). Promote that same row to 'draft'
+        // instead of raising a second Project. The status guard is the
+        // idempotency check: a second payment finds the project already past
+        // 'unpaid' and does nothing.
         if ($invoice->project_id) {
-            return null;
+            $project = Project::find($invoice->project_id);
+            if (!$project || $project->status !== 'unpaid') {
+                return null;
+            }
+
+            $project->update([
+                'status' => 'draft',
+                'source' => $invoice->status === 'paid'
+                    ? 'paid_invoice_auto_start'
+                    : 'partial_paid_invoice_auto_start',
+            ]);
+
+            $creator = self::activeUser($invoice->created_by, $invoice->company_id);
+            self::assignOwner($project, $invoice, $creator);
+            self::notifyDraftAwaitingActivation($project, $invoice);
+
+            return $project;
         }
+
+        // Legacy fallback: invoices raised before this feature (or via
+        // "Existing Project" mode with no project_title) never got a
+        // placeholder — create the draft fresh, exactly as before.
 
         // A pure guest / external invoice has no counterparty to own the work.
         if (!$invoice->client_id && !$invoice->lead_id) {
@@ -121,6 +148,54 @@ class PaymentProjectStartService
         // Api\*\ProjectController::activate().
 
         self::notifyDraftAwaitingActivation($project, $invoice);
+
+        return $project;
+    }
+
+    /**
+     * Creates the not-yet-paid placeholder the instant an invoice is raised in
+     * "New Project" mode (project_title set, no existing project_id) — called
+     * from Api\Admin\InvoiceController::store() and Api\User\InvoiceController
+     * ::store(), right after the Invoice row exists. Status starts at 'unpaid'
+     * rather than 'draft': the client hasn't paid anything yet, so every
+     * isDraft() "not real work" guard already applies (see Project::isDraft()),
+     * but the badge tells staff paperwork is still outstanding instead of
+     * merely un-activated. createDraftProject() above promotes this exact row
+     * to 'draft' the moment a qualifying payment lands, rather than creating a
+     * second Project.
+     */
+    public static function createUnpaidPlaceholder(Invoice $invoice): ?Project
+    {
+        if ($invoice->project_id || !$invoice->project_title) {
+            return null;
+        }
+
+        // Unlike the auto-drafted fallback below, a missing client_id/lead_id
+        // is not a reason to skip here: this is called directly off "New
+        // Project" mode, where the invoice creator explicitly named a project
+        // — including for a guest/one-off customer (customer_name/
+        // customer_email, no Client record at all). That is the same "no
+        // client" state a manually created project already supports; it just
+        // means nobody to auto-assign as owner (assignOwner() below already
+        // handles that gracefully).
+        $creator = self::activeUser($invoice->created_by, $invoice->company_id);
+
+        $project = Project::create([
+            'company_id' => $invoice->company_id,
+            'client_id'  => $invoice->client_id,
+            'lead_id'    => $invoice->lead_id,
+            'invoice_id' => $invoice->id,
+            'reference'  => self::nextProjectReference(),
+            'name'       => self::projectName($invoice),
+            'status'     => 'unpaid',
+            'source'     => 'invoice_created_unpaid',
+            'created_by'          => $creator?->id,
+            'created_by_admin_id' => $invoice->created_by_admin_id,
+        ]);
+
+        $invoice->update(['project_id' => $project->id]);
+
+        self::assignOwner($project, $invoice, $creator);
 
         return $project;
     }
