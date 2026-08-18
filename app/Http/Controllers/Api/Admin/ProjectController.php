@@ -171,7 +171,13 @@ class ProjectController extends Controller
 
         $projects = $projects->map(function ($p) use ($taskStats) {
             $stats = $taskStats[$p->id] ?? null;
-            $p->progress  = $stats && $stats->total > 0 ? round(($stats->done / $stats->total) * 100) : 0;
+            // A completed/closed project reads 100% regardless of its task
+            // ratio — otherwise one with zero tasks (or any tasks still open
+            // at completion time) shows 0%/partial forever despite the work
+            // being done.
+            $p->progress  = in_array($p->status, ['completed', 'closed'], true)
+                ? 100
+                : ($stats && $stats->total > 0 ? round(($stats->done / $stats->total) * 100) : 0);
             $p->is_overdue = $p->deadline && $p->deadline->isPast() && $p->status !== 'completed';
             return $p;
         });
@@ -342,7 +348,11 @@ class ProjectController extends Controller
 
         $totalTasks = $project->tasks->count();
         $doneTasks  = $project->tasks->where('status', 'completed')->count();
-        $project->progress = $totalTasks > 0 ? round(($doneTasks / $totalTasks) * 100) : 0;
+        // A completed/closed project reads 100% regardless of its task
+        // ratio — see the same override in index() above.
+        $project->progress = in_array($project->status, ['completed', 'closed'], true)
+            ? 100
+            : ($totalTasks > 0 ? round(($doneTasks / $totalTasks) * 100) : 0);
 
         $totalInvoiced = (float) $project->invoices->sum('total_amount');
         $totalPaid     = (float) $project->invoices->sum('paid_amount');
