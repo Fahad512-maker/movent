@@ -902,6 +902,10 @@ Route::prefix('user')->group(function () {
             Route::get('production/my-queue',                   [UserProductionController::class, 'myQueue']);
             Route::patch('production/{id}/start',               [UserProductionController::class, 'start']);
             Route::patch('production/{id}/submit',              [UserProductionController::class, 'submit']);
+            // Approves a submitted queue item directly when it has no
+            // Deliverable file to review — see ProductionController::
+            // approveQueueItem()'s own doc comment.
+            Route::patch('production/{id}/approve',             [UserProductionController::class, 'approveQueueItem']);
         });
     });
 });

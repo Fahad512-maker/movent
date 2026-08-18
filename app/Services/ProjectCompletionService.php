@@ -42,18 +42,37 @@ class ProjectCompletionService
             ->with('task:id,title')
             ->get(['id', 'task_id', 'status']);
 
-        $pendingDeliverables = Deliverable::where('project_id', $project->id)
-            ->whereIn('status', ['delivered'])
-            ->get(['id', 'title', 'status']);
+        // Re-submitting a task-tied deliverable (e.g. after a revision
+        // request) always INSERTs a new row at the next version rather than
+        // updating the old one — nothing in this app ever transitions a
+        // superseded row out of whatever status it was left at. Left
+        // unfiltered, an old 'revision_requested'/'submitted' row would
+        // block "Mark as Complete" FOREVER, even once a newer version was
+        // uploaded and approved, with no button anywhere to clear it. Only
+        // each task's LATEST version can still be genuinely outstanding — a
+        // project-level deliverable (task_id null) has no version cycle at
+        // all (every upload is independent, not a revision of another), so
+        // every one of those stays in play on its own.
+        $currentDeliverables = Deliverable::where('project_id', $project->id)
+            ->get(['id', 'task_id', 'title', 'status', 'version'])
+            ->groupBy(fn (Deliverable $d) => $d->task_id ?? "solo-{$d->id}")
+            ->map(fn ($group) => $group->sortByDesc('version')->first())
+            ->values();
 
-        $pendingRevisions = Revision::whereIn('deliverable_id', Deliverable::where('project_id', $project->id)->pluck('id'))
+        // 'submitted' (current convention, Api\User\ProductionController::
+        // uploadDeliverable()) and 'delivered' (Api\Admin\ProductionController::
+        // storeDeliverable()'s older convention for a fresh, not-yet-reviewed
+        // upload) both mean "awaiting review" depending on which panel
+        // uploaded it — block completion on either so a fresh upload from
+        // neither side can slip through unreviewed.
+        $pendingDeliverables = $currentDeliverables->whereIn('status', ['delivered', 'submitted'])->values();
+
+        $revisionRequestedDeliverables = $currentDeliverables->where('status', 'revision_requested')->values();
+
+        $pendingRevisions = Revision::whereIn('deliverable_id', $currentDeliverables->pluck('id'))
             ->whereIn('status', ['open', 'in_progress'])
             ->with('deliverable:id,title')
             ->get(['id', 'deliverable_id', 'status', 'feedback']);
-
-        $revisionRequestedDeliverables = Deliverable::where('project_id', $project->id)
-            ->where('status', 'revision_requested')
-            ->get(['id', 'title', 'status']);
 
         $blockers = [
             'pending_tasks' => $pendingTasks->map(fn (Task $t) => [

@@ -57,6 +57,16 @@ export default function UserProductionPage() {
     catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to reject'); }
   };
 
+  // For a task with no Deliverable file at all (e.g. work is live on the
+  // site, nothing to attach) — approves the queue item directly instead of
+  // going through a Deliverable id. Without this, such a task could never
+  // leave "Submitted" (nothing in the app ever approved it), permanently
+  // stuck short of 100% progress and blocking "Mark Project as Complete".
+  const approveItem = async (id: number) => {
+    try { await userProjectService.production.approveItem(id); toast.success('Approved'); load(seeAllQueue); }
+    catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to approve'); }
+  };
+
   const title = seeAllQueue ? 'Production Queue' : 'My Production Queue';
 
   return (
@@ -111,6 +121,9 @@ export default function UserProductionPage() {
                             <button onClick={() => approve(item.task!.deliverables![0].id)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Approve</button>
                             <button onClick={() => reject(item.task!.deliverables![0].id)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Reject</button>
                           </>
+                        )}
+                        {canApprove && item.status === 'submitted' && !item.task?.deliverables?.[0] && (
+                          <button onClick={() => approveItem(item.id)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Approve</button>
                         )}
                       </div>
                     </td>

@@ -432,13 +432,18 @@ class ProjectController extends Controller
             ]);
         }
 
-        // A Seller handing themselves off a project (seller_id === creator)
-        // is dropped straight into its chat — same reasoning as
-        // ProjectSellerAssignmentService::assign(). Without this they'd hold
-        // canViewProjectChat/canSendProjectChatMessage but still 403 on their
-        // own project until a PM/Admin separately opened "Manage
-        // Participants" — see ProjectChatService::addSeller().
-        if ($isHandoff) {
+        // A Seller creating their own project — handoff OR a full,
+        // unrestricted create (canCreateProjects) — is dropped straight into
+        // its chat — same reasoning as ProjectSellerAssignmentService::assign().
+        // Without this they'd hold canViewProjectChat/canSendProjectChatMessage
+        // but still 403 on their own project until a PM/Admin separately
+        // opened "Manage Participants" — see ProjectChatService::addSeller().
+        // Keyed off role_type, not $isHandoff, so it fires on EVERY
+        // Seller-created project (matches the seller_id assignment above,
+        // which uses the same condition) — a Seller holding the default
+        // canCreateProjects grant almost always takes the non-handoff path,
+        // which this used to skip entirely.
+        if ($user->role_type === 'seller') {
             ProjectChatService::addSeller($project, $user->id);
         }
 

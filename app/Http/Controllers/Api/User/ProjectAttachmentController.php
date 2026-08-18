@@ -79,16 +79,25 @@ class ProjectAttachmentController extends Controller
     // GET /user/projects/{projectId}/attachments
     public function index(int $projectId): JsonResponse
     {
-        // A Seller never gets the full, untiered attachment list (that would
-        // expose internal project files) — only ever the subset an Admin/PM
-        // explicitly marked "Visible to client", on a project they're
-        // actually linked to. No canViewProjectAttachments permission
-        // needed or checked for this narrower path.
+        // A Seller never gets the full, untiered attachment list on a
+        // project a real, different PM actually runs (that would expose
+        // internal project files) — only ever the subset an Admin/PM
+        // explicitly marked "Visible to client". No canViewProjectAttachments
+        // permission needed or checked for this narrower path. EXCEPTION: a
+        // Seller who is ALSO this project's own PM (a self-created/
+        // self-handoff project with nobody else appointed) sees everything —
+        // there's no separate internal team to hide files from, they ARE the
+        // whole team, and without this they couldn't even see a file they
+        // just uploaded themselves.
         if ($this->user()->role_type === 'seller') {
             $project = $this->sellerVisibleProject($projectId);
 
-            $attachments = ProjectAttachment::where('project_id', $project->id)
-                ->where('is_visible_to_client', true)
+            $query = ProjectAttachment::where('project_id', $project->id);
+            if ((int) $project->project_manager_id !== $this->user()->id) {
+                $query->where('is_visible_to_client', true);
+            }
+
+            $attachments = $query
                 ->with(['uploadedByAdmin:id,name', 'uploadedByUser:id,name'])
                 ->orderByDesc('created_at')
                 ->get();
@@ -165,12 +174,19 @@ class ProjectAttachmentController extends Controller
     // GET /user/projects/{projectId}/attachments/{id}/download
     public function download(int $projectId, int $id): StreamedResponse
     {
-        // Same "Visible to client" subset as index() — a Seller can only
-        // ever download an attachment they were actually shown the listing
-        // for, never any other attachment id on the project by guessing.
+        // Same tiering as index() (including the "Seller is also this
+        // project's own PM" exception) — a Seller can only ever download an
+        // attachment they were actually shown the listing for, never any
+        // other attachment id on the project by guessing.
         if ($this->user()->role_type === 'seller') {
             $project = $this->sellerVisibleProject($projectId);
-            $attachment = ProjectAttachment::where('project_id', $project->id)->where('is_visible_to_client', true)->findOrFail($id);
+
+            $query = ProjectAttachment::where('project_id', $project->id);
+            if ((int) $project->project_manager_id !== $this->user()->id) {
+                $query->where('is_visible_to_client', true);
+            }
+
+            $attachment = $query->findOrFail($id);
 
             return Storage::download($attachment->file_path, $attachment->original_name);
         }

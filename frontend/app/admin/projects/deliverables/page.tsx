@@ -365,7 +365,11 @@ export default function DeliverablesPage() {
                     : 'PM has not submitted final project delivery yet.'}
               </div>
             </div>
-            {selectedProject.delivery_status === 'pending_admin_review' && selectedProject.delivery_file_name && (
+            {/* Stays available once delivered too — the backend endpoint
+                never required 'pending_admin_review', only that the file
+                exists, so this used to vanish right after approval even
+                though the file was still sitting in storage. */}
+            {selectedProject.delivery_file_name && (
               <button onClick={() => downloadProjectDelivery()} style={{
                 padding: '9px 18px', background: '#fff', color: '#2563eb',
                 border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',

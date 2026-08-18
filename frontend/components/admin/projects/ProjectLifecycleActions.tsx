@@ -251,7 +251,12 @@ export default function ProjectLifecycleActions({
           {deliveryStatus === 'pending_admin_review' ? 'Resubmit Delivery' : 'Submit for Admin Review'}
         </button>
       )}
-      {status === 'completed' && canApproveDelivery && service.downloadDelivery && deliveryStatus === 'pending_admin_review' && deliveryFileName && (
+      {/* Stays visible after approval too (deliveryStatus becomes
+          'delivered_to_client') — the backend download endpoint never
+          required 'pending_admin_review', it only needs the file to exist,
+          so this used to vanish the moment Admin approved even though the
+          file was still sitting right there in storage. */}
+      {status === 'completed' && canApproveDelivery && service.downloadDelivery && deliveryFileName && (
         <button onClick={downloadDelivery} style={secondaryBtn}>Download PM Package</button>
       )}
       {status === 'completed' && canApproveDelivery && service.approveDelivery && deliveryStatus === 'pending_admin_review' && (
