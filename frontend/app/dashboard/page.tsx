@@ -136,14 +136,13 @@ export default function DashboardPage() {
       // project_management is intentionally NOT a blanket "any permission in
       // this module → show every shortcut" mapping like the others above —
       // a Seller holds several project_management keys (chat, client-facing
-      // comments, linked projects) but must never see the Tasks/Timesheets/
-      // Production shortcuts, so each one requires its own specific key,
-      // mirroring the same permAny lists Sidebar.tsx uses for these nav items.
+      // comments, linked projects) but must never see the Tasks/Timesheets
+      // shortcuts, so each one requires its own specific key, mirroring the
+      // same permAny lists Sidebar.tsx uses for these nav items.
       const PROJECT_MGMT_SHORTCUT_PERMS: Record<string, string[]> = {
         projects:   ['canViewProjects', 'canViewLinkedProjects', 'canViewProjectDashboard'],
         tasks:      ['canViewTasks'],
         timesheets: ['canViewTimesheets'],
-        production: ['canViewProductionQueue', 'canViewProductionDashboard', 'canStartProductionTasks', 'canSubmitProductionTasks'],
       };
       const mods = new Set<string>();
       for (const a of assignments) {
@@ -213,7 +212,6 @@ export default function DashboardPage() {
       projects:   { icon: '📋', label: 'Projects',    desc: 'Active project tracking',     href: '/projects',   color: '#0891b2', bg: '#ecfeff' },
       tasks:      { icon: '✅', label: 'Tasks',       desc: 'My assigned tasks',           href: '/tasks',      color: '#16a34a', bg: '#f0fdf4' },
       timesheets: { icon: '⏱️', label: 'Timesheets',  desc: 'Log & review work hours',     href: '/timesheets', color: '#d97706', bg: '#fffbeb' },
-      production: { icon: '🎬', label: 'Production',  desc: 'Production queue',            href: '/projects/production', color: '#dc2626', bg: '#fef2f2' },
       compliance: { icon: '🛡️', label: 'Compliance',  desc: 'Policies & risk',             href: '/compliance', color: '#b91c1c', bg: '#fef2f2' },
       reports:    { icon: '📊', label: 'Reports',     desc: 'Financial reports',           href: '/reports',    color: '#d97706', bg: '#fffbeb' },
     };

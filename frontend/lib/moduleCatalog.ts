@@ -202,7 +202,6 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'canCreateTasks',             label: 'Create Tasks', group: 'Tasks' },
       { key: 'canEditTasks',               label: 'Edit Tasks',   group: 'Tasks' },
       { key: 'canAssignTasks',             label: 'Assign Tasks', group: 'Tasks' },
-      { key: 'canMarkTaskBlocked',         label: 'Mark Task Blocked', group: 'Tasks' },
 
       { key: 'canViewTeamResources',       label: 'View Team Resources',   group: 'Team & Timesheets' },
       { key: 'canAssignTeamResources',     label: 'Assign Team Resources', group: 'Team & Timesheets' },
@@ -212,15 +211,9 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'canViewProjectReports',      label: 'View Project Reports', group: 'Reports' },
       { key: 'canViewTaskReports',         label: 'View Task Reports',    group: 'Reports' },
 
-      { key: 'canViewProductionQueue',     label: 'View Production Queue',     group: 'Production' },
-      { key: 'canAssignProductionTasks',   label: 'Assign Production Tasks',   group: 'Production' },
-      { key: 'canStartProductionTasks',    label: 'Start Production Tasks',    group: 'Production' },
-      { key: 'canSubmitProductionTasks',   label: 'Submit Production Tasks',   group: 'Production' },
-
       { key: 'canCreateRevisions',         label: 'Create Revisions',    group: 'Revisions & Deliverables' },
       { key: 'canResolveRevisions',        label: 'Resolve Revisions',   group: 'Revisions & Deliverables' },
       { key: 'canUploadDeliverables',      label: 'Upload Deliverables', group: 'Revisions & Deliverables' },
-      { key: 'canVerifyDeliverables',      label: 'Verify Deliverables', group: 'Revisions & Deliverables' },
       { key: 'canViewDeliverables',        label: 'View Deliverables',   group: 'Revisions & Deliverables' },
       { key: 'canApproveDeliverables',     label: 'Approve Deliverables', group: 'Revisions & Deliverables' },
 

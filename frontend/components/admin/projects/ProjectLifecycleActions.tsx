@@ -222,7 +222,7 @@ export default function ProjectLifecycleActions({
   };
 
   const b = checklist?.blockers;
-  const totalBlockers = b ? b.pending_tasks.length + b.pending_production.length + b.pending_deliverables.length + b.pending_revisions.length : 0;
+  const totalBlockers = b ? b.pending_tasks.length + b.pending_deliverables.length + b.pending_revisions.length : 0;
 
   return (
     <>
@@ -281,7 +281,6 @@ export default function ProjectLifecycleActions({
               <div style={{ fontSize: 13, color: '#7f1d1d', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>This project isn&apos;t ready yet — {totalBlockers} item(s) outstanding:</div>
                 <BlockerGroup title="Incomplete tasks" items={b!.pending_tasks} />
-                <BlockerGroup title="Production tasks not approved" items={b!.pending_production} render={i => i.task_title || 'Task'} />
                 <BlockerGroup title="Deliverables pending review" items={b!.pending_deliverables} />
                 <BlockerGroup title="Open revision requests" items={b!.pending_revisions} render={i => i.deliverable_title || 'Deliverable'} />
               </div>

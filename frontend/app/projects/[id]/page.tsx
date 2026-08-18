@@ -29,9 +29,9 @@ function assignedToId(t: Task): number | null {
   return typeof t.assigned_to === 'object' ? t.assigned_to.id : t.assigned_to;
 }
 
-// Unwraps a relation-or-id field (qa_assigned_to/production_assigned_to come
-// back as the loaded {id,name} relation on GET but must round-trip as a
-// bare id on PUT) into the plain numeric id the update payload expects.
+// Unwraps a relation-or-id field (production_assigned_to comes back as the
+// loaded {id,name} relation on GET but must round-trip as a bare id on PUT)
+// into the plain numeric id the update payload expects.
 function relationId(v: number | { id: number } | null | undefined): number | undefined {
   if (v == null) return undefined;
   return typeof v === 'object' ? v.id : v;
@@ -84,7 +84,6 @@ export default function UserProjectDetailPage() {
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachmentVisibleToClient, setAttachmentVisibleToClient] = useState(false);
-  const [myProduction, setMyProduction] = useState<ProductionQueueItem[]>([]);
 
   const canEditProjects = can('project_management', 'canEditProjects');
   const canManageProjectInvoices = can('project_management', 'canManageProjectInvoices');
@@ -96,12 +95,6 @@ export default function UserProjectDetailPage() {
   // "review" server-side regardless of what's shown here.
   const canCreateLinkedTask = can('project_management', 'canCreateLinkedProjectTask');
   const canCreateAnyTask = canCreateTasks || canCreateLinkedTask;
-  // A Developer/Team Member gets free rein on THEIR OWN task — full status
-  // freedom and reassignment to anyone in the company — mirroring the
-  // backend bypass in TaskStatusService::canTransition() and the
-  // isDevOrTeamAssignee widening of Api\User\TaskController::update()'s
-  // assigned_to rule. Neither canEditTasks nor canAssignTasks is required.
-  const isDevOrTeamRole = me?.role_type === 'developer' || me?.role_type === 'team_member';
   // Mirrors Api\User\ProjectCommentController::isInternalStaff() — a Seller
   // following up on a linked project never sees/posts 'internal' notes, no
   // matter what permissions they hold.
@@ -129,30 +122,18 @@ export default function UserProjectDetailPage() {
     : isProjectPmTier && (canEditProjects || can('project_management', 'canUploadProjectAttachments'));
   const canDownloadAttachments = isSeller || can('project_management', 'canDownloadProjectAttachments');
   const canDeleteAttachments = !isSeller && can('project_management', 'canDeleteProjectAttachments');
-  // Same permAny set the sidebar's "Production Queue" nav item already uses —
-  // the section only appears for a role that has some production capability.
-  const hasProductionAccess = ['canViewProductionQueue', 'canViewProductionDashboard', 'canStartProductionTasks', 'canSubmitProductionTasks']
-    .some(k => can('project_management', k));
-  const canStartProduction  = can('project_management', 'canStartProductionTasks');
-  const canSubmitProduction = can('project_management', 'canSubmitProductionTasks');
   const canCompleteProjects   = can('project_management', 'canCompleteProjects');
   const canCloseProjects      = can('project_management', 'canCloseProjects');
   const canReopenProjects     = can('project_management', 'canReopenProjects');
   const canForceCloseProjects = can('project_management', 'canForceCloseProjects');
   const canActivateProjects   = can('project_management', 'canActivateProjects');
 
-  // Task status-workflow permission set — passed to getAllowedNextTaskStatuses()
-  // below to filter each status <select>'s options; the backend
-  // (TaskStatusService::canTransition) is the real enforcement either way.
-  const taskStatusPerms = [
-    canEditTasks && 'canEditTasks',
-    can('project_management', 'canMarkTaskBlocked') && 'canMarkTaskBlocked',
-    can('project_management', 'canVerifyDeliverables') && 'canVerifyDeliverables',
-    can('project_management', 'canAssignProductionTasks') && 'canAssignProductionTasks',
-    can('project_management', 'canCompleteTasks') && 'canCompleteTasks',
-    can('project_management', 'canReopenTasks') && 'canReopenTasks',
-    can('project_management', 'canOverrideTaskStatus') && 'canOverrideTaskStatus',
-  ].filter(Boolean) as string[];
+  // Task status is a Jira-style free jump for an allowed actor — see
+  // TaskStatusService::canChangeTaskStatus(). QA (any task) and the manual
+  // canOverrideTaskStatus escape hatch are the two flags
+  // getAllowedNextTaskStatuses() needs beyond isAssignee/isPm/isAdmin.
+  const isQa = me?.role_type === 'qa';
+  const canOverrideTaskStatus = can('project_management', 'canOverrideTaskStatus');
   const isProjectPm = isProjectPmTier;
   const canSubmitProjectDelivery = !!project && me?.role_type === 'project_manager' && canCompleteProjects && (
     project.project_manager_id === me.id
@@ -254,13 +235,6 @@ export default function UserProjectDetailPage() {
     } finally { setInvoiceBusy(false); }
   };
 
-  const loadProduction = async () => {
-    try {
-      const items = await userProjectService.production.myQueue();
-      setMyProduction(items.filter(it => it.task?.project_id === id));
-    } catch { /* silent */ }
-  };
-
   useEffect(() => {
     if (!can('project_management', 'canViewProjects') && !can('project_management', 'canViewLinkedProjects')) {
       router.replace('/dashboard');
@@ -269,7 +243,6 @@ export default function UserProjectDetailPage() {
     load();
     loadComments();
     if (canViewAttachments) loadAttachments();
-    if (hasProductionAccess) loadProduction();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Comments have no realtime push — poll so a teammate's new comment shows
@@ -364,16 +337,16 @@ export default function UserProjectDetailPage() {
   };
 
   const updateTaskStatus = async (task: Task, status: TaskStatus) => {
+    // Optional reason — never required (Jira-style free jump has no
+    // "requires comment" rule), but still worth capturing when offered.
     let comment: string | undefined;
-    if (taskStatusRequiresComment(status)) {
-      const input = window.prompt(status === 'blocked' ? 'Reason for marking this task Blocked:' : 'QA comment / reason for QA Failed:');
-      if (!input || !input.trim()) { toast.error('A comment is required for this status change.'); return; }
-      comment = input.trim();
+    if (status === 'blocked') {
+      const input = window.prompt('Reason for marking this task Blocked (optional):');
+      if (input && input.trim()) comment = input.trim();
     }
     // No production-user prompt here — production_assigned_to just carries
     // through whatever the task already has (set elsewhere, e.g. the task
-    // detail page). Ready for QA no longer needs a QA user picked at all —
-    // qa_assigned_to is unused/optional.
+    // detail page).
     const productionAssignedTo = relationId(task.production_assigned_to);
     try {
       await userProjectService.tasks.update(id, task.id, {
@@ -395,26 +368,6 @@ export default function UserProjectDetailPage() {
       load();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to reassign task');
-    }
-  };
-
-  const startProductionItem = async (item: ProductionQueueItem) => {
-    try {
-      await userProjectService.production.start(item.id);
-      toast.success('Task started');
-      loadProduction(); load();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to start task');
-    }
-  };
-
-  const submitProductionItem = async (item: ProductionQueueItem) => {
-    try {
-      await userProjectService.production.submit(item.id);
-      toast.success('Submitted for review');
-      loadProduction(); load();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to submit task');
     }
   };
 
@@ -932,7 +885,7 @@ export default function UserProjectDetailPage() {
                           <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)}
                             style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                            {getAllowedNextTaskStatuses(t.status, { isAssignee: true, isPm: isProjectPm, isAdmin: false, perms: taskStatusPerms }).map(s => (
+                            {getAllowedNextTaskStatuses(t.status, { isAssignee: true, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
                               <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
                             ))}
                           </select>
@@ -950,45 +903,6 @@ export default function UserProjectDetailPage() {
               )}
             </div>
           </>
-        )}
-
-        {/* ── E. Production Queue (only if the role has a production permission) ── */}
-        {hasProductionAccess && (
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>Production Queue ({myProduction.length})</div>
-            {myProduction.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No production tasks assigned yet.</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    {['Task', 'Status', 'Due', ''].map(h => (
-                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {myProduction.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <td style={{ padding: '11px 16px', fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{item.task ? (item.task.task_number ? `${item.task.task_number} - ${item.task.title}` : item.task.title) : '—'}</td>
-                      <td style={{ padding: '11px 16px' }}><Badge label={PRODUCTION_LABEL[item.status] ?? item.status} sc={PRODUCTION_SC[item.status]} /></td>
-                      <td style={{ padding: '11px 16px', fontSize: 12, color: '#64748b' }}>{fmtDate(item.task?.due_date)}</td>
-                      <td style={{ padding: '11px 16px' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {canStartProduction && item.status === 'queued' && (
-                            <button onClick={() => startProductionItem(item)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Start</button>
-                          )}
-                          {canSubmitProduction && item.status === 'in_progress' && (
-                            <button onClick={() => submitProductionItem(item)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', background: '#d97706', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Submit for Review</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
         )}
 
         {/* ── Tasks (full list + create) — hidden entirely from anyone
@@ -1014,7 +928,7 @@ export default function UserProjectDetailPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['Title', 'Assigned To', 'Status', 'Production', 'Due', ''].map(h => (
+                  {['Title', 'Assigned To', 'Status', 'Due', ''].map(h => (
                     <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
@@ -1059,20 +973,16 @@ export default function UserProjectDetailPage() {
                       })()}
                     </td>
                     <td style={{ padding: '11px 16px' }}><Badge label={t.status} sc={TASK_SC[t.status]} /></td>
-                    <td style={{ padding: '11px 16px' }}>
-                      {t.production_queue ? <Badge label={PRODUCTION_LABEL[t.production_queue.status] ?? t.production_queue.status} sc={PRODUCTION_SC[t.production_queue.status]} /> : <span style={{ fontSize: 12, color: '#cbd5e1' }}>—</span>}
-                    </td>
                     <td style={{ padding: '11px 16px', fontSize: 12, color: '#64748b' }}>{fmtDate(t.due_date)}</td>
                     <td style={{ padding: '11px 16px' }}>
                       {(() => {
                         const isSelfTask = assignedToId(t) === me?.id;
-                        const isDevOrTeamAssignee = isDevOrTeamRole && isSelfTask;
-                        if (!canEditTasks && !isDevOrTeamAssignee) return null;
+                        if (!canEditTasks && !isSelfTask && !isQa && !canOverrideTaskStatus) return null;
                         return (
                           <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)}
                             style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                            {getAllowedNextTaskStatuses(t.status, { isAssignee: isSelfTask, isPm: isProjectPm, isAdmin: false, perms: taskStatusPerms, isDevOrTeamAssignee }).map(s => (
+                            {getAllowedNextTaskStatuses(t.status, { isAssignee: isSelfTask, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
                               <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
                             ))}
                           </select>

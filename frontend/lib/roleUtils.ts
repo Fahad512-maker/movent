@@ -139,11 +139,10 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
       'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-      'canCompleteTasks', 'canReopenTasks', 'canOverrideTaskStatus',
+      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+      'canOverrideTaskStatus',
       'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',
-      'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-      'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+      'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canViewTimesheets', 'canApproveTimesheets',
       'canViewProjectReports', 'canViewTaskReports',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
@@ -175,9 +174,8 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
   developer: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-      'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-      'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+      'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -186,9 +184,8 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
   designer: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-      'canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks',
-      'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+      'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -200,8 +197,8 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
   qa: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
-      'canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
+      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
+      'canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',
@@ -216,7 +213,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
   team_member: {
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked',
+      'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
       'canUploadProjectAttachments', 'canViewProjectAttachments', 'canDownloadProjectAttachments', 'canUploadTaskAttachments', 'canViewTaskAttachments', 'canDownloadTaskAttachments',
       'canAddClientFacingComment',
       'canViewProjectChat', 'canSendProjectChatMessage', 'canUploadProjectChatAttachment', 'canViewProjectChatAttachments',

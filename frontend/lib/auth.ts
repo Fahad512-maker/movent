@@ -83,8 +83,8 @@ export const can = (moduleKey: string, permKey: string): boolean => {
 // Viewer) fall through to '/dashboard', which already adapts its content to
 // whatever modules the user has.
 const STAFF_REDIRECT_RULES: { module: string; permAny: string[]; path: string }[] = [
-  { module: 'project_management', permAny: ['canViewProjectDashboard', 'canViewProjects', 'canCreateTasks', 'canAssignTasks', 'canViewProductionDashboard'], path: '/projects/dashboard' },
-  { module: 'project_management', permAny: ['canViewTasks', 'canViewProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks'], path: '/tasks' },
+  { module: 'project_management', permAny: ['canViewProjectDashboard', 'canViewProjects', 'canCreateTasks', 'canAssignTasks'], path: '/projects/dashboard' },
+  { module: 'project_management', permAny: ['canViewTasks'], path: '/tasks' },
   { module: 'sales',   permAny: ['canViewSalesDashboard', 'canViewLeads'], path: '/sales' },
   { module: 'invoice', permAny: ['canViewInvoiceDashboard', 'canViewInvoices'], path: '/invoices' },
   { module: 'finance', permAny: ['canViewFinanceDashboard', 'canViewRevenueDashboard'], path: '/invoices' },

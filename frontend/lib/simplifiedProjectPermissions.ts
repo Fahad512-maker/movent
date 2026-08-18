@@ -29,19 +29,15 @@ export const SIMPLE_PROJECT_PERMISSIONS: SimpleProjectPermission[] = [
   },
   {
     key: 'pm_manage_tasks', label: 'Manage Tasks',
-    maps: ['canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks', 'canMarkTaskBlocked'],
+    maps: ['canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks'],
   },
   {
     key: 'pm_manage_team', label: 'Manage Team / Resources',
     maps: ['canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment'],
   },
   {
-    key: 'pm_manage_production', label: 'Manage Production',
-    maps: ['canViewProductionQueue', 'canAssignProductionTasks', 'canStartProductionTasks', 'canSubmitProductionTasks'],
-  },
-  {
     key: 'pm_manage_deliverables', label: 'Manage Deliverables / QA',
-    maps: ['canViewDeliverables', 'canUploadDeliverables', 'canVerifyDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions'],
+    maps: ['canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables', 'canCreateRevisions', 'canResolveRevisions'],
   },
   {
     key: 'pm_manage_timesheets', label: 'Manage Timesheets',

@@ -7,7 +7,7 @@ import {
   HiFolderOpen, HiCheckCircle, HiBriefcase, HiClock,
   HiDocumentText, HiShieldCheck, HiChatBubbleLeftRight,
   HiCog6Tooth, HiArrowRightOnRectangle, HiChartBar,
-  HiCurrencyDollar, HiWrenchScrewdriver, HiCalendarDays,
+  HiCurrencyDollar, HiCalendarDays,
   HiDocumentCheck,
 } from 'react-icons/hi2';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,9 +62,8 @@ const ADMIN_NAV_GROUPS = [
       { href: '/admin/tasks',              icon: HiCheckCircle,       label: 'Tasks',              module: 'tasks', badgeKey: 'tasks' },
       { href: '/admin/timesheets',         icon: HiClock,             label: 'Timesheets',         module: 'timesheets' },
       { href: '/admin/projects/team',      icon: HiUserGroup,         label: 'Team / Resources',   module: 'projects' },
-      // Production/Deliverables are a section INSIDE Project Management, not
-      // a separate module — gated on 'projects' only, never a standalone key.
-      { href: '/admin/projects/production',  icon: HiWrenchScrewdriver, label: 'Production',    module: 'projects' },
+      // Deliverables are a section INSIDE Project Management, not a
+      // separate module — gated on 'projects' only, never a standalone key.
       { href: '/admin/projects/deliverables', icon: HiDocumentCheck,   label: 'Deliverables',  module: 'projects' },
       { href: '/admin/projects/reports',   icon: HiChartBar,          label: 'Project Reports',    module: 'projects' },
     ],
@@ -177,7 +176,6 @@ const USER_NAV_GROUPS = [
       { href: '/tasks',                  icon: HiCheckCircle,       label: 'Tasks',              permAny: ['canViewTasks'], fallbackLabel: 'My Tasks', badgeKey: 'tasks', hideForSeller: true },
       { href: '/timesheets',             icon: HiClock,             label: 'Timesheets',         permAny: ['canViewTimesheets'] },
       { href: '/projects/team',          icon: HiUserGroup,         label: 'Team / Resources',   permAny: ['canViewTeamResources', 'canAssignTeamResources', 'canAddUsers'] },
-      { href: '/projects/production',    icon: HiWrenchScrewdriver, label: 'Production Queue',   permAny: ['canViewProductionQueue', 'canViewProductionDashboard', 'canStartProductionTasks', 'canSubmitProductionTasks'] },
       { href: '/projects/deliverables',  icon: HiDocumentCheck,     label: 'Deliverables',      permAny: ['canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables'] },
       { href: '/projects/reports',       icon: HiChartBar,          label: 'Project Reports',    permAny: ['canViewProjectReports', 'canViewTaskReports'] },
     ],
@@ -269,7 +267,7 @@ export default function Sidebar() {
           sales:              ['leads'],
           invoice:            ['invoices'],
           hr:                 ['hr'],
-          project_management: ['projects', 'tasks', 'timesheets', 'production'],
+          project_management: ['projects', 'tasks', 'timesheets'],
           compliance:         ['compliance'],
           finance:            ['reports'],
         };
