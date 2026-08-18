@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { userService } from '@/lib/services/userService';
-import { ROLE_LABELS } from '@/lib/roleUtils';
+import { roleDisplayLabel } from '@/lib/roleUtils';
 import { MODULE_CATALOG } from '@/lib/moduleCatalog';
 import { User } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
@@ -243,7 +243,7 @@ export default function UsersPage() {
                         {/* Role — just the role_type label, nothing else */}
                         <td style={{ padding: '14px 16px' }}>
                           <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 50, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap' }}>
-                            {ROLE_LABELS[user.role_type] ?? user.role_type}
+                            {roleDisplayLabel(user)}
                           </span>
                         </td>
 

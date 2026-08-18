@@ -132,7 +132,7 @@ class ProjectController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
-        $q = $this->visibleProjects()->with(['client:id,name', 'projectManager:id,name,role_type', 'teamMembers.user:id,name,role_type']);
+        $q = $this->visibleProjects()->with(['client:id,name', 'projectManager:id,name,role_type,custom_role_label', 'teamMembers.user:id,name,role_type,custom_role_label']);
 
         if ($request->filled('status'))    $q->where('status', $request->status);
         if ($request->filled('client_id')) $q->where('client_id', $request->client_id);
@@ -804,13 +804,13 @@ class ProjectController extends Controller
     {
         $project->load([
             'client:id,name,email',
-            'projectManager:id,name,role_type',
+            'projectManager:id,name,role_type,custom_role_label',
             'seller:id,name,email',
             'createdBy:id,name',
             'createdByAdmin:id,name',
             'deliverySubmittedBy:id,name',
             'deliveryApprovedByAdmin:id,name',
-            'teamMembers.user:id,name,role_type',
+            'teamMembers.user:id,name,role_type,custom_role_label',
             'folders' => fn($q) => $q->whereNull('parent_folder_id'),
         ]);
 
@@ -819,7 +819,7 @@ class ProjectController extends Controller
         // see any task via this project payload, same as the Tasks tab being
         // fully hidden for them on the frontend.
         if ($this->can('canViewTasks')) {
-            $project->load(['tasks' => fn($q) => $q->with(['assignedTo:id,name', 'assignedBy:id,name', 'productionQueue'])]);
+            $project->load(['tasks' => fn($q) => $q->with(['assignedTo:id,name', 'assignedBy:id,name'])]);
         } else {
             $project->setRelation('tasks', collect());
         }
@@ -877,7 +877,7 @@ class ProjectController extends Controller
             return ApiResponse::error('Permission denied', 403);
         }
 
-        $project = $this->visibleProjects()->with('teamMembers.user:id,name,role_type', 'company')->findOrFail($id);
+        $project = $this->visibleProjects()->with('teamMembers.user:id,name,role_type,custom_role_label', 'company')->findOrFail($id);
         $user = $this->user();
 
         $isActualPm = $project->project_manager_id === $user->id && $user->role_type === 'project_manager';

@@ -187,7 +187,7 @@ class TaskController extends Controller
         // project team, instead of every user in the company (same fix
         // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
-            ->with(['project:id,name,company_id', 'project.teamMembers.user:id,name,role_type', 'assignedBy:id,name', 'assignedTo:id,name', 'productionAssignedTo:id,name'])
+            ->with(['project:id,name,company_id', 'project.teamMembers.user:id,name,role_type,custom_role_label', 'assignedBy:id,name', 'assignedTo:id,name', 'productionAssignedTo:id,name'])
             ->withCount('attachments');
 
         $q->where(function ($w) use ($user) {
@@ -242,7 +242,7 @@ class TaskController extends Controller
         // project team, instead of every user in the company (same fix
         // already applied to Api\Admin\TaskController::indexAll()).
         $q = Task::whereIn('project_id', $visibleProjectIds)
-            ->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type'])
+            ->with(['assignedTo:id,name', 'productionAssignedTo:id,name', 'assignedBy:id,name', 'project:id,name,company_id', 'project.teamMembers.user:id,name,role_type,custom_role_label'])
             ->withCount('attachments');
 
         if (!$canViewAll) {

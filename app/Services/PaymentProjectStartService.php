@@ -85,11 +85,6 @@ class PaymentProjectStartService
             return null;
         }
 
-        // A pure guest / external invoice has no counterparty to own the work.
-        if (!$invoice->client_id && !$invoice->lead_id) {
-            return null;
-        }
-
         $creator = self::activeUser($invoice->created_by, $invoice->company_id);
 
         $project = Project::create([

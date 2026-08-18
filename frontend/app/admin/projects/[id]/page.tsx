@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminProjectService, Project, ProjectComment, ProjectCommentAttachment, MentionableUser, ProjectUserOption, ActivityItem } from '@/lib/services/adminProjectService';
 import { getAuthUser } from '@/lib/auth';
-import { ROLE_LABELS } from '@/lib/roleUtils';
+import { ROLE_LABELS, roleDisplayLabel } from '@/lib/roleUtils';
 import { Admin } from '@/types';
 import ProjectTabs from '@/components/admin/projects/ProjectTabs';
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
@@ -368,7 +368,7 @@ export default function ProjectOverviewPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div><label style={lbl}>{project.project_manager?.role_type === 'seller' ? 'Creator' : 'Manager'}</label><div style={{ fontSize: 13 }}>
                 {project.project_manager
-                  ? `${project.project_manager.name}${project.project_manager.role_type ? ` (${ROLE_LABELS[project.project_manager.role_type] ?? project.project_manager.role_type})` : ''}`
+                  ? `${project.project_manager.name}${project.project_manager.role_type ? ` (${roleDisplayLabel(project.project_manager)})` : ''}`
                   : '—'}
               </div></div>
               <div>

@@ -6,7 +6,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { userProjectService } from '@/lib/services/userProjectService';
 import { TaskStatus } from '@/lib/services/adminProjectService';
 import { can } from '@/lib/auth';
-import { ROLE_LABELS } from '@/lib/roleUtils';
+import { roleDisplayLabel } from '@/lib/roleUtils';
 import { card, inp, lbl, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
@@ -17,9 +17,9 @@ const TASK_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'review', 'completed
 // below). These roles are excluded from the dropdown only for an actor who
 // lacks canAssignTasks — mirrors Api\User\TaskController::assignedToRule().
 const INTERNAL_ASSIGNEE_ROLES = ['production', 'developer', 'designer', 'qa'];
-const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client'];
+const NEVER_TASK_ASSIGNEE_ROLES = ['seller', 'client', 'project_manager'];
 
-interface AssigneeOption { id: number; name: string; role_type?: string }
+interface AssigneeOption { id: number; name: string; role_type?: string; custom_role_label?: string | null }
 
 export default function CreateTaskPage() {
   useAdminGuard();
@@ -82,12 +82,11 @@ export default function CreateTaskPage() {
           return;
         }
         setProjectName(p.name);
+        // The Project Manager is never assignable — this dropdown is the
+        // production team only (Developer/Designer/QA/Production/Team
+        // Member), mirrors Api\User\TaskController::assignedToRule().
         const fromTeam = (p.team_members ?? []).map(m => m.user).filter((u): u is AssigneeOption => !!u);
-        const options = [...fromTeam];
-        if (p.project_manager && !options.some(u => u.id === p.project_manager!.id)) {
-          options.push(p.project_manager);
-        }
-        setTeamOptions(options);
+        setTeamOptions(fromTeam);
       })
       .catch(() => { toast.error('Project not found or not accessible'); router.replace('/projects'); })
       .finally(() => setLoading(false));
@@ -177,7 +176,7 @@ export default function CreateTaskPage() {
               <select value={assignee} onChange={e => setAssignee(e.target.value)} style={inp}>
                 <option value="">Unassigned</option>
                 {(canAssignTasks ? assignableTeamUsers : assignableTeamUsers.filter(u => !INTERNAL_ASSIGNEE_ROLES.includes(u.role_type ?? ''))).map(u => (
-                  <option key={u.id} value={u.id}>{u.name}{u.role_type ? ` — ${ROLE_LABELS[u.role_type] ?? u.role_type}` : ''}</option>
+                  <option key={u.id} value={u.id}>{u.name}{u.role_type ? ` (${roleDisplayLabel(u)})` : ''}</option>
                 ))}
               </select>
               {teamOptions.length === 0 && (

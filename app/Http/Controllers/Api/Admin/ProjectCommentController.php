@@ -430,10 +430,10 @@ class ProjectCommentController extends Controller
     // the comment's author is the Company Admin (never a `users` row).
     private function notifyAndLog(Project $project, ProjectComment $comment, ?int $actorUserId): void
     {
-        $task = $comment->task_id ? Task::with('productionQueue', 'deliverables')->find($comment->task_id) : null;
+        $task = $comment->task_id ? Task::with('deliverables')->find($comment->task_id) : null;
         $pmId = $project->project_manager_id;
         $assigneeId = $task?->assigned_to;
-        $productionUserId = $task?->productionQueue?->assigned_to;
+        $productionUserId = $task?->production_assigned_to;
         $authorName = $comment->authorAdmin?->name ?? $comment->authorUser?->name ?? 'Someone';
 
         // Client-facing comments never route through the internal
@@ -481,7 +481,7 @@ class ProjectCommentController extends Controller
         }
 
         $action = !$task ? 'project_comment_added'
-            : ($task->productionQueue || $task->task_type === 'production' ? 'production_comment_added'
+            : ($task->production_assigned_to || $task->task_type === 'production' ? 'production_comment_added'
                 : ($task->deliverables->isNotEmpty() ? 'deliverable_comment_added' : 'task_comment_added'));
 
         SystemAuditLog::create([

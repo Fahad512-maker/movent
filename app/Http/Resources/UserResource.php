@@ -16,7 +16,12 @@ class UserResource extends JsonResource
             'id'          => $this->id,
             'name'        => $this->name,
             'email'       => $this->email,
-            'role_type'   => $this->role_type,
+            'role_type'         => $this->role_type,
+            // Display-only override for a "Custom Role" — see
+            // 2026_08_18_100000_add_custom_role_label_to_users_table.php.
+            // role_type above still carries the real permission/behavior
+            // bucket; the frontend shows this label instead when set.
+            'custom_role_label' => $this->custom_role_label,
             'phone'       => $this->phone,
             'avatar_path' => $this->avatar_path,
             'avatar_url'  => $this->avatar_path ? Storage::url($this->avatar_path) : null,

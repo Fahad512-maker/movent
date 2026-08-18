@@ -10,6 +10,7 @@ import { notificationService } from '@/lib/services/notificationService';
 import { can, getAuthType, getAuthUser, getUserModulePermissions } from '@/lib/auth';
 import { Badge, TASK_SC, PRIORITY_SC, fmtDate, asRelation } from '@/components/admin/projects/shared';
 import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses } from '@/lib/taskStatusFlow';
+import { roleDisplayLabel } from '@/lib/roleUtils';
 import toast from 'react-hot-toast';
 
 // Unwraps a relation-or-id field (production_assigned_to comes back as the
@@ -96,7 +97,7 @@ export default function UserTasksPage() {
   // team (added via "Manage Team" — project.team_members, not every company
   // user), excluding the Project Manager — this is the developer-side "who
   // can do the work" list (mirrors Api\User\TaskController::assignedToRule()).
-  const assignableUsersFor = (t: Task): { id: number; name: string; role_type?: string }[] =>
+  const assignableUsersFor = (t: Task): { id: number; name: string; role_type?: string; custom_role_label?: string | null }[] =>
     (t.project?.team_members ?? [])
       .filter(tm => tm.user && tm.user.role_type !== 'project_manager' && tm.user.role_type !== 'seller' && tm.user.role_type !== 'client')
       .map(tm => tm.user!);
@@ -271,7 +272,7 @@ export default function UserTasksPage() {
                             style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value="">Unassigned</option>
                             {options.map(u => (
-                              <option key={u.id} value={u.id}>{u.name}</option>
+                              <option key={u.id} value={u.id}>{u.name}{u.role_type ? ` (${roleDisplayLabel(u)})` : ''}</option>
                             ))}
                             {/* Keep a task's existing assignee showing correctly
                                 even if their role is no longer eligible here, or

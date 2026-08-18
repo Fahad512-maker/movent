@@ -519,7 +519,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { userService } from '@/lib/services/userService';
 import { getAvailableModules } from '@/lib/moduleCatalog';
 import { SIMPLE_PROJECT_PERMISSIONS, collapseProjectPermissions } from '@/lib/simplifiedProjectPermissions';
-import { USER_ROLE_TYPE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
+import { USER_ROLE_TYPE_OPTIONS, CUSTOM_ROLE_SENTINEL, CUSTOM_ROLE_BASE_OPTIONS, getRoleDefaultPermissions } from '@/lib/roleUtils';
 import { CompanyOption } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { getAuthType } from '@/lib/auth';
@@ -606,6 +606,14 @@ export default function NewUserPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('');
+  // "+ Custom Role…" mode — role holds CUSTOM_ROLE_SENTINEL, customRoleLabel
+  // is the free-text name shown everywhere instead, and customRoleBase is
+  // the real structural role_type this custom role behaves like (defaults
+  // to the generic/least-privilege Team Member bucket).
+  const [customRoleLabel, setCustomRoleLabel] = useState('');
+  const [customRoleBase, setCustomRoleBase] = useState('team_member');
+  const isCustomRole = role === CUSTOM_ROLE_SENTINEL;
+  const effectiveRole = isCustomRole ? customRoleBase : role;
 
   // Step 2
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -680,7 +688,8 @@ export default function NewUserPage() {
 
       await userService.create({
         name: name.trim(), email: email.trim(),
-        role_type: role || undefined,
+        role_type: effectiveRole || undefined,
+        custom_role_label: isCustomRole ? (customRoleLabel.trim() || undefined) : undefined,
         ...(existingUser ? {} : { password }),
         company_assignments: assignments,
       });
@@ -865,15 +874,36 @@ export default function NewUserPage() {
                 {existingUser && <div style={{ marginBottom: 12 }} />}
 
                 {/* Select Role — default permissions for this role are auto-checked in the next step */}
-                <div style={{ marginBottom: 28 }}>
+                <div style={{ marginBottom: isCustomRole ? 16 : 28 }}>
                   <label style={lbl}>Role *</label>
                   <select style={inp} value={role} onChange={e => setRole(e.target.value)}>
                     <option value="">Select a role…</option>
                     {USER_ROLE_TYPE_OPTIONS.map(r => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
+                    <option value={CUSTOM_ROLE_SENTINEL}>+ Custom Role…</option>
                   </select>
                 </div>
+
+                {isCustomRole && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
+                    <div>
+                      <label style={lbl}>Custom Role Name *</label>
+                      <input style={inp} value={customRoleLabel} onChange={e => setCustomRoleLabel(e.target.value)} placeholder="e.g. Marketing Lead" maxLength={100} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Behaves Like *</label>
+                      <select style={inp} value={customRoleBase} onChange={e => setCustomRoleBase(e.target.value)}>
+                        {CUSTOM_ROLE_BASE_OPTIONS.map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                        Determines this custom role&apos;s real permissions/behavior — the name above is just what&apos;s shown.
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   disabled={!!existingUser}
@@ -885,6 +915,7 @@ export default function NewUserPage() {
                       return;
                     }
                     if (!role) { setError('Please select a role.'); return; }
+                    if (isCustomRole && !customRoleLabel.trim()) { setError('Please enter a name for this custom role.'); return; }
                     setError('');
                     if (singleCompany) {
                       // Auto-assign the only company and pre-fill this role's default permissions
@@ -892,7 +923,7 @@ export default function NewUserPage() {
                       const rawDb = companies[0].modules ?? [];
                       const mods = getAvailableModules(rawDb);
                       const allPerms = visiblePermsByModule(mods, rawDb);
-                      const auto = getRoleDefaultPermissions(role, mods.map(m => m.key), allPerms);
+                      const auto = getRoleDefaultPermissions(effectiveRole, mods.map(m => m.key), allPerms);
                       setPerms({ [cid]: auto });
                       setActiveCompanyId(cid);
                       setStep(3);
@@ -946,7 +977,7 @@ export default function NewUserPage() {
                         const rawDb = co?.modules ?? [];
                         const mods = getAvailableModules(rawDb);
                         const allPerms = visiblePermsByModule(mods, rawDb);
-                        nextPerms[cid] = getRoleDefaultPermissions(role, mods.map(m => m.key), allPerms);
+                        nextPerms[cid] = getRoleDefaultPermissions(effectiveRole, mods.map(m => m.key), allPerms);
                       }
                       setPerms(nextPerms);
 

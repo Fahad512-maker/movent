@@ -14,7 +14,7 @@ class User extends Authenticatable
     use HasApiTokens, SoftDeletes;
 
     protected $fillable = [
-        'company_id', 'name', 'email', 'password', 'google_id', 'role_type', 'phone',
+        'company_id', 'name', 'email', 'password', 'google_id', 'role_type', 'custom_role_label', 'phone',
         'avatar_path', 'is_active', 'status', 'socket_id', 'is_online', 'created_by',
         'invite_token', 'invite_expires_at', 'must_change_password', 'last_login_at',
     ];

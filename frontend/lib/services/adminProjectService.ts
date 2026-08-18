@@ -84,7 +84,7 @@ export interface Project {
   // Relation keys — Eloquent snake_cases relation method names when
   // serializing (projectManager() -> project_manager, teamMembers() ->
   // team_members). The API never returns the camelCase form.
-  project_manager?: { id: number; name: string; role_type?: string } | null;
+  project_manager?: { id: number; name: string; role_type?: string; custom_role_label?: string | null } | null;
   tasks?: Task[];
   team_members?: TeamMember[];
   folders?: { id: number; name: string; folder_path: string }[];
@@ -207,7 +207,7 @@ export interface TeamMember {
   user_id: number;
   role_in_project: TeamRole;
   assigned_by: number | null;
-  user?: { id: number; name: string; role_type?: string };
+  user?: { id: number; name: string; role_type?: string; custom_role_label?: string | null };
 }
 
 export interface Timesheet {

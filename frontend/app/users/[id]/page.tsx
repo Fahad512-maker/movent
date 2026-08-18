@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { userService, UserActivity } from '@/lib/services/userService';
-import { ROLE_LABELS, computeAccessLabel } from '@/lib/roleUtils';
+import { roleDisplayLabel, computeAccessLabel } from '@/lib/roleUtils';
 import { MODULE_CATALOG } from '@/lib/moduleCatalog';
 import { SIMPLE_PROJECT_PERMISSIONS, collapseProjectPermissions } from '@/lib/simplifiedProjectPermissions';
 import { User } from '@/types';
@@ -59,7 +59,7 @@ export default function UserProfilePage() {
       merged[mod] = Array.from(new Set([...(merged[mod] ?? []), ...keys]));
     }
   }
-  const accessLabel = Object.keys(merged).length > 0 ? computeAccessLabel(merged) : (ROLE_LABELS[user.role_type] ?? user.role_type);
+  const accessLabel = Object.keys(merged).length > 0 ? computeAccessLabel(merged) : roleDisplayLabel(user);
 
   return (
     <DashboardLayout title="User Profile">
@@ -94,7 +94,7 @@ export default function UserProfilePage() {
               <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>{user.email}{user.phone ? ` · ${user.phone}` : ''}</div>
               <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 50, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb' }}>{accessLabel}</span>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>{ROLE_LABELS[user.role_type] ?? user.role_type}</span>
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>{roleDisplayLabel(user)}</span>
               </div>
             </div>
           </div>

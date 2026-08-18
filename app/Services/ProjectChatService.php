@@ -233,7 +233,7 @@ class ProjectChatService
     }
 
     // Users formally tied to the project: PM, team members, task assignees,
-    // and each task's production-queue assignee. Mirrors the per-guard
+    // and each task's production handoff assignee. Mirrors the per-guard
     // projectMemberIds() in both ProjectMessengerControllers exactly, so
     // auto-add/auto-remove here never disagrees with the manual-add
     // eligibility check they enforce.
@@ -241,8 +241,7 @@ class ProjectChatService
     {
         $teamIds = $project->teamMembers()->pluck('user_id');
         $taskAssigneeIds = $project->tasks()->whereNotNull('assigned_to')->pluck('assigned_to');
-        $productionAssigneeIds = $project->tasks()->with('productionQueue')->get()
-            ->pluck('productionQueue.assigned_to')->filter();
+        $productionAssigneeIds = $project->tasks()->whereNotNull('production_assigned_to')->pluck('production_assigned_to');
 
         return collect([$project->project_manager_id])
             ->merge($teamIds)->merge($taskAssigneeIds)->merge($productionAssigneeIds)

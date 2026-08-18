@@ -46,6 +46,10 @@ export interface User {
   name: string;
   email: string;
   role_type: string;
+  // Display-only override for a "Custom Role" — takes priority over the
+  // generic ROLE_LABELS[role_type] name wherever a role is shown; the real
+  // permission/behavior bucket stays role_type. See roleUtils.roleDisplayLabel().
+  custom_role_label?: string | null;
   phone?: string;
   avatar_path?: string;
   avatar_url?: string | null;
