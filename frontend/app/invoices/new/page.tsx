@@ -213,6 +213,8 @@ function NewInvoiceForm() {
     if (!authResolved || !leadId || leadPrefilled) return;
     const svc = isAdmin ? adminLeadService : userLeadService;
     svc.getOne(leadId).then(lead => {
+      setCompanyId(lead.company_id);
+
       if (lead.client_id) {
         setCustomerType('client');
         setClientId(lead.client_id);
