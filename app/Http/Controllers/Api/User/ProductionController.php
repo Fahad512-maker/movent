@@ -208,6 +208,64 @@ class ProductionController extends Controller
         return ApiResponse::success($item, 'Production task submitted');
     }
 
+    // Approves a submitted production queue item DIRECTLY, for the common
+    // case where there's no Deliverable file to review at all (e.g. "the
+    // work is live on the site, nothing to attach") — Submit (above) and
+    // uploading a Deliverable are two entirely separate, unlinked actions in
+    // this app, and every OTHER approval path
+    // (approve()/Api\Admin\ProductionController::verifyDeliverable()) only
+    // ever flips a queue item to 'approved' as a side effect of approving
+    // its linked Deliverable. A task that never gets one had no way to ever
+    // leave 'submitted' — permanently stuck at 75% progress and permanently
+    // blocking "Mark as Complete" (ProjectCompletionService's
+    // pending_production check), with no button anywhere for a PM to clear
+    // it. Mirrors approve()'s side effects exactly (task progress/
+    // approved_at/delivered_at, the 'qa_passed' status transition) — just
+    // keyed off the ProductionQueue id instead of a Deliverable id, and
+    // notifies whoever the item is assigned to instead of a Deliverable's
+    // uploader.
+    public function approveQueueItem(int $id): JsonResponse
+    {
+        if (!$this->can('canApproveDeliverables')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $item = $this->visibleQueueItem($id);
+
+        if ($item->status !== 'submitted') {
+            return ApiResponse::error('Only a submitted production task can be approved this way.', 422);
+        }
+
+        $item->update(['status' => 'approved']);
+
+        $task = $item->task;
+        $task->update([
+            'progress'     => $this->progressForStatus('approved'),
+            'approved_at'  => now(),
+            'delivered_at' => now(),
+        ]);
+
+        \App\Services\TaskStatusService::applyTransition($task, 'qa_passed', null, [
+            'type' => 'user', 'id' => $this->user()->id, 'name' => $this->userName(),
+        ]);
+
+        $this->logActivity($task->project->company_id, 'production_task_approved', 'Task', $item->task_id);
+        $this->logTaskRevision($item->task_id, "{$this->userName()} approved this task's production work");
+
+        if ($item->assigned_to && (int) $item->assigned_to !== (int) $this->user()->id) {
+            Notification::create([
+                'user_id'    => $item->assigned_to,
+                'company_id' => $task->project->company_id,
+                'type'       => 'production_task_approved',
+                'title'      => 'Production task approved',
+                'body'       => "Your submitted work on task '{$task->task_number} - {$task->title}' was approved.",
+                'data'       => ['project_id' => $task->project_id, 'link' => "/projects/{$task->project_id}/tasks/{$task->id}"],
+            ]);
+        }
+
+        return ApiResponse::success($item->fresh(), 'Production task approved');
+    }
+
     // Mirrors the visibility scope in Api\User\ProjectController::visibleProjects().
     private function visibleProject(int $projectId): Project
     {
@@ -515,19 +573,51 @@ class ProductionController extends Controller
         return ApiResponse::success($deliverable->revisions()->with('requestedBy:id,name')->orderByDesc('id')->get());
     }
 
-    // A queue item reaches here either already claimed by this exact user, or
-    // still unclaimed (assigned_to null — e.g. TaskStatusService::
+    // A queue item reaches here if: it's already claimed by this exact user,
+    // it's still unclaimed (assigned_to null — e.g. TaskStatusService::
     // applyTransition() created it with no specific handoff target, so it
-    // broadcast to every production_user team member instead of one person).
-    // Requiring an exact assigned_to match unconditionally meant Start/Submit
-    // 404'd for every production teammate on an unclaimed item — nobody could
-    // ever pick it up, since assigned_to never equals anybody's id.
+    // broadcast to every production_user team member instead of one person),
+    // OR the caller is PM-tier for this item's project (canViewAllCompanyProjects,
+    // or literally that project's own project_manager_id) — the same
+    // oversight authority queue() itself is gated on. Without that last
+    // clause, a PM viewing the full oversight queue() list (which shows
+    // every item across their visible projects, whoever claimed it) would
+    // hit "No query results for model [ProductionQueue]" clicking
+    // Start/Submit on an item a production teammate had already claimed —
+    // a perfectly valid row, just excluded by an ownership check that only
+    // ever anticipated a plain production teammate acting on their own work.
     private function ownQueueItem(int $id): ProductionQueue
     {
         $user = $this->user();
 
-        return ProductionQueue::where(fn ($q) => $q->where('assigned_to', $user->id)->orWhereNull('assigned_to'))
-            ->whereHas('task.project', fn($p) => $p->where('company_id', $user->company_id))
+        // company_id must stay in this column list — start()/submit() read
+        // $item->task->project->company_id afterward, and this eager-load's
+        // column-limited relation means that access can never fall back to
+        // a fresh lazy-load if it's missing here (it silently returns null
+        // instead, which then blew up logActivity()'s int $companyId param).
+        $item = ProductionQueue::whereHas('task.project', fn ($p) => $p->where('company_id', $user->company_id))
+            ->with('task.project:id,company_id,project_manager_id')
+            ->findOrFail($id);
+
+        $isPmTier = $this->can('canViewAllCompanyProjects')
+            || (int) $item->task->project->project_manager_id === (int) $user->id;
+
+        if (!$isPmTier && $item->assigned_to !== null && (int) $item->assigned_to !== (int) $user->id) {
+            abort(404, 'Production queue item not found or not assigned to you.');
+        }
+
+        return $item;
+    }
+
+    // For approveQueueItem() — approving is a review action, not "my own
+    // work," so it's scoped by project visibility (same oversight scope
+    // queue() itself lists items under) rather than ownQueueItem()'s
+    // self-assigned-or-unclaimed rule: the approver is typically NOT the
+    // person who did the work.
+    private function visibleQueueItem(int $id): ProductionQueue
+    {
+        return ProductionQueue::whereHas('task.project', fn ($p) => $p->whereIn('id', $this->visibleProjectIds()))
+            ->with('task.project:id,company_id,project_manager_id')
             ->findOrFail($id);
     }
 }

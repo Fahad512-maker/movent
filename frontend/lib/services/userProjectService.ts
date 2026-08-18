@@ -319,6 +319,15 @@ export const userProjectService = {
       const res = await api.patch(`/user/production/${id}/submit`);
       return res.data.data;
     },
+    // Approves a submitted queue item directly — for a task with no
+    // Deliverable file to review at all (see
+    // Api\User\ProductionController::approveQueueItem()). Distinct from
+    // deliverables.approve()/reject() below, which operate on a Deliverable
+    // id, not a queue item id.
+    approveItem: async (id: number): Promise<ProductionQueueItem> => {
+      const res = await api.patch(`/user/production/${id}/approve`);
+      return res.data.data;
+    },
   },
 
   deliverables: {
