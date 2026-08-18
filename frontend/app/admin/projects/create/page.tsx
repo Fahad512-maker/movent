@@ -1,23 +1,17 @@
-"use client";
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import api from "@/lib/axios";
-import toast from "react-hot-toast";
-import { useModuleGuard } from "@/hooks/useModuleGuard";
-import { getAuthUser } from "@/lib/auth";
-import { adminProjectService } from "@/lib/services/adminProjectService";
-import { adminClientService } from "@/lib/services/adminClientService";
-import { adminLeadService } from "@/lib/services/adminLeadService";
-import {
-    inp,
-    lbl,
-    card,
-    ALLOWED_ATTACHMENT_TYPES,
-    MAX_ATTACHMENT_MB,
-    fmtFileSize,
-} from "@/components/admin/projects/shared";
-import { Admin } from "@/types";
+'use client';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import api from '@/lib/axios';
+import toast from 'react-hot-toast';
+import { useModuleGuard } from '@/hooks/useModuleGuard';
+import { getAuthUser } from '@/lib/auth';
+import { adminProjectService } from '@/lib/services/adminProjectService';
+import { adminClientService } from '@/lib/services/adminClientService';
+import { adminLeadService } from '@/lib/services/adminLeadService';
+import { inp, lbl, card, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
+import { ROLE_LABELS } from '@/lib/roleUtils';
+import { Admin } from '@/types';
 
 interface Company {
     id: number;
@@ -174,16 +168,10 @@ function CreateProjectForm() {
             .finally(() => setUsersLoading(false));
     }, [form.company_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const handleSubmit = async (e: { preventDefault(): void }) => {
-        e.preventDefault();
-        if (!form.company_id) {
-            toast.error("Select a company");
-            return;
-        }
-        if (!form.name) {
-            toast.error("Enter a project name");
-            return;
-        }
+  const handleSubmit = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    if (!form.company_id)  { toast.error('Select a company'); return; }
+    if (!form.name)        { toast.error('Enter a project name'); return; }
 
         setSaving(true);
         try {
@@ -235,56 +223,22 @@ function CreateProjectForm() {
         }
     };
 
-    return (
-        <DashboardLayout title="New Project">
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    marginBottom: 24,
-                }}
-            >
-                <button
-                    onClick={() => router.back()}
-                    style={{
-                        background: "#f1f5f9",
-                        border: "none",
-                        borderRadius: 8,
-                        padding: "8px 14px",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        color: "#64748b",
-                    }}
-                >
-                    ← Back
-                </button>
-                <div>
-                    <h2
-                        style={{
-                            fontSize: 20,
-                            fontWeight: 700,
-                            color: "#1e293b",
-                            margin: 0,
-                        }}
-                    >
-                        New Project
-                    </h2>
-                    <p
-                        style={{
-                            fontSize: 13,
-                            color: "#64748b",
-                            margin: "2px 0 0",
-                        }}
-                    >
-                        {leadName
-                            ? `Handing off from lead "${leadName}"`
-                            : invoiceNumber
-                              ? `Handing off from paid invoice "${invoiceNumber}"`
-                              : "Set up a new project for your team"}
-                    </p>
-                </div>
-            </div>
+  return (
+    <DashboardLayout title="New Project">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={() => router.back()} style={{
+          background: '#f1f5f9', border: 'none', borderRadius: 8,
+          padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#64748b',
+        }}>← Back</button>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>New Project</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
+            {leadName ? `Handing off from lead "${leadName}"`
+              : invoiceNumber ? `Handing off from paid invoice "${invoiceNumber}"`
+              : 'Set up a new project for your team'}
+          </p>
+        </div>
+      </div>
 
             <form onSubmit={handleSubmit}>
                 <div style={card}>
@@ -617,42 +571,20 @@ function CreateProjectForm() {
                     )}
                 </div>
 
-                <div style={{ display: "flex", gap: 10 }}>
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        style={{
-                            padding: "11px 28px",
-                            background: saving ? "#93c5fd" : "#2563eb",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 8,
-                            fontSize: 14,
-                            fontWeight: 600,
-                            cursor: saving ? "not-allowed" : "pointer",
-                        }}
-                    >
-                        {saving ? "Creating…" : "Create Project"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => router.back()}
-                        style={{
-                            padding: "11px 22px",
-                            background: "#fff",
-                            color: "#64748b",
-                            border: "1px solid #e2e8f0",
-                            borderRadius: 8,
-                            fontSize: 14,
-                            cursor: "pointer",
-                        }}
-                    >
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </DashboardLayout>
-    );
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="submit" disabled={saving} style={{
+            padding: '11px 28px', background: saving ? '#93c5fd' : '#2563eb',
+            color: '#fff', border: 'none', borderRadius: 8,
+            fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
+          }}>{saving ? 'Creating…' : 'Create Project'}</button>
+          <button type="button" onClick={() => router.back()} style={{
+            padding: '11px 22px', background: '#fff', color: '#64748b',
+            border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer',
+          }}>Cancel</button>
+        </div>
+      </form>
+    </DashboardLayout>
+  );
 }
 
 export default function CreateProjectPage() {

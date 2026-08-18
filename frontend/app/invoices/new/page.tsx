@@ -14,6 +14,8 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { HiArrowLeft, HiFolder, HiFolderPlus, HiPlusCircle, HiTrash, HiUserCircle, HiUsers } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -101,9 +103,10 @@ function NewInvoiceForm() {
   // already had; 'new' replaces Line Items entirely with a single
   // title/reference/amount, since the project (and its billing) doesn't
   // exist yet.
-  const [projectMode, setProjectMode]         = useState<ProjectMode>('existing');
+  const [projectMode, setProjectMode]         = useState<ProjectMode>('new');
+  const [projectModuleAvailable, setProjectModuleAvailable] = useState(false);
   const [projects, setProjects]               = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [projectId, setProjectId]             = useState<number | null>(null);
   const [projectTitle, setProjectTitle]       = useState('');
   const [projectReference, setProjectReference] = useState('');
@@ -129,6 +132,9 @@ function NewInvoiceForm() {
     setAuthResolved(true);
     if (!adminFlag) {
       const user = getAuthUser() as User | null;
+      const hasProjects = can('project_management', 'canViewProjects') || can('project_management', 'canViewLinkedProjects');
+      setProjectModuleAvailable(hasProjects);
+      if (hasProjects && !leadId) setProjectMode('existing');
       if (user?.company) {
         const c: ClientCompany = { id: user.company.id, name: user.company.name, currency: user.company.currency ?? 'USD' };
         setCompanies([c]);
@@ -141,6 +147,9 @@ function NewInvoiceForm() {
     } else {
       const admin = getAuthUser() as Admin | null;
       if (admin?.currency) setCurrency(admin.currency);
+      const hasProjects = (admin?.modules ?? []).includes('projects') || (admin?.modules ?? []).includes('project_management');
+      setProjectModuleAvailable(hasProjects);
+      if (hasProjects && !leadId) setProjectMode('existing');
       adminClientService.companies().then(cs => {
         setCompanies(cs);
         if (cs.length) setCompanyId(companyIdParam && cs.some(c => c.id === companyIdParam) ? companyIdParam : cs[0].id);
@@ -174,17 +183,22 @@ function NewInvoiceForm() {
   // same visibility rule the Projects module already applies (created by
   // this staff member, or a Seller's own assigned/handed-off projects).
   useEffect(() => {
-    if (!companyId) { setProjects([]); return; }
-    setLoadingProjects(true);
-    setProjectId(null);
+    if (!companyId || !projectModuleAvailable) return;
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoadingProjects(true);
+      setProjectId(null);
+    });
     const load = isAdmin
       ? adminProjectService.list({ company_id: String(companyId) })
       : userProjectService.list();
     load
-      .then(list => setProjects(list))
-      .catch(() => setProjects([]))
-      .finally(() => setLoadingProjects(false));
-  }, [companyId, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+      .then(list => { if (!cancelled) setProjects(list); })
+      .catch(() => { if (!cancelled) setProjects([]); })
+      .finally(() => { if (!cancelled) setLoadingProjects(false); });
+    return () => { cancelled = true; };
+  }, [companyId, isAdmin, projectModuleAvailable]);
 
   // Pre-fill from a Lead (e.g. arriving via /invoices/new?lead_id=50 from a
   // won lead's detail page) — once. Doesn't wait on (or validate against)
@@ -367,6 +381,7 @@ function NewInvoiceForm() {
   };
 
   const handleCreate = async (sendAfter: boolean) => {
+    if (saving || sending || linking) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     const recipientEmail = customerType === 'client'
       ? clients.find(c => c.id === clientId)?.email
       : guestEmail.trim();
@@ -417,6 +432,7 @@ function NewInvoiceForm() {
   // email required, unlike Create & Send) — generateLink already marks the
   // invoice as sent on its own, matching existing invoice-module behavior.
   const handleCreateAndLink = async () => {
+    if (saving || sending || linking) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     setError('');
     setCreatedLink('');
     const payload = buildPayload();
@@ -497,6 +513,10 @@ function NewInvoiceForm() {
 
   return (
     <DashboardLayout title="New Invoice">
+      <LoadingOverlay
+        show={saving || sending || linking}
+        message={sending ? 'Creating & Sending Invoice…' : 'Creating Invoice…'}
+      />
       <div>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
@@ -676,12 +696,12 @@ function NewInvoiceForm() {
 
                   {/* Mode toggle */}
                   <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-                    {projectModeBtn('existing', <HiFolder size={15} />, 'Existing Project', 'Bill against a project already created or assigned to you')}
+                    {projectModuleAvailable && projectModeBtn('existing', <HiFolder size={15} />, 'Existing Project', 'Bill against a project already created or assigned to you')}
                     {projectModeBtn('new',      <HiFolderPlus size={15} />, 'New Project', 'Name the project and set an amount for this invoice')}
                   </div>
 
                   {/* Existing Project picker */}
-                  {projectMode === 'existing' && (
+                  {projectModuleAvailable && projectMode === 'existing' && (
                     <div>
                       <label style={lbl}>Select Project *</label>
                       {loadingProjects ? (
@@ -851,32 +871,38 @@ function NewInvoiceForm() {
                 </div>
               )}
 
-              <button
+              <SubmitButton
                 type="submit"
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={saving}
+                loadingText="Creating Invoice…"
+                disabled={sending || linking || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before creating invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 15, fontWeight: 700, marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {saving ? 'Creating…' : 'Save as Draft'}
-              </button>
-              <button
+                Save as Draft
+              </SubmitButton>
+              <SubmitButton
                 type="button"
                 onClick={handleCreateAndLink}
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={linking}
+                loadingText="Creating Invoice…"
+                disabled={saving || sending || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before sending invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #0284c7', background: linking ? '#f0f9ff' : '#fff', color: '#0284c7', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #0284c7', background: linking ? '#f0f9ff' : '#fff', color: '#0284c7', fontSize: 15, fontWeight: 700, marginBottom: 10, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {linking ? 'Creating…' : 'Create Invoice'}
-              </button>
-              <button
+                Create Invoice
+              </SubmitButton>
+              <SubmitButton
                 type="button"
                 onClick={() => handleCreate(true)}
-                disabled={saving || sending || linking || noGatewayConfigured}
+                loading={sending}
+                loadingText="Creating & Sending…"
+                disabled={saving || linking || noGatewayConfigured}
                 title={noGatewayConfigured ? 'Configure a payment gateway before sending invoice' : undefined}
-                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #2563eb', background: sending ? '#eff6ff' : '#fff', color: '#2563eb', fontSize: 15, fontWeight: 700, cursor: (saving || sending || linking || noGatewayConfigured) ? 'not-allowed' : 'pointer', opacity: noGatewayConfigured ? 0.5 : 1 }}
+                style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: '1.5px solid #2563eb', background: sending ? '#eff6ff' : '#fff', color: '#2563eb', fontSize: 15, fontWeight: 700, opacity: noGatewayConfigured ? 0.5 : 1 }}
               >
-                {sending ? 'Creating & Sending…' : 'Create & Send Invoice'}
-              </button>
+                Create & Send Invoice
+              </SubmitButton>
             </div>
           </div>
         </form>

@@ -523,10 +523,7 @@ class ProjectController extends Controller
             }
         }
 
-        $project = $project->fresh(['client:id,name', 'projectManager:id,name,role_type', 'folders', 'createdBy:id,name']);
-        $project->makeHidden('budget');
-
-        return ApiResponse::success($project, 'Project created', 201);
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project created', 201);
     }
 
     // Next PRJ-{year}-{seq} reference — same generator pattern as
@@ -794,34 +791,34 @@ class ProjectController extends Controller
         }
     }
 
-    public function show(int $id): JsonResponse
+    // Full relation set + computed progress/billing_summary, respecting the
+    // current sub-user's own view permissions — the single source of truth
+    // for what a Project API response looks like, used by show() AND every
+    // lifecycle action (create/update/activate/complete/close/reopen).
+    // Before this, those actions returned a bare or partially-loaded
+    // $project->fresh(), so the frontend's onUpdated(updated) =>
+    // setProject(updated) wiped out created_by_admin/client/seller/tasks/etc
+    // from the page's state, and reset progress to its raw (never-persisted)
+    // column value, until the next full reload.
+    private function presentProject(Project $project): Project
     {
-        if (!$this->can('canViewProjects') && !$this->can('canViewLinkedProjects') && !$this->can('canViewProjectDashboard')
-            && !$this->can('canViewTeamResources') && !$this->can('canAssignTeamResources') && !$this->can('canViewAllCompanyProjects')) {
-            return ApiResponse::error('Permission denied', 403);
-        }
+        $project->load([
+            'client:id,name,email',
+            'projectManager:id,name,role_type',
+            'seller:id,name,email',
+            'createdBy:id,name',
+            'createdByAdmin:id,name',
+            'deliverySubmittedBy:id,name',
+            'deliveryApprovedByAdmin:id,name',
+            'teamMembers.user:id,name,role_type',
+            'folders' => fn($q) => $q->whereNull('parent_folder_id'),
+        ]);
 
         // Task data is only ever surfaced to actors with real Task visibility
         // (canViewTasks) — a Seller (canViewLinkedProjects only) must never
         // see any task via this project payload, same as the Tasks tab being
         // fully hidden for them on the frontend.
-        $canViewTasks = $this->can('canViewTasks');
-
-        $project = $this->visibleProjects()
-            ->with([
-                'client:id,name,email',
-                'projectManager:id,name,role_type',
-                'seller:id,name,email',
-                'createdBy:id,name',
-                'createdByAdmin:id,name',
-                'deliverySubmittedBy:id,name',
-                'deliveryApprovedByAdmin:id,name',
-                'teamMembers.user:id,name,role_type',
-                'folders' => fn($q) => $q->whereNull('parent_folder_id'),
-            ])
-            ->findOrFail($id);
-
-        if ($canViewTasks) {
+        if ($this->can('canViewTasks')) {
             $project->load(['tasks' => fn($q) => $q->with(['assignedTo:id,name', 'assignedBy:id,name', 'productionQueue'])]);
         } else {
             $project->setRelation('tasks', collect());
@@ -859,7 +856,19 @@ class ProjectController extends Controller
             $project->setRelation('invoices', collect());
         }
 
-        return ApiResponse::success($project);
+        return $project;
+    }
+
+    public function show(int $id): JsonResponse
+    {
+        if (!$this->can('canViewProjects') && !$this->can('canViewLinkedProjects') && !$this->can('canViewProjectDashboard')
+            && !$this->can('canViewTeamResources') && !$this->can('canAssignTeamResources') && !$this->can('canViewAllCompanyProjects')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $project = $this->visibleProjects()->findOrFail($id);
+
+        return ApiResponse::success($this->presentProject($project));
     }
 
     public function submitDelivery(Request $request, int $id): JsonResponse
@@ -927,10 +936,7 @@ class ProjectController extends Controller
             'url'           => "/admin/projects/{$project->id}",
         ]);
 
-        return ApiResponse::success(
-            $project->fresh(['client:id,name,email', 'projectManager:id,name,role_type', 'seller:id,name,email', 'deliverySubmittedBy:id,name', 'deliveryApprovedByAdmin:id,name']),
-            'Project submitted for admin review'
-        );
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project submitted for admin review');
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -980,10 +986,7 @@ class ProjectController extends Controller
             ]);
         }
 
-        // Budget is financial data — Company Admin only, never surfaced to staff.
-        $project->makeHidden('budget');
-
-        return ApiResponse::success($project, 'Project updated');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project updated');
     }
 
     // Picker list for assignee/team-member selection — active, same-company
@@ -1419,7 +1422,7 @@ class ProjectController extends Controller
         $companyName = \App\Models\Company::find($project->company_id)?->invoicingProfile()['name'] ?? config('app.name');
         $this->completionService()->notifyClientOfActivation($project, $companyName);
 
-        return ApiResponse::success($project->fresh(), 'Project activated');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project activated');
     }
 
     public function complete(int $id): JsonResponse
@@ -1456,7 +1459,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_completed', 'Project completed', "\"{$project->name}\" was marked as completed by {$user->name}.");
 
-        return ApiResponse::success($project->fresh(), 'Project marked as completed');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project marked as completed');
     }
 
     public function close(Request $request, int $id): JsonResponse
@@ -1517,7 +1520,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_closed', 'Project closed', "\"{$project->name}\" was closed by {$user->name}.");
 
-        return ApiResponse::success($project->fresh(), 'Project closed');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project closed');
     }
 
     public function reopen(Request $request, int $id): JsonResponse
@@ -1556,7 +1559,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_reopened', 'Project reopened', "\"{$project->name}\" was reopened by {$user->name}. Reason: {$validated['reason']}");
 
-        return ApiResponse::success($project->fresh(), 'Project reopened');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project reopened');
     }
 
     // Mirrors Api\Admin\ProjectController::activity() exactly (SystemAuditLog

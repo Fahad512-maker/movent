@@ -103,7 +103,7 @@ export default function LeadsPage() {
 
   return (
     <DashboardLayout title="Leads">
-      <div style={{ maxWidth: 1200 }}>
+      <div style={{ width: '100%', maxWidth: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Leads</h1>

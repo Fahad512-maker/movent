@@ -117,7 +117,13 @@ class PublicInvoiceController extends Controller
             ->first();
         $totalTasks = (int) ($taskStats?->total ?? 0);
         $doneTasks  = (int) ($taskStats?->done ?? 0);
-        $progress   = $totalTasks > 0 ? (int) round(($doneTasks / $totalTasks) * 100) : (int) ($project->progress ?? 0);
+        // A completed/closed project reads 100% regardless of its task ratio
+        // — same override as Api\Admin\User\Client\ProjectController — else a
+        // zero-task (or partially-open-task) completed project shows 0%/
+        // partial here forever, since projects.progress is never persisted.
+        $progress   = in_array($project->status, ['completed', 'closed'], true)
+            ? 100
+            : ($totalTasks > 0 ? (int) round(($doneTasks / $totalTasks) * 100) : (int) ($project->progress ?? 0));
 
         $projectInvoices = Invoice::where('company_id', $project->company_id)
             ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('id', $project->invoice_id))

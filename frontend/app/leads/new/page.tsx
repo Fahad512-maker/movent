@@ -6,6 +6,8 @@ import { adminLeadService, userLeadService } from '@/lib/services/adminLeadServi
 import { adminClientService, ClientCompany } from '@/lib/services/adminClientService';
 import { getAuthType, can } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -53,6 +55,7 @@ export default function NewLeadPage() {
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (isAdmin && companies.length === 0) { setError('No active company found for your account. Please contact support.'); return; }
     if (isAdmin && companies.length > 1 && !effectiveCompanyId) { setError('Select a company'); return; }
     setSaving(true); setError('');
@@ -87,6 +90,7 @@ export default function NewLeadPage() {
 
   return (
     <DashboardLayout title="New Lead">
+      <LoadingOverlay show={saving} message="Creating Lead…" />
       <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back
@@ -200,10 +204,10 @@ export default function NewLeadPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => router.back()} style={{ padding: '10px 22px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-              <button type="submit" disabled={saving} style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Saving…' : 'Create Lead'}
-              </button>
+              <button type="button" onClick={() => router.back()} disabled={saving} style={{ padding: '10px 22px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
+              <SubmitButton loading={saving} loadingText="Creating Lead…" style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 700 }}>
+                Create Lead
+              </SubmitButton>
             </div>
           </form>
         </div>

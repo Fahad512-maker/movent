@@ -13,6 +13,8 @@ import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, TEAM_ROLE_
 import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
 import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses } from '@/lib/taskStatusFlow';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const TASK_TYPE_LABEL: Record<string, string> = {
   general: 'General', production: 'Production', client_request: 'Client Request', internal: 'Internal',
@@ -227,6 +229,7 @@ export default function UserProjectDetailPage() {
   const projectInvoiceCurrency = (project?.invoices ?? []).find(inv => inv.project_id === project?.id)?.currency;
 
   const handleCreateProjectInvoice = async () => {
+    if (invoiceBusy) return; // Guards a double-click re-submit before the disabled prop re-renders.
     if (!newInvDesc.trim() || !newInvAmount) { toast.error('Description and amount are required'); return; }
     if (!project?.client && !newInvEmail.trim()) { toast.error('This project has no linked client — enter an email to send the invoice to'); return; }
     setInvoiceBusy(true);
@@ -625,6 +628,7 @@ export default function UserProjectDetailPage() {
 
   return (
     <DashboardLayout title={project.name}>
+      <LoadingOverlay show={invoiceBusy} message="Creating Invoice…" />
       <div style={{ width: '100%', maxWidth: 'none' }}>
         {isDraft && <DraftNotice style={{ marginBottom: 16 }} />}
         {/* ── Header ── */}
@@ -841,9 +845,9 @@ export default function UserProjectDetailPage() {
                 ) : (
                   <input type="email" value={newInvEmail} onChange={e => setNewInvEmail(e.target.value)} placeholder="Recipient email (no client on this project)" style={{ ...inp, flex: '1 1 220px' }} />
                 )}
-                <button onClick={handleCreateProjectInvoice} disabled={invoiceBusy} style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: invoiceBusy ? 'not-allowed' : 'pointer' }}>
-                  {invoiceBusy ? 'Creating…' : 'Create & Send'}
-                </button>
+                <SubmitButton type="button" onClick={handleCreateProjectInvoice} loading={invoiceBusy} loadingText="Creating Invoice…" style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600 }}>
+                  Create & Send
+                </SubmitButton>
                 {projectInvoiceCurrency && (
                   <div style={{ width: '100%', fontSize: 11, color: '#94a3b8' }}>
                     Matches this project's existing invoice currency ({projectInvoiceCurrency}) — new invoices for this project always inherit it.

@@ -10,6 +10,8 @@ import { getAuthType, getAuthUser, getToken, setAuthData } from '@/lib/auth';
 import { Admin } from '@/types';
 import toast from 'react-hot-toast';
 import type { Stripe, StripeCardElement } from '@stripe/stripe-js';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 // Augment window for PayPal SDK and Accept.js
 declare global {
@@ -388,6 +390,7 @@ export default function PaymentPage() {
 
   // ── Pay handler (Stripe + Authorize.Net) ──────────────────────────────────
   const handlePay = async () => {
+    if (processing) return; // Guards a double-click re-submit before the disabled prop re-renders.
     if (!selectedGW || !initData || !order) return;
     setError('');
 
@@ -560,6 +563,7 @@ export default function PaymentPage() {
 
   return (
     <>
+      <LoadingOverlay show={processing} message="Processing Payment…" />
       <LandingNavbar />
       <div style={{ paddingTop: 96, paddingBottom: 80, background: '#f8fafc', minHeight: '100vh' }}>
         <div style={{ maxWidth: 820, margin: '0 auto', padding: '0 24px' }}>
@@ -821,9 +825,12 @@ export default function PaymentPage() {
 
                 {/* Pay button — only for non-PayPal gateways */}
                 {showPayBtn && (
-                  <button
+                  <SubmitButton
+                    type="button"
                     onClick={handlePay}
-                    disabled={processing || !selectedGW || initLoading || !initData}
+                    loading={processing}
+                    loadingText="Processing Payment…"
+                    disabled={!selectedGW || initLoading || !initData}
                     style={{
                       width: '100%', padding: '13px',
                       background: (processing || !selectedGW || initLoading || !initData)
@@ -832,12 +839,11 @@ export default function PaymentPage() {
                       border: 'none', borderRadius: 10,
                       color: (processing || !selectedGW || initLoading || !initData) ? '#94a3b8' : '#fff',
                       fontSize: 14, fontWeight: 700,
-                      cursor: (processing || !selectedGW || initLoading || !initData) ? 'not-allowed' : 'pointer',
                       boxShadow: (processing || !selectedGW || initLoading || !initData) ? 'none' : '0 4px 14px rgba(37,99,235,0.3)',
                       transition: 'all 0.15s',
                     }}>
-                    {processing ? '⏳ Processing…' : '🔒 Pay Now'}
-                  </button>
+                    🔒 Pay Now
+                  </SubmitButton>
                 )}
 
                 {/* PayPal note (buttons are rendered in the left panel) */}

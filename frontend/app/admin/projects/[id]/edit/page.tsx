@@ -255,7 +255,7 @@ export default function EditProjectPage() {
                 </h2>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
+            <form onSubmit={handleSubmit} style={{ width: "100%" }}>
                 <div style={card}>
                     <div style={{ marginBottom: 16 }}>
                         <label style={lbl}>Project Name *</label>
@@ -302,7 +302,7 @@ export default function EditProjectPage() {
                     <div
                         style={{
                             display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
                             gap: 14,
                             marginBottom: 16,
                         }}
@@ -397,7 +397,7 @@ export default function EditProjectPage() {
                     <div
                         style={{
                             display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
                             gap: 14,
                             marginBottom: 16,
                         }}

@@ -9,6 +9,8 @@ import { can } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { card, inp, lbl, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const TASK_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'review', 'completed', 'cancelled'];
 // A Seller can never be a task assignee, full stop (unconditional exclusion
@@ -107,6 +109,7 @@ export default function CreateTaskPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!title.trim()) { toast.error('Task title is required'); return; }
     setSaving(true);
     try {
@@ -150,6 +153,7 @@ export default function CreateTaskPage() {
 
   return (
     <DashboardLayout title="Create Task">
+      <LoadingOverlay show={saving} message={canCreateTasks ? 'Creating Task…' : 'Submitting Request…'} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.push(`/projects/${projectId}`)} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -281,12 +285,12 @@ export default function CreateTaskPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <button type="submit" disabled={saving} style={{
+          <SubmitButton loading={saving} loadingText={canCreateTasks ? 'Creating Task…' : 'Submitting Request…'} style={{
             padding: '11px 28px', background: saving ? '#93c5fd' : '#2563eb',
             color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
-          }}>{saving ? 'Saving…' : (canCreateTasks ? 'Create Task' : 'Submit Request')}</button>
-          <button type="button" onClick={() => router.push(`/projects/${projectId}`)} style={{
+            fontSize: 14, fontWeight: 600,
+          }}>{canCreateTasks ? 'Create Task' : 'Submit Request'}</SubmitButton>
+          <button type="button" onClick={() => router.push(`/projects/${projectId}`)} disabled={saving} style={{
             padding: '11px 22px', background: '#fff', color: '#64748b',
             border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer',
           }}>Cancel</button>

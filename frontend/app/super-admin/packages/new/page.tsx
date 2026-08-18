@@ -6,6 +6,8 @@ import { packageService, PackagePayload } from '@/lib/services/packageService';
 import { moduleService, ModuleItem } from '@/lib/services/moduleService';
 import { Package } from '@/types';
 import { HiArrowLeft } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 13px',
@@ -49,6 +51,7 @@ export default function NewPackagePage() {
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (form.modules.length === 0) { setError('Select at least one module'); return; }
     setSaving(true); setError('');
     try {
@@ -78,6 +81,7 @@ export default function NewPackagePage() {
 
   return (
     <SuperAdminLayout>
+      <LoadingOverlay show={saving} message="Creating Package…" />
       <div style={{ maxWidth: 760, padding: '28px 32px' }}>
         <button
           onClick={() => router.push('/super-admin/packages')}
@@ -216,12 +220,12 @@ export default function NewPackagePage() {
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: 12, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
-              <button type="button" onClick={() => router.push('/super-admin/packages')} style={{ padding: '10px 24px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
+              <button type="button" onClick={() => router.push('/super-admin/packages')} disabled={saving} style={{ padding: '10px 24px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer' }}>
                 Cancel
               </button>
-              <button type="submit" disabled={saving} style={{ padding: '10px 32px', borderRadius: 8, border: 'none', background: saving ? '#c4b5fd' : 'linear-gradient(135deg, #7c3aed, #a78bfa)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Creating…' : 'Create Package'}
-              </button>
+              <SubmitButton loading={saving} loadingText="Creating Package…" style={{ padding: '10px 32px', borderRadius: 8, border: 'none', background: saving ? '#c4b5fd' : 'linear-gradient(135deg, #7c3aed, #a78bfa)', color: '#fff', fontSize: 14, fontWeight: 600 }}>
+                Create Package
+              </SubmitButton>
             </div>
           </form>
         </div>

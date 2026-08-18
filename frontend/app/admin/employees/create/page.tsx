@@ -7,6 +7,8 @@ import { adminHrService, EmploymentType } from '@/lib/services/adminHrService';
 import { adminClientService, ClientCompany } from '@/lib/services/adminClientService';
 import { inp, lbl, card } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 export default function CreateEmployeePage() {
   useModuleGuard('employees');
@@ -37,6 +39,7 @@ export default function CreateEmployeePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (companies.length === 0) { toast.error('No active company found for your account.'); return; }
     setSaving(true);
     try {
@@ -57,6 +60,7 @@ export default function CreateEmployeePage() {
 
   return (
     <DashboardLayout title="Add Employee">
+      <LoadingOverlay show={saving} message="Creating Employee…" />
       <div style={{ maxWidth: 720 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: '0 0 20px' }}>Add Employee</h2>
 
@@ -112,10 +116,10 @@ export default function CreateEmployeePage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" onClick={() => router.back()} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-            <button type="submit" disabled={saving} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer' }}>
-              {saving ? 'Saving…' : 'Create Employee'}
-            </button>
+            <button type="button" onClick={() => router.back()} disabled={saving} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
+            <SubmitButton loading={saving} loadingText="Creating Employee…" style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600 }}>
+              Create Employee
+            </SubmitButton>
           </div>
         </form>
       </div>

@@ -10,6 +10,8 @@ import {
   HiArrowLeft, HiPencilSquare, HiPaperAirplane, HiXCircle,
   HiPlusCircle, HiTrash, HiLink, HiClipboard, HiClipboardDocumentCheck
 } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   draft:          { bg: '#f1f5f9', color: '#64748b', label: 'Draft' },
@@ -91,6 +93,7 @@ export default function InvoiceDetailPage() {
 
   const handleRecordPayment = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (payLoading) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     setPayLoading(true); setPayError('');
     try {
       await adminInvoiceService.recordPayment(invoiceId, {
@@ -163,6 +166,7 @@ export default function InvoiceDetailPage() {
 
   return (
     <DashboardLayout title={invoice.invoice_number}>
+      <LoadingOverlay show={payLoading} message="Recording Payment…" />
       <div style={{ width: '100%', maxWidth: 'none' }}>
         <button onClick={() => router.push('/invoices')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to Invoices
@@ -382,10 +386,10 @@ export default function InvoiceDetailPage() {
                 <input style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #86efac', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff', boxSizing: 'border-box' }} value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="Optional note…" />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button type="submit" disabled={payLoading} style={{ padding: '9px 24px', borderRadius: 7, border: 'none', background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: payLoading ? 'not-allowed' : 'pointer' }}>
-                  {payLoading ? 'Saving…' : 'Save Payment'}
-                </button>
-                <button type="button" onClick={() => setShowPayForm(false)} style={{ padding: '9px 18px', borderRadius: 7, border: '1px solid #86efac', background: '#fff', color: '#059669', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                <SubmitButton loading={payLoading} loadingText="Recording Payment…" style={{ padding: '9px 24px', borderRadius: 7, border: 'none', background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600 }}>
+                  Save Payment
+                </SubmitButton>
+                <button type="button" onClick={() => setShowPayForm(false)} disabled={payLoading} style={{ padding: '9px 18px', borderRadius: 7, border: '1px solid #86efac', background: '#fff', color: '#059669', fontSize: 13, cursor: payLoading ? 'not-allowed' : 'pointer' }}>Cancel</button>
               </div>
             </form>
           </div>

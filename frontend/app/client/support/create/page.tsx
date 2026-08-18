@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clientService } from '@/lib/services/clientService';
 import toast from 'react-hot-toast';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const GREEN = '#10b981';
 
@@ -18,6 +20,7 @@ export default function ClientCreateTicketPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     setLoading(true);
     try {
       const fd = new FormData();
@@ -46,6 +49,7 @@ export default function ClientCreateTicketPage() {
 
   return (
     <div style={{ maxWidth: 600 }}>
+      <LoadingOverlay show={loading} message="Submitting Ticket…" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}>←</button>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>Raise Support Ticket</h1>
@@ -95,15 +99,15 @@ export default function ClientCreateTicketPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              type="submit" disabled={loading}
+            <SubmitButton
+              loading={loading} loadingText="Submitting Ticket…"
               style={{
                 padding: '10px 24px', background: loading ? '#a7f3d0' : GREEN,
                 color: '#fff', fontWeight: 600, fontSize: 14,
-                border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer',
+                border: 'none', borderRadius: 8,
               }}>
-              {loading ? 'Submitting...' : 'Raise Ticket'}
-            </button>
+              Raise Ticket
+            </SubmitButton>
             <button
               type="button" onClick={() => router.back()}
               style={{

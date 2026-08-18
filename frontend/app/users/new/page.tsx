@@ -524,6 +524,8 @@ import { CompanyOption } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { getAuthType } from '@/lib/auth';
 import { HiArrowLeft, HiArrowRight, HiCheckCircle, HiClipboard, HiUserGroup, HiCheck } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 // availMods (from getAvailableModules) -> { moduleKey: visible permission keys[] },
 // respecting the same requiresDb/hideIfCatalogKey filtering the checkbox UI uses —
@@ -668,6 +670,7 @@ export default function NewUserPage() {
   };
 
   const handleSubmit = async () => {
+    if (saving) return; // Guards a double-click re-submit before the disabled prop re-renders.
     setSaving(true); setError('');
     try {
       const assignments = selectedIds.map(cid => ({
@@ -765,6 +768,7 @@ export default function NewUserPage() {
 
   return (
     <DashboardLayout title="Add User">
+      <LoadingOverlay show={saving} message="Creating Account…" />
       <div style={{ width: "100%" }}>
         <button
           onClick={() => {
@@ -1211,14 +1215,16 @@ export default function NewUserPage() {
                 })()}
 
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button
+                  <SubmitButton
+                    type="button"
                     onClick={handleSubmit}
-                    disabled={saving}
-                    style={{ flex: 1, padding: '12px 0', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer' }}
+                    loading={saving}
+                    loadingText="Creating Account…"
+                    style={{ flex: 1, padding: '12px 0', borderRadius: 9, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: 14 }}
                   >
-                    {saving ? 'Creating…' : 'Create User'}
-                  </button>
-                  <button onClick={() => { setError(''); setStep(singleCompany ? 1 : 2); }} style={{ padding: '12px 20px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Back</button>
+                    Create User
+                  </SubmitButton>
+                  <button onClick={() => { setError(''); setStep(singleCompany ? 1 : 2); }} disabled={saving} style={{ padding: '12px 20px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer' }}>Back</button>
                 </div>
               </div>
             )}

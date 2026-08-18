@@ -12,6 +12,8 @@ import { inp, lbl, card, Badge, TASK_SC, PRIORITY_SC, fmtDate, ALLOWED_ATTACHMEN
 import { TASK_STATUS_LABELS, promptForOptionalProductionUser } from '@/lib/taskStatusFlow';
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { User } from '@/types';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const hasProjectManagementAccess = (u: User) =>
   (u.company_assignments ?? []).some(a => (a.permissions?.project_management ?? []).length > 0);
@@ -163,6 +165,7 @@ export default function ProjectTasksPage() {
 
   const submit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!form.title) { toast.error('Enter a task title'); return; }
     setSaving(true);
     try {
@@ -231,6 +234,7 @@ export default function ProjectTasksPage() {
 
   return (
     <DashboardLayout title="Project Tasks">
+      <LoadingOverlay show={saving} message={editingId ? 'Updating Task…' : 'Creating Task…'} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <button onClick={() => router.push(`/admin/projects/${id}`)} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
@@ -407,10 +411,10 @@ export default function ProjectTasksPage() {
               )}
             </div>
           )}
-          <button type="submit" disabled={saving} style={{
+          <SubmitButton loading={saving} loadingText={editingId ? 'Updating Task…' : 'Creating Task…'} style={{
             padding: '9px 20px', background: saving ? '#93c5fd' : '#2563eb', color: '#fff',
-            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',
-          }}>{saving ? 'Saving…' : editingId ? 'Update Task' : 'Add Task'}</button>
+            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+          }}>{editingId ? 'Update Task' : 'Add Task'}</SubmitButton>
         </form>
       )}
 

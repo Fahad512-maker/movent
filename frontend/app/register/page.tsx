@@ -714,6 +714,8 @@ import { publicService, PublicModule } from '../../lib/services/publicService';
 import { setAuthData } from '../../lib/auth';
 import toast from 'react-hot-toast';
 import Container from '../../components/ui/Conatiner';
+import SubmitButton from '../../components/ui/SubmitButton';
+import LoadingOverlay from '../../components/ui/LoadingOverlay';
 import { MdOutlineDone } from 'react-icons/md';
 
 type Category = {
@@ -1158,6 +1160,7 @@ function RegisterContent() {
   const step1Valid = !!(companyName && companyNameOk && name && email && emailOk && password.length >= 8 && password === confirm);
 
   const handleSubmit = async () => {
+    if (submitting) return; // Guards a double-click re-submit before the disabled prop re-renders.
     const pkgToUse = mode === 'package' ? selectedPackage : autoPackage();
     const modulesToUse = mode === 'package' ? (selectedPackage?.modules ?? []) : customModules;
     if (mode === 'package' && !selectedPackage) { toast.error('Please select a package'); return; }
@@ -1210,6 +1213,7 @@ function RegisterContent() {
 
   return (
     <>
+      <LoadingOverlay show={submitting} message="Creating Account…" />
       <LandingNavbar />
       <div className='AuthBackground'>
         <Container>
@@ -1851,21 +1855,22 @@ function RegisterContent() {
                         </div>
                       )}
 
-                      <button
+                      <SubmitButton
+                        type="button"
                         onClick={handleSubmit}
+                        loading={submitting}
+                        loadingText="Creating Account…"
                         disabled={!canSubmit}
                         style={{
                           width: '100%', height: 42,
                           borderRadius: 4, border: 'none',
-                          cursor: canSubmit ? 'pointer' : 'not-allowed',
                           background: canSubmit ? 'var(--brand-gradient)' : 'var(--bg-blue-light1)',
                           color: '#fff', fontSize: 14, fontWeight: 600,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                           transition: 'background 0.2s',
                         }}
                       >
-                        {submitting ? 'Setting up…' : <>Continue to Payment <HiArrowRight size={16} /></>}
-                      </button>
+                        Continue to Payment <HiArrowRight size={16} />
+                      </SubmitButton>
 
                       <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                         <HiShieldCheck size={12} /> Secure · 14-day free trial included

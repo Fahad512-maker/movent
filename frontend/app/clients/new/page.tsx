@@ -6,6 +6,8 @@ import { adminClientService, ClientCompany, ClientPayload } from '@/lib/services
 import { userClientService } from '@/lib/services/userClientService';
 import { getAuthType } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
+import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 13px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -36,6 +38,7 @@ export default function NewClientPage() {
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!isSubUser && !form.company_id) { setError('Please select a company'); return; }
     setSaving(true); setError('');
     try {
@@ -79,6 +82,7 @@ export default function NewClientPage() {
 
   return (
     <DashboardLayout title="Add Client">
+      <LoadingOverlay show={saving} message="Creating Client…" />
       <div style={{ maxWidth: 720 }}>
         <button onClick={() => router.push('/clients')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to Clients
@@ -167,10 +171,10 @@ export default function NewClientPage() {
             )}
 
             <div style={{ display: 'flex', gap: 12, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
-              <button type="button" onClick={() => router.push('/clients')} style={{ padding: '10px 24px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-              <button type="submit" disabled={saving} style={{ padding: '10px 32px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Saving…' : 'Create Client'}
-              </button>
+              <button type="button" onClick={() => router.push('/clients')} disabled={saving} style={{ padding: '10px 24px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
+              <SubmitButton loading={saving} loadingText="Creating Client…" style={{ padding: '10px 32px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 14, fontWeight: 600 }}>
+                Create Client
+              </SubmitButton>
             </div>
           </form>
         </div>
