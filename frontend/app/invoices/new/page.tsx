@@ -103,9 +103,10 @@ function NewInvoiceForm() {
   // already had; 'new' replaces Line Items entirely with a single
   // title/reference/amount, since the project (and its billing) doesn't
   // exist yet.
-  const [projectMode, setProjectMode]         = useState<ProjectMode>('existing');
+  const [projectMode, setProjectMode]         = useState<ProjectMode>('new');
+  const [projectModuleAvailable, setProjectModuleAvailable] = useState(false);
   const [projects, setProjects]               = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [projectId, setProjectId]             = useState<number | null>(null);
   const [projectTitle, setProjectTitle]       = useState('');
   const [projectReference, setProjectReference] = useState('');
@@ -131,6 +132,9 @@ function NewInvoiceForm() {
     setAuthResolved(true);
     if (!adminFlag) {
       const user = getAuthUser() as User | null;
+      const hasProjects = can('project_management', 'canViewProjects') || can('project_management', 'canViewLinkedProjects');
+      setProjectModuleAvailable(hasProjects);
+      if (hasProjects && !leadId) setProjectMode('existing');
       if (user?.company) {
         const c: ClientCompany = { id: user.company.id, name: user.company.name, currency: user.company.currency ?? 'USD' };
         setCompanies([c]);
@@ -143,6 +147,9 @@ function NewInvoiceForm() {
     } else {
       const admin = getAuthUser() as Admin | null;
       if (admin?.currency) setCurrency(admin.currency);
+      const hasProjects = (admin?.modules ?? []).includes('projects') || (admin?.modules ?? []).includes('project_management');
+      setProjectModuleAvailable(hasProjects);
+      if (hasProjects && !leadId) setProjectMode('existing');
       adminClientService.companies().then(cs => {
         setCompanies(cs);
         if (cs.length) setCompanyId(companyIdParam && cs.some(c => c.id === companyIdParam) ? companyIdParam : cs[0].id);
@@ -176,17 +183,22 @@ function NewInvoiceForm() {
   // same visibility rule the Projects module already applies (created by
   // this staff member, or a Seller's own assigned/handed-off projects).
   useEffect(() => {
-    if (!companyId) { setProjects([]); return; }
-    setLoadingProjects(true);
-    setProjectId(null);
+    if (!companyId || !projectModuleAvailable) return;
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoadingProjects(true);
+      setProjectId(null);
+    });
     const load = isAdmin
       ? adminProjectService.list({ company_id: String(companyId) })
       : userProjectService.list();
     load
-      .then(list => setProjects(list))
-      .catch(() => setProjects([]))
-      .finally(() => setLoadingProjects(false));
-  }, [companyId, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+      .then(list => { if (!cancelled) setProjects(list); })
+      .catch(() => { if (!cancelled) setProjects([]); })
+      .finally(() => { if (!cancelled) setLoadingProjects(false); });
+    return () => { cancelled = true; };
+  }, [companyId, isAdmin, projectModuleAvailable]);
 
   // Pre-fill from a Lead (e.g. arriving via /invoices/new?lead_id=50 from a
   // won lead's detail page) — once. Doesn't wait on (or validate against)
@@ -684,12 +696,12 @@ function NewInvoiceForm() {
 
                   {/* Mode toggle */}
                   <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-                    {projectModeBtn('existing', <HiFolder size={15} />, 'Existing Project', 'Bill against a project already created or assigned to you')}
+                    {projectModuleAvailable && projectModeBtn('existing', <HiFolder size={15} />, 'Existing Project', 'Bill against a project already created or assigned to you')}
                     {projectModeBtn('new',      <HiFolderPlus size={15} />, 'New Project', 'Name the project and set an amount for this invoice')}
                   </div>
 
                   {/* Existing Project picker */}
-                  {projectMode === 'existing' && (
+                  {projectModuleAvailable && projectMode === 'existing' && (
                     <div>
                       <label style={lbl}>Select Project *</label>
                       {loadingProjects ? (

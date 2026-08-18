@@ -310,7 +310,7 @@ class ProjectController extends Controller
             ]);
         }
 
-        return ApiResponse::success($project->fresh(['client', 'projectManager', 'folders', 'createdByAdmin:id,name']), 'Project created', 201);
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project created', 201);
     }
 
     // Whoever is set as project_manager_id must also have a ProjectTeamMember
@@ -326,25 +326,31 @@ class ProjectController extends Controller
         );
     }
 
-    public function show(Request $request, int $id): JsonResponse
+    // Full relation set + computed progress/billing_summary — the single
+    // source of truth for what a Project API response looks like, used by
+    // show() AND every lifecycle action (create/update/activate/complete/
+    // close/reopen/approveDelivery). Before this, those actions returned a
+    // bare or partially-loaded $project->fresh(), so the frontend's
+    // onUpdated(updated) => setProject(updated) wiped out created_by_admin/
+    // client/seller/tasks/etc from the page's state, and reset progress to
+    // its raw (never-persisted) column value, until the next full reload.
+    private function presentProject(Project $project): Project
     {
-        $project = Project::whereIn('company_id', $this->companyIds())
-            ->with([
-                'client:id,name,email',
-                'invoice:id,invoice_number,total_amount,status',
-                'invoices:id,invoice_number,total_amount,paid_amount,status,due_date,currency,project_id',
-                'projectManager:id,name,role_type',
-                'seller:id,name,email',
-                'createdBy:id,name',
-                'createdByAdmin:id,name',
-                'deliverySubmittedBy:id,name',
-                'deliveryApprovedByAdmin:id,name',
-                'tasks' => fn($q) => $q->with('assignedTo:id,name'),
-                'teamMembers.user:id,name,role_type',
-                'folders' => fn($q) => $q->whereNull('parent_folder_id')->orderBy('sort_order'),
-                'deliverables',
-            ])
-            ->findOrFail($id);
+        $project->load([
+            'client:id,name,email',
+            'invoice:id,invoice_number,total_amount,status',
+            'invoices:id,invoice_number,total_amount,paid_amount,status,due_date,currency,project_id',
+            'projectManager:id,name,role_type',
+            'seller:id,name,email',
+            'createdBy:id,name',
+            'createdByAdmin:id,name',
+            'deliverySubmittedBy:id,name',
+            'deliveryApprovedByAdmin:id,name',
+            'tasks' => fn($q) => $q->with('assignedTo:id,name'),
+            'teamMembers.user:id,name,role_type',
+            'folders' => fn($q) => $q->whereNull('parent_folder_id')->orderBy('sort_order'),
+            'deliverables',
+        ]);
 
         $totalTasks = $project->tasks->count();
         $doneTasks  = $project->tasks->where('status', 'completed')->count();
@@ -362,7 +368,14 @@ class ProjectController extends Controller
             'outstanding'    => max(0, round($totalInvoiced - $totalPaid, 2)),
         ];
 
-        return ApiResponse::success($project);
+        return $project;
+    }
+
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        return ApiResponse::success($this->presentProject($project));
     }
 
     // POST /admin/projects/{id}/invoices/link — attach an existing invoice
@@ -509,7 +522,7 @@ class ProjectController extends Controller
             ]);
         }
 
-        return ApiResponse::success($project->fresh(['client', 'projectManager']), 'Project updated');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project updated');
     }
 
     public function destroy(int $id): JsonResponse
@@ -759,7 +772,7 @@ class ProjectController extends Controller
         $companyName = \App\Models\Company::find($project->company_id)?->invoicingProfile()['name'] ?? config('app.name');
         $this->completionService()->notifyClientOfActivation($project, $companyName);
 
-        return ApiResponse::success($project->fresh(), 'Project activated');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project activated');
     }
 
     // Company Admin is always structurally allowed to complete/close/reopen —
@@ -799,7 +812,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_completed', 'Project completed', "\"{$project->name}\" was marked as completed by {$this->adminName()}.");
 
-        return ApiResponse::success($project->fresh(), 'Project marked as completed');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project marked as completed');
     }
 
     public function downloadDelivery(int $id): StreamedResponse
@@ -899,10 +912,7 @@ class ProjectController extends Controller
             'visibility'      => 'client',
         ]);
 
-        return ApiResponse::success(
-            $project->fresh(['client:id,name,email,user_id', 'projectManager:id,name,role_type', 'seller:id,name,email', 'deliverySubmittedBy:id,name', 'deliveryApprovedByAdmin:id,name']),
-            'Project delivered to client'
-        );
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project delivered to client');
     }
 
     public function close(Request $request, int $id): JsonResponse
@@ -959,7 +969,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_closed', 'Project closed', "\"{$project->name}\" was closed by {$this->adminName()}.");
 
-        return ApiResponse::success($project->fresh(), 'Project closed');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project closed');
     }
 
     public function reopen(Request $request, int $id): JsonResponse
@@ -998,7 +1008,7 @@ class ProjectController extends Controller
 
         $this->notifyLifecycle($project, 'project_reopened', 'Project reopened', "\"{$project->name}\" was reopened by {$this->adminName()}. Reason: {$validated['reason']}");
 
-        return ApiResponse::success($project->fresh(), 'Project reopened');
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Project reopened');
     }
 
     // Notifies PM/team/production/seller via the existing per-user Notification
