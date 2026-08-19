@@ -350,7 +350,7 @@ export default function ProjectLifecycleActions({
       )}
       {status === 'completed' && canApproveCompletion && service.approveCompletion && (
         <button onClick={submitApproveCompletion} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#7c3aed', '#fff')}>
-          {submitting ? 'Approving…' : 'Approve & Lock Project'}
+          {submitting ? 'Approving…' : 'Lock Project'}
         </button>
       )}
       {/* Locked: only Admin can actually reopen it (reused Reopen Project

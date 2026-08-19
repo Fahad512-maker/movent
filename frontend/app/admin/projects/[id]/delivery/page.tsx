@@ -156,10 +156,20 @@ export default function ProjectDeliveryPage() {
               <div style={{ fontSize: 13, color: '#5b21b6', fontWeight: 600, marginBottom: 8 }}>
                 A Project Manager submitted &quot;{project.delivery_file_name}&quot; for your review.
               </div>
-              <button onClick={approveDelivery} disabled={submitting} style={{
-                padding: '8px 16px', borderRadius: 7, border: 'none', background: submitting ? '#c4b5fd' : '#7c3aed',
-                color: '#fff', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer',
-              }}>{submitting ? 'Approving…' : 'Approve'}</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {/* Admin needs to actually see the file before deciding
+                    whether to approve it — downloadDelivery() on the backend
+                    has never required a specific delivery_status, only that
+                    the file exists, so this was just a missing button here. */}
+                <button onClick={downloadCurrent} style={{
+                  padding: '8px 16px', borderRadius: 7, border: '1px solid #ddd6fe', background: '#fff',
+                  color: '#5b21b6', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>Download</button>
+                <button onClick={approveDelivery} disabled={submitting} style={{
+                  padding: '8px 16px', borderRadius: 7, border: 'none', background: submitting ? '#c4b5fd' : '#7c3aed',
+                  color: '#fff', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer',
+                }}>{submitting ? 'Approving…' : 'Approve'}</button>
+              </div>
             </div>
           )}
 
@@ -185,10 +195,16 @@ export default function ProjectDeliveryPage() {
                   </div>
                 </div>
               )}
-              <button onClick={deliverToClient} disabled={submitting || (needsGuestEmail && !deliveryEmail.trim())} style={{
-                padding: '8px 16px', borderRadius: 7, border: 'none', background: (submitting || (needsGuestEmail && !deliveryEmail.trim())) ? '#99f6e4' : '#0d9488',
-                color: '#fff', fontSize: 13, fontWeight: 600, cursor: (submitting || (needsGuestEmail && !deliveryEmail.trim())) ? 'not-allowed' : 'pointer',
-              }}>{submitting ? 'Sending…' : 'Send to Client'}</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={downloadCurrent} style={{
+                  padding: '8px 16px', borderRadius: 7, border: '1px solid #99f6e4', background: '#fff',
+                  color: '#0f766e', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>Download</button>
+                <button onClick={deliverToClient} disabled={submitting || (needsGuestEmail && !deliveryEmail.trim())} style={{
+                  padding: '8px 16px', borderRadius: 7, border: 'none', background: (submitting || (needsGuestEmail && !deliveryEmail.trim())) ? '#99f6e4' : '#0d9488',
+                  color: '#fff', fontSize: 13, fontWeight: 600, cursor: (submitting || (needsGuestEmail && !deliveryEmail.trim())) ? 'not-allowed' : 'pointer',
+                }}>{submitting ? 'Sending…' : 'Send to Client'}</button>
+              </div>
             </div>
           )}
 

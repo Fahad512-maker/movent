@@ -10,6 +10,7 @@ use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Revision;
 use App\Models\Task;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -136,7 +137,16 @@ class ProjectCompletionService
             $ids->push($project->seller_id);
         }
 
-        return $ids->unique()->filter()->values()->all();
+        $ids = $ids->unique()->filter()->values();
+
+        // Every caller feeds this straight into Notification::create(),
+        // whose user_id FK is NOT NULL and has no ON DELETE fallback here —
+        // a stale reference (project_team_members/tasks.assigned_to/etc.
+        // pointing at a user hard-deleted through some path that skipped
+        // cascading cleanup) would otherwise 500 the whole lifecycle action
+        // (complete/close/reopen/etc.) instead of just being one fewer
+        // notification sent.
+        return User::whereIn('id', $ids)->pluck('id')->values()->all();
     }
 
     // The only "notify the client" mechanism this codebase has is the

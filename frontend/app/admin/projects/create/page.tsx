@@ -13,6 +13,7 @@ import { inp, lbl, card, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSiz
 import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
 import SubmitButton from '@/components/ui/SubmitButton';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 interface Company {
     id: number;
@@ -234,6 +235,7 @@ function CreateProjectForm() {
 
   return (
     <DashboardLayout title="New Project">
+      <LoadingOverlay show={saving} message="Creating Project…" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,

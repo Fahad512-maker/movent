@@ -543,6 +543,19 @@ class ProjectController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+
+        // The project row itself is only soft-deleted (SoftDeletes, no
+        // restore feature exists) — but its storage folder and everything
+        // in it (attachments, deliverables, delivery packages, etc.) are
+        // real files that would otherwise sit on disk forever with nothing
+        // left in the app pointing at them. Remove the folder tree plus its
+        // ProjectFolder metadata rows now, while $project->storage_folder is
+        // still known.
+        if ($project->storage_folder) {
+            Storage::deleteDirectory($project->storage_folder);
+        }
+        ProjectFolder::where('project_id', $project->id)->delete();
+
         $project->delete();
 
         SystemAuditLog::create([
