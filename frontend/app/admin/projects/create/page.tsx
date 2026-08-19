@@ -353,6 +353,7 @@ function CreateProjectForm() {
                                 onChange={(e) => setF("status", e.target.value)}
                                 style={inp}
                             >
+                                <option value="planning">Planning</option>
                                 <option value="active">Active</option>
                                 <option value="on_hold">On Hold</option>
                                 <option value="completed">Completed</option>

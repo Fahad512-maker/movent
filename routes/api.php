@@ -439,6 +439,7 @@ Route::prefix('admin')->group(function () {
             Route::get('projects/{id}/completion-status',           [AdminProjectController::class, 'completionStatus']);
             Route::post('projects/{id}/activate',                   [AdminProjectController::class, 'activate']);
             Route::post('projects/{id}/complete',                   [AdminProjectController::class, 'complete']);
+            Route::post('projects/{id}/approve-completion',         [AdminProjectController::class, 'approveCompletion']);
             Route::get('projects/{id}/delivery/download',           [AdminProjectController::class, 'downloadDelivery']);
             Route::post('projects/{id}/approve-delivery',           [AdminProjectController::class, 'approveDelivery']);
             Route::post('projects/{id}/deliver-to-client',          [AdminProjectController::class, 'deliverToClient']);
@@ -807,6 +808,7 @@ Route::prefix('user')->group(function () {
             Route::post('projects/{id}/submit-delivery',         [UserProjectController::class, 'submitDelivery']);
             Route::post('projects/{id}/close',                  [UserProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                 [UserProjectController::class, 'reopen']);
+            Route::post('projects/{id}/request-reopen',         [UserProjectController::class, 'requestReopen']);
             Route::post('projects/{id}/invoices',               [UserProjectController::class, 'createInvoice']);
             Route::post('projects/{id}/invoices/link',          [UserProjectController::class, 'linkInvoice']);
             Route::delete('projects/{id}/invoices/{invoiceId}', [UserProjectController::class, 'unlinkInvoice']);

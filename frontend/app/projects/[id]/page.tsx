@@ -553,6 +553,10 @@ export default function UserProjectDetailPage() {
   // Mirrors the server-side guards (Project::isDraft()); everything here
   // re-enables by itself the moment the project is activated.
   const isDraft = project.status === 'draft' || project.status === 'unpaid';
+  // Mirrors Project::isLocked() — 'closed' (existing) or 'approved_locked'
+  // (Project Approval Lock). Backend is the authoritative guard on every one
+  // of these actions; this just avoids a dead click + confusing 422 toast.
+  const isProjectLocked = project.status === 'closed' || project.status === 'approved_locked';
 
   const tasks = project.tasks ?? [];
   const team = project.team_members ?? [];
@@ -633,12 +637,15 @@ export default function UserProjectDetailPage() {
               canReopen={canReopenProjects}
               canForceClose={canForceCloseProjects}
               canActivate={canActivateProjects}
+              canRequestReopen={canReopenProjects}
+              reopenRequestedAt={project.reopen_requested_at}
+              reopenRequestReason={project.reopen_request_reason}
               canSubmitDelivery={canSubmitProjectDelivery}
               deliveryStatus={project.delivery_status}
               deliveryFileName={project.delivery_file_name}
               onUpdated={updated => setProject(updated)}
             />
-            {canEditProjects && project.status !== 'closed' && (
+            {canEditProjects && !isProjectLocked && (
               <button onClick={() => router.push(`/projects/${id}/edit`)} style={{
                 padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
                 color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -883,7 +890,7 @@ export default function UserProjectDetailPage() {
                           {t.title}
                         </td>
                         <td style={{ padding: '11px 16px' }}>
-                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)}
+                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)} disabled={isProjectLocked}
                             style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
                             {getAllowedNextTaskStatuses(t.status, { isAssignee: true, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
@@ -912,7 +919,7 @@ export default function UserProjectDetailPage() {
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>All Tasks ({tasks.length})</span>
-            {canCreateAnyTask && !['closed', 'completed'].includes(project.status) && (
+            {canCreateAnyTask && project.status !== 'completed' && !isProjectLocked && (
               <button
                 onClick={() => !isDraft && router.push(`/projects/${id}/tasks/create`)}
                 disabled={isDraft}
@@ -954,7 +961,7 @@ export default function UserProjectDetailPage() {
                         }
                         const currentAssigneeId = asRelation(t.assigned_to)?.id ?? t.assigned_to;
                         return (
-                          <select value={currentAssigneeId != null ? String(currentAssigneeId) : ''} onChange={e => updateTaskAssignee(t, e.target.value)}
+                          <select value={currentAssigneeId != null ? String(currentAssigneeId) : ''} onChange={e => updateTaskAssignee(t, e.target.value)} disabled={isProjectLocked}
                             style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value="">Unassigned</option>
                             {assignableUsers.map(u => (
@@ -980,7 +987,7 @@ export default function UserProjectDetailPage() {
                         const isSelfTask = assignedToId(t) === me?.id;
                         if (!canEditTasks && !isSelfTask && !isQa && !canOverrideTaskStatus) return null;
                         return (
-                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)}
+                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)} disabled={isProjectLocked}
                             style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
                             <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
                             {getAllowedNextTaskStatuses(t.status, { isAssignee: isSelfTask, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (

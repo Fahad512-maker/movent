@@ -121,6 +121,15 @@ export const userProjectService = {
     return res.data.data;
   },
 
+  // Project Approval Lock — reopen() above only accepts a 'completed' or
+  // 'closed' project, so it structurally can't touch 'approved_locked';
+  // this is the only door out of a lock for anyone but Admin (see
+  // Api\Admin\ProjectController::reopen(), which does accept it).
+  requestReopen: async (id: number, reason: string): Promise<Project> => {
+    const res = await api.post(`/user/projects/${id}/request-reopen`, { reason });
+    return res.data.data;
+  },
+
   linkInvoice: async (id: number, invoiceId: number): Promise<void> => {
     await api.post(`/user/projects/${id}/invoices/link`, { invoice_id: invoiceId });
   },

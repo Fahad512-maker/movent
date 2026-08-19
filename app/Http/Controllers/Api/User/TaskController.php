@@ -386,8 +386,8 @@ class TaskController extends Controller
             return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
         }
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         if ($project->status === 'completed') {
@@ -481,8 +481,8 @@ class TaskController extends Controller
         $project = $this->project($projectId);
         $task = Task::where('project_id', $project->id)->findOrFail($id);
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $isOwnTask = $task->assigned_to === $this->user()->id;

@@ -180,8 +180,8 @@ class ProductionController extends Controller
             return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
         }
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $file = $request->file('file');
@@ -237,6 +237,10 @@ class ProductionController extends Controller
         $revision = Revision::whereHas('deliverable.project', fn($p) => $p->where('company_id', $user->company_id))
             ->findOrFail($id);
 
+        if ($revision->deliverable?->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
+
         $revision->update(['status' => 'resolved', 'resolved_at' => now()]);
 
         $deliverable = $revision->deliverable;
@@ -261,6 +265,10 @@ class ProductionController extends Controller
 
         $deliverable = Deliverable::whereHas('project', fn($p) => $p->where('company_id', $user->company_id))
             ->findOrFail($id);
+
+        if ($deliverable->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
 
         // QA Failed / Revision Required requires a reason when it drives a
         // linked task's status — a project-level deliverable (no task_id)
@@ -314,6 +322,10 @@ class ProductionController extends Controller
         $deliverable = Deliverable::whereHas('project', fn($p) => $p->whereIn('id', $this->visibleProjectIds()))
             ->findOrFail($id);
 
+        if ($deliverable->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
+
         DB::transaction(function () use ($deliverable) {
             $deliverable->update(['status' => 'approved', 'approved_at' => now()]);
 
@@ -355,6 +367,10 @@ class ProductionController extends Controller
 
         $deliverable = Deliverable::whereHas('project', fn($p) => $p->whereIn('id', $this->visibleProjectIds()))
             ->findOrFail($id);
+
+        if ($deliverable->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
 
         // QA Failed / Revision Required requires a reason when it drives a
         // linked task's status — a project-level deliverable (no task_id)

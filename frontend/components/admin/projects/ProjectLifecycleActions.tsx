@@ -7,6 +7,13 @@ interface LifecycleService {
   completionStatus: (id: number) => Promise<CompletionStatus>;
   activate: (id: number) => Promise<Project>;
   complete: (id: number) => Promise<Project>;
+  // Project Approval Lock — approveCompletion() moves 'completed' to
+  // 'approved_locked' (Admin only); requestReopen() is a PM's only door out
+  // of that lock, reopen() below is Admin's (see Api\Admin\
+  // ProjectController::approveCompletion()/reopen() and Api\User\
+  // ProjectController::requestReopen()).
+  approveCompletion?: (id: number) => Promise<Project>;
+  requestReopen?: (id: number, reason: string) => Promise<Project>;
   submitDelivery?: (id: number, file: File) => Promise<Project>;
   // Two-step review: approveDelivery() is the internal sign-off (no client
   // contact), deliverToClient() is the actual send — see
@@ -33,6 +40,14 @@ interface Props {
   // canActivateProjects — gates the draft → active transition. A sub-user
   // without it never even sees a draft project (see visibleProjects()).
   canActivate: boolean;
+  // Admin page passes canApproveCompletion=true (structurally unrestricted,
+  // same as canComplete/canClose/canReopen). PM page passes canRequestReopen
+  // from its own canReopenProjects flag — reused rather than a new
+  // permission key, since requesting is just the other half of reopening.
+  canApproveCompletion?: boolean;
+  canRequestReopen?: boolean;
+  reopenRequestedAt?: string | null;
+  reopenRequestReason?: string | null;
   canSubmitDelivery?: boolean;
   canApproveDelivery?: boolean;
   // Company Admin's own direct upload — no Project Manager involved, skips
@@ -82,9 +97,10 @@ function BlockerGroup({ title, items, render }: { title: string; items: { id: nu
 
 export default function ProjectLifecycleActions({
   projectId, status, service, canComplete, canClose, canReopen, canForceClose, canActivate,
+  canApproveCompletion = false, canRequestReopen = false, reopenRequestedAt, reopenRequestReason,
   canSubmitDelivery = false, canApproveDelivery = false, canUploadAndDeliver = false, deliveryStatus, deliveryFileName, onUpdated,
 }: Props) {
-  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | 'submitDelivery' | 'uploadDeliver' | null>(null);
+  const [mode, setMode] = useState<'complete' | 'close' | 'reopen' | 'requestReopen' | 'submitDelivery' | 'uploadDeliver' | null>(null);
   const [loadingCheck, setLoadingCheck] = useState(false);
   const [checklist, setChecklist] = useState<CompletionStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -122,6 +138,13 @@ export default function ProjectLifecycleActions({
 
   const openReopen = () => {
     setMode('reopen');
+    // Prefill with the PM's own stated reason when this is actually
+    // approving a pending request — still editable before submitting.
+    setReopenReason(reopenRequestReason ?? '');
+  };
+
+  const openRequestReopen = () => {
+    setMode('requestReopen');
     setReopenReason('');
   };
 
@@ -149,6 +172,35 @@ export default function ProjectLifecycleActions({
       close();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to complete project');
+    } finally { setSubmitting(false); }
+  };
+
+  // No modal needed — nothing to collect, just a confirmation, same as the
+  // existing activate/delivery-approve one-click actions.
+  const submitApproveCompletion = async () => {
+    if (!service.approveCompletion) { toast.error('Approve & Lock is not available'); return; }
+    if (!confirm('Approve this project and lock it? The Project Manager will not be able to edit it until an Admin reopens it.')) return;
+    setSubmitting(true);
+    try {
+      const updated = await service.approveCompletion(projectId);
+      toast.success('Project approved and locked');
+      onUpdated(updated);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to approve project');
+    } finally { setSubmitting(false); }
+  };
+
+  const submitRequestReopen = async () => {
+    if (!service.requestReopen) { toast.error('Requesting a reopen is not available'); return; }
+    if (!reopenReason.trim()) { toast.error('A reason is required to request a reopen.'); return; }
+    setSubmitting(true);
+    try {
+      const updated = await service.requestReopen(projectId, reopenReason.trim());
+      toast.success('Reopen requested — an Admin will review it');
+      onUpdated(updated);
+      close();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to request reopen');
     } finally { setSubmitting(false); }
   };
 
@@ -280,17 +332,40 @@ export default function ProjectLifecycleActions({
         </button>
       )) : (
       <>
-      {!isTerminal && canComplete && (
+      {/* isTerminal deliberately excludes 'approved_locked' (see its
+          declaration) so the existing Reopen button below doesn't leak into
+          that status for a PM — but that means it alone can't hide Mark as
+          Complete here, so approved_locked needs its own explicit check. */}
+      {!isTerminal && status !== 'approved_locked' && canComplete && (
         <button onClick={openComplete} style={btn('#059669', '#fff')}>Mark as Complete</button>
       )}
-      {status === 'completed' && canClose && (
+      {(status === 'completed' || status === 'approved_locked') && canClose && (
         <button onClick={openClose} style={btn('#475569', '#fff')}>Close Project</button>
       )}
-      {status !== 'completed' && status !== 'closed' && canForceClose && (
+      {status !== 'completed' && status !== 'approved_locked' && status !== 'closed' && canForceClose && (
         <button onClick={openClose} style={secondaryBtn}>Force Close</button>
       )}
       {isTerminal && canReopen && (
         <button onClick={openReopen} style={btn('#2563eb', '#fff')}>Reopen Project</button>
+      )}
+      {status === 'completed' && canApproveCompletion && service.approveCompletion && (
+        <button onClick={submitApproveCompletion} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#7c3aed', '#fff')}>
+          {submitting ? 'Approving…' : 'Approve & Lock Project'}
+        </button>
+      )}
+      {/* Locked: only Admin can actually reopen it (reused Reopen Project
+          modal/action below, now also reachable from this status) — a PM
+          can only ask, via requestReopen(). */}
+      {status === 'approved_locked' && canApproveCompletion && canReopen && (
+        <button onClick={openReopen} style={btn('#2563eb', '#fff')}>
+          {reopenRequestedAt ? 'Approve Reopen Request' : 'Reopen Project'}
+        </button>
+      )}
+      {status === 'approved_locked' && !canApproveCompletion && canRequestReopen && service.requestReopen && !reopenRequestedAt && (
+        <button onClick={openRequestReopen} style={btn('#2563eb', '#fff')}>Request Reopen</button>
+      )}
+      {status === 'approved_locked' && !canApproveCompletion && !!reopenRequestedAt && (
+        <span style={{ ...secondaryBtn, cursor: 'default' }}>Reopen requested — awaiting admin approval</span>
       )}
       {status === 'completed' && canSubmitDelivery && service.submitDelivery && deliveryStatus !== 'delivered_to_client' && (
         <button onClick={openSubmitDelivery} style={btn(deliveryStatus === 'pending_admin_review' ? '#7c3aed' : '#0d9488', '#fff')}>
@@ -359,12 +434,12 @@ export default function ProjectLifecycleActions({
         <div style={overlay} onClick={close}>
           <div style={modalCard} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Close Project</h3>
-            {status !== 'completed' && (
+            {status !== 'completed' && status !== 'approved_locked' && (
               <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
                 This project is not yet Completed. {canForceClose ? 'You can force-close it below with a reason.' : 'It must be marked Completed before it can be closed.'}
               </div>
             )}
-            {status !== 'completed' && canForceClose && (
+            {status !== 'completed' && status !== 'approved_locked' && canForceClose && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
                 <input type="checkbox" checked={closeForce} onChange={e => setCloseForce(e.target.checked)} />
                 Force close anyway
@@ -382,10 +457,10 @@ export default function ProjectLifecycleActions({
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={close} style={secondaryBtn}>Cancel</button>
-              <button onClick={submitClose} disabled={submitting || (status !== 'completed' && !closeForce)} style={{
+              <button onClick={submitClose} disabled={submitting || (status !== 'completed' && status !== 'approved_locked' && !closeForce)} style={{
                 ...btn('#475569', '#fff'),
-                opacity: (submitting || (status !== 'completed' && !closeForce)) ? 0.5 : 1,
-                cursor: (submitting || (status !== 'completed' && !closeForce)) ? 'not-allowed' : 'pointer',
+                opacity: (submitting || (status !== 'completed' && status !== 'approved_locked' && !closeForce)) ? 0.5 : 1,
+                cursor: (submitting || (status !== 'completed' && status !== 'approved_locked' && !closeForce)) ? 'not-allowed' : 'pointer',
               }}>{submitting ? 'Closing…' : 'Confirm Close'}</button>
             </div>
           </div>
@@ -445,7 +520,14 @@ export default function ProjectLifecycleActions({
       {mode === 'reopen' && (
         <div style={overlay} onClick={close}>
           <div style={modalCard} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Reopen Project</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>
+              {reopenRequestedAt ? 'Approve Reopen Request' : 'Reopen Project'}
+            </h3>
+            {reopenRequestedAt && (
+              <div style={{ fontSize: 12, color: '#5b21b6', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+                The Project Manager requested this reopen: {reopenRequestReason}
+              </div>
+            )}
             <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>This resets the project back to Active. A reason is required.</p>
             <div style={{ marginBottom: 16 }}>
               <label style={lbl}>Reason <span style={{ color: '#dc2626' }}>*</span></label>
@@ -458,6 +540,27 @@ export default function ProjectLifecycleActions({
                 opacity: (submitting || !reopenReason.trim()) ? 0.5 : 1,
                 cursor: (submitting || !reopenReason.trim()) ? 'not-allowed' : 'pointer',
               }}>{submitting ? 'Reopening…' : 'Confirm Reopen'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'requestReopen' && (
+        <div style={overlay} onClick={close}>
+          <div style={modalCard} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Request Reopen</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>This project is locked. Explain why it needs to be reopened — an Admin will review your request.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Reason <span style={{ color: '#dc2626' }}>*</span></label>
+              <textarea value={reopenReason} onChange={e => setReopenReason(e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Why does this project need to be reopened?" />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={close} style={secondaryBtn}>Cancel</button>
+              <button onClick={submitRequestReopen} disabled={submitting || !reopenReason.trim()} style={{
+                ...btn('#2563eb', '#fff'),
+                opacity: (submitting || !reopenReason.trim()) ? 0.5 : 1,
+                cursor: (submitting || !reopenReason.trim()) ? 'not-allowed' : 'pointer',
+              }}>{submitting ? 'Requesting…' : 'Submit Request'}</button>
             </div>
           </div>
         </div>

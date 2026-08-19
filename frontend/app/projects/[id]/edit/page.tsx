@@ -314,10 +314,10 @@ export default function UserEditProjectPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-            <button type="submit" disabled={saving || project.status === 'closed'} style={{
-              padding: '11px 28px', background: saving || project.status === 'closed' ? '#93c5fd' : '#2563eb',
+            <button type="submit" disabled={saving || ['closed', 'approved_locked'].includes(project.status)} style={{
+              padding: '11px 28px', background: saving || ['closed', 'approved_locked'].includes(project.status) ? '#93c5fd' : '#2563eb',
               color: '#fff', border: 'none', borderRadius: 8,
-              fontSize: 14, fontWeight: 600, cursor: saving || project.status === 'closed' ? 'not-allowed' : 'pointer',
+              fontSize: 14, fontWeight: 600, cursor: saving || ['closed', 'approved_locked'].includes(project.status) ? 'not-allowed' : 'pointer',
             }}>{saving ? 'Saving...' : 'Save Changes'}</button>
             <button type="button" onClick={() => router.push(`/projects/${projectId}`)} style={{
               padding: '11px 22px', background: '#fff', color: '#64748b',

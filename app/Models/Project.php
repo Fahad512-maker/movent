@@ -24,6 +24,8 @@ class Project extends Model
         'completed_by', 'completed_by_admin_id',
         'closed_at', 'closed_by', 'closed_by_admin_id', 'close_reason',
         'reopened_at', 'reopened_by', 'reopened_by_admin_id', 'reopen_reason',
+        'completion_approved_at', 'completion_approved_by_admin_id',
+        'reopen_requested_at', 'reopen_requested_by', 'reopen_request_reason',
         'delivery_status', 'delivery_file_path', 'delivery_file_name', 'delivery_file_type', 'delivery_file_size',
         'delivery_submitted_at', 'delivery_submitted_by', 'delivery_approved_at', 'delivery_approved_by_admin_id',
     ];
@@ -38,6 +40,8 @@ class Project extends Model
         'seller_assigned_at' => 'datetime',
         'delivery_submitted_at' => 'datetime',
         'delivery_approved_at' => 'datetime',
+        'completion_approved_at' => 'datetime',
+        'reopen_requested_at' => 'datetime',
     ];
 
     // Statuses that mean "not real work yet" — a 'draft' is the name-only stub
@@ -72,6 +76,20 @@ class Project extends Model
     // One wording for every guard, so a draft explains itself the same way
     // wherever the user runs into it.
     public const DRAFT_BLOCKED_MESSAGE = 'This project is still a draft. Activate it first — tasks, timesheets, files, comments and chat all open up once it is active.';
+
+    // 'closed' is the pre-existing terminal/archival state; 'approved_locked'
+    // is the new one reached via Api\Admin\ProjectController::
+    // approveCompletion() once Admin signs off on a 'completed' project. Both
+    // are equally read-only for every mutation guarded here — viewing, chat
+    // and comments stay open regardless (see the Project Approval Lock
+    // feature notes). Only Admin can lift either one (reopen()); a PM can
+    // only request it (requestReopen()).
+    public function isLocked(): bool
+    {
+        return in_array($this->status, ['closed', 'approved_locked'], true);
+    }
+
+    public const LOCKED_MESSAGE = 'This project is locked. Ask an Admin to reopen it before making changes.';
 
     public function company(): BelongsTo
     {
@@ -174,6 +192,16 @@ class Project extends Model
     public function deliveryApprovedByAdmin(): BelongsTo
     {
         return $this->belongsTo(CompanyAdmin::class, 'delivery_approved_by_admin_id');
+    }
+
+    public function completionApprovedByAdmin(): BelongsTo
+    {
+        return $this->belongsTo(CompanyAdmin::class, 'completion_approved_by_admin_id');
+    }
+
+    public function reopenRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reopen_requested_by');
     }
 
     public function tasks(): HasMany

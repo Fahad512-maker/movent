@@ -128,6 +128,10 @@ class ProjectAttachmentController extends Controller
             return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
         }
 
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
+
         // Upload (and the visibility it grants over a file) is Admin/PM
         // territory — hard-restricted to this project's actual assigned PM,
         // regardless of who else was left holding canUploadProjectAttachments
@@ -221,6 +225,10 @@ class ProjectAttachmentController extends Controller
         }
 
         $project = $this->visibleProject($projectId);
+
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
 
         $attachment = ProjectAttachment::where('project_id', $project->id)->findOrFail($id);
         Storage::delete($attachment->file_path);

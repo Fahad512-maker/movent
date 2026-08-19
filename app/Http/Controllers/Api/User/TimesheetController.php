@@ -66,6 +66,10 @@ class TimesheetController extends Controller
             return ApiResponse::error(Project::DRAFT_BLOCKED_MESSAGE, 422);
         }
 
+        if ($task->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
+
         $validated['user_id'] = $user->id;
         $validated['status']  = 'pending';
 
@@ -84,7 +88,12 @@ class TimesheetController extends Controller
         $validated = $request->validate(['status' => ['required', 'in:approved,rejected']]);
 
         $timesheet = Timesheet::whereHas('task.project', fn($p) => $p->where('company_id', $user->company_id))
+            ->with('task.project:id,status')
             ->findOrFail($id);
+
+        if ($timesheet->task?->project?->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
+        }
 
         $timesheet->update(['status' => $validated['status'], 'approved_by' => $user->id]);
 

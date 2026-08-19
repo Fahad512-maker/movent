@@ -345,12 +345,14 @@ export default function ProjectOverviewPage() {
           projectId={Number(id)}
           status={project.status}
           service={adminProjectService}
-          canComplete canClose canReopen canForceClose canActivate
+          canComplete canClose canReopen canForceClose canActivate canApproveCompletion
+          reopenRequestedAt={project.reopen_requested_at}
+          reopenRequestReason={project.reopen_request_reason}
           deliveryStatus={project.delivery_status}
           deliveryFileName={project.delivery_file_name}
           onUpdated={updated => setProject(updated)}
         />
-        {project.status !== 'closed' && (
+        {!['closed', 'approved_locked'].includes(project.status) && (
           <button onClick={() => router.push(`/admin/projects/${id}/edit`)} style={{
             padding: '8px 16px', background: '#fff', color: '#2563eb', border: '1px solid #bfdbfe',
             borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',

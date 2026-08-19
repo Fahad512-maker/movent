@@ -812,6 +812,8 @@ class ProjectController extends Controller
             'createdByAdmin:id,name',
             'deliverySubmittedBy:id,name',
             'deliveryApprovedByAdmin:id,name',
+            'completionApprovedByAdmin:id,name',
+            'reopenRequestedBy:id,name',
             'teamMembers.user:id,name,role_type,custom_role_label',
             'folders' => fn($q) => $q->whereNull('parent_folder_id'),
         ]);
@@ -951,8 +953,8 @@ class ProjectController extends Controller
 
         // Closed is a terminal, read-only state — only reopen() can move a
         // project out of it.
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $validated = $request->validate([
@@ -1037,8 +1039,8 @@ class ProjectController extends Controller
 
         $project = $this->visibleProjects()->findOrFail($id);
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $validated = $request->validate([
@@ -1079,8 +1081,8 @@ class ProjectController extends Controller
             return ApiResponse::error('Only this project\'s Seller can assign a Project Manager.', 403);
         }
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $validated = $request->validate([
@@ -1193,8 +1195,8 @@ class ProjectController extends Controller
 
         $project = $this->visibleProjects()->findOrFail($id);
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         // Team members must be real, existing users of this staff member's
@@ -1337,8 +1339,8 @@ class ProjectController extends Controller
 
         $project = $this->visibleProjects()->findOrFail($id);
 
-        if ($project->status === 'closed') {
-            return ApiResponse::error('This project is closed and read-only. Reopen it first to make changes.', 422);
+        if ($project->isLocked()) {
+            return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
         $removedUserId = $project->teamMembers()->where('id', $memberId)->value('user_id');
@@ -1442,7 +1444,7 @@ class ProjectController extends Controller
             return ApiResponse::error("Activate this project before completing it — it is currently {$project->status}.", 422);
         }
 
-        if (in_array($project->status, ['completed', 'closed'])) {
+        if (in_array($project->status, ['completed', 'approved_locked', 'closed'])) {
             return ApiResponse::error("Project is already {$project->status}.", 422);
         }
 
@@ -1495,7 +1497,7 @@ class ProjectController extends Controller
             return ApiResponse::error('Project is already closed.', 422);
         }
 
-        if ($project->status !== 'completed' && !$force) {
+        if (!in_array($project->status, ['completed', 'approved_locked']) && !$force) {
             $project->logActivity('close_blocked', "Close attempted by {$user->name} but project is not yet Completed.", $user->name);
             return ApiResponse::error('Project must be Completed before it can be closed. Use Force Close to close anyway.', 422);
         }
@@ -1509,10 +1511,13 @@ class ProjectController extends Controller
         }
 
         $project->update([
-            'status'       => 'closed',
-            'closed_at'    => now(),
-            'closed_by'    => $user->id,
-            'close_reason' => $validated['reason'] ?? null,
+            'status'                => 'closed',
+            'closed_at'             => now(),
+            'closed_by'             => $user->id,
+            'close_reason'          => $validated['reason'] ?? null,
+            'reopen_requested_at'   => null,
+            'reopen_requested_by'   => null,
+            'reopen_request_reason' => null,
         ]);
 
         $project->logActivity(
@@ -1564,6 +1569,57 @@ class ProjectController extends Controller
         $this->notifyLifecycle($project, 'project_reopened', 'Project reopened', "\"{$project->name}\" was reopened by {$user->name}. Reason: {$validated['reason']}");
 
         return ApiResponse::success($this->presentProject($project->fresh()), 'Project reopened');
+    }
+
+    // A PM can only ask — reopen() above still requires status in
+    // ['completed','closed'], which structurally excludes 'approved_locked',
+    // so this is the only door out of a lock for anyone but Admin. Reuses
+    // canReopenProjects rather than a new permission key, since it's the
+    // same underlying capability just split into request/approve halves —
+    // mirrors submitDelivery() -> Api\Admin\ProjectController::
+    // approveDelivery()/deliverToClient()'s submit/approve shape.
+    public function requestReopen(Request $request, int $id): JsonResponse
+    {
+        if (!$this->can('canReopenProjects')) {
+            return ApiResponse::error('Permission denied', 403);
+        }
+
+        $project = $this->visibleProjects()->findOrFail($id);
+        $user = $this->user();
+
+        if ($project->status !== 'approved_locked') {
+            return ApiResponse::error('Only a locked project can have its reopen requested.', 422);
+        }
+
+        if ($project->reopen_requested_at) {
+            return ApiResponse::error('A reopen request is already pending admin approval.', 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $project->update([
+            'reopen_requested_at'   => now(),
+            'reopen_requested_by'   => $user->id,
+            'reopen_request_reason' => $validated['reason'],
+        ]);
+
+        $project->logActivity('reopen_requested', "{$user->name} requested this project be reopened. Reason: {$validated['reason']}", $user->name);
+        $this->logActivity($project->company_id, 'reopen_requested', 'Project', $project->id);
+
+        NotificationService::notifyCompanyAdmins($project->company_id, null, [
+            'actor_user_id' => $user->id,
+            'module'        => 'project_management',
+            'type'          => 'project_reopen_requested',
+            'title'         => 'Reopen requested',
+            'message'       => "{$user->name} requested \"{$project->name}\" be reopened. Reason: {$validated['reason']}",
+            'entity_type'   => 'Project',
+            'entity_id'     => $project->id,
+            'url'           => "/admin/projects/{$project->id}",
+        ]);
+
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Reopen requested — an Admin will review it');
     }
 
     // Mirrors Api\Admin\ProjectController::activity() exactly (SystemAuditLog

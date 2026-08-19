@@ -5,7 +5,7 @@ import api from '@/lib/axios';
 // a qualifying payment lands (App\Services\PaymentProjectStartService) — and
 // 'draft' is only ever left via the activate endpoint. Both are deliberately
 // absent from the create/update status whitelists.
-export type ProjectStatus = 'unpaid' | 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'cancelled' | 'closed';
+export type ProjectStatus = 'unpaid' | 'draft' | 'planning' | 'active' | 'on_hold' | 'blocked' | 'completed' | 'approved_locked' | 'cancelled' | 'closed';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
   | 'todo' | 'in_progress' | 'blocked' | 'ready_for_production' | 'in_production'
@@ -71,6 +71,15 @@ export interface Project {
   close_reason?: string | null;
   reopened_at?: string | null;
   reopen_reason?: string | null;
+  // Project Approval Lock — set by Api\Admin\ProjectController::
+  // approveCompletion() (status -> 'approved_locked') and requestReopen()/
+  // reopen() (see ProjectLifecycleActions.tsx's Approve & Lock / Request
+  // Reopen / Reopen Project buttons).
+  completion_approved_at?: string | null;
+  completion_approved_by_admin?: { id: number; name: string } | null;
+  reopen_requested_at?: string | null;
+  reopen_requested_by?: { id: number; name: string } | null;
+  reopen_request_reason?: string | null;
   delivery_status?: 'pending_admin_review' | 'approved' | 'delivered_to_client' | null;
   delivery_file_name?: string | null;
   delivery_file_type?: string | null;
@@ -493,6 +502,15 @@ export const adminProjectService = {
 
   complete: async (id: number): Promise<Project> => {
     const res = await api.post(`/admin/projects/${id}/complete`);
+    return res.data.data;
+  },
+
+  // Project Approval Lock — moves a 'completed' project to
+  // 'approved_locked'. From here PM edits (details/tasks/timesheets/
+  // deliverables/attachments) are blocked; only reopen() below (or a PM's
+  // requestReopen(), see userProjectService) can lift it.
+  approveCompletion: async (id: number): Promise<Project> => {
+    const res = await api.post(`/admin/projects/${id}/approve-completion`);
     return res.data.data;
   },
 

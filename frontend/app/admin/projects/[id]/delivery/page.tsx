@@ -50,7 +50,9 @@ export default function ProjectDeliveryPage() {
   useEffect(() => { load(); loadHistory(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDraft = project?.status === 'draft' || project?.status === 'unpaid';
-  const canDeliver = project?.status === 'completed';
+  // 'approved_locked' (Project Approval Lock) still needs to be deliverable
+  // by Admin — locking only freezes PM edits, not Admin's own delivery flow.
+  const canDeliver = project?.status === 'completed' || project?.status === 'approved_locked';
   // Two-step review: a PM submission sits in 'pending_admin_review' until
   // Admin approves it (no client contact yet), then 'approved' until Admin
   // explicitly sends it on — see deliverToClient() on the backend.
