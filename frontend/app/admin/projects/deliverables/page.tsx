@@ -100,12 +100,18 @@ export default function DeliverablesPage() {
   const selectedProject = projects.find(p => String(p.id) === projectId);
   const pendingProjectDeliveries = projects.filter(p => p.delivery_status === 'pending_admin_review');
 
+  // This button only ever shows for a client with real portal access (see
+  // the render gating below), so there's no guest email step to collect —
+  // safe to chain both backend steps (internal approve, then send) as one
+  // click here, unlike the per-project Delivery tab which shows them
+  // separately (see /admin/projects/[id]/delivery).
   const approveProjectDelivery = async (project = selectedProject) => {
     if (!project) return;
     if (!confirm('Approve this project delivery and send it to the client?')) return;
     setApprovingDelivery(true);
     try {
-      const updated = await adminProjectService.approveDelivery(project.id);
+      await adminProjectService.approveDelivery(project.id);
+      const updated = await adminProjectService.deliverToClient(project.id);
       setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
       if (String(project.id) === projectId) setProjectId(String(updated.id));
       toast.success('Project delivered to client');
@@ -360,9 +366,11 @@ export default function DeliverablesPage() {
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                 {selectedProject.delivery_status === 'pending_admin_review'
                   ? `Pending admin review${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
-                  : selectedProject.delivery_status === 'delivered_to_client'
-                    ? `Delivered to client${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
-                    : 'PM has not submitted final project delivery yet.'}
+                  : selectedProject.delivery_status === 'approved'
+                    ? `Approved, not yet sent to client${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                    : selectedProject.delivery_status === 'delivered_to_client'
+                      ? `Delivered to client${selectedProject.delivery_file_name ? `: ${selectedProject.delivery_file_name}` : ''}`
+                      : 'PM has not submitted final project delivery yet.'}
               </div>
             </div>
             {/* Stays available once delivered too — the backend endpoint
@@ -375,6 +383,17 @@ export default function DeliverablesPage() {
                 border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}>
                 Download PM Package
+              </button>
+            )}
+            {selectedProject.delivery_status === 'approved' && (
+              <button onClick={() => adminProjectService.deliverToClient(selectedProject.id).then(updated => {
+                setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+                toast.success('Project delivered to client');
+              }).catch((err: any) => toast.error(err?.response?.data?.message || 'Failed to deliver project'))} style={{
+                padding: '9px 18px', background: '#0d9488', color: '#fff',
+                border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>
+                Send to Client
               </button>
             )}
             {selectedProject.delivery_status === 'pending_admin_review' && (

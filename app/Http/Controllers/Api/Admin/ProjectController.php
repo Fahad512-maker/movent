@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Mail\ProjectDeliveredMail;
 use App\Models\CompanyUserAssignment;
 use App\Models\Notification;
 use App\Models\Project;
@@ -20,6 +21,8 @@ use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -348,7 +351,7 @@ class ProjectController extends Controller
     {
         $project->load([
             'client:id,name,email',
-            'invoice:id,invoice_number,total_amount,status',
+            'invoice:id,invoice_number,total_amount,status,customer_email',
             'invoices:id,invoice_number,total_amount,paid_amount,status,due_date,currency,project_id',
             'projectManager:id,name,role_type',
             'seller:id,name,email',
@@ -841,10 +844,14 @@ class ProjectController extends Controller
         return Storage::download($project->delivery_file_path, $project->delivery_file_name ?? "{$project->name}-delivery.zip");
     }
 
+    // Step 1 of 2 — Admin signs off on the PM's submitted package. This is a
+    // purely internal checkpoint: no client/guest is notified yet, and no
+    // email address is collected here. See deliverToClient() for step 2,
+    // which actually sends it on.
     public function approveDelivery(int $id): JsonResponse
     {
         $project = Project::whereIn('company_id', $this->companyIds())
-            ->with(['client:id,name,user_id,portal_access', 'deliverySubmittedBy:id,name'])
+            ->with('deliverySubmittedBy:id,name')
             ->findOrFail($id);
 
         if ($project->status !== 'completed') {
@@ -855,36 +862,17 @@ class ProjectController extends Controller
             return ApiResponse::error('No project delivery is pending admin review.', 422);
         }
 
-        // A client-linked project needs a real portal to deliver into. A guest
-        // project (no client_id at all — e.g. a "New Project" invoice paid
-        // by someone with no Client record) has no portal, but does have the
-        // public payment-link page (Api\PublicInvoiceController) as its
-        // delivery channel instead — see downloadDelivery() there.
-        if ($project->client_id && (!$project->client?->portal_access || !$project->client?->user_id)) {
-            return ApiResponse::error('Enable client portal access before sending this delivery.', 422);
-        }
-
         if (!Storage::exists($project->delivery_file_path)) {
             return ApiResponse::error('The submitted delivery file is missing from storage.', 422);
         }
 
         $project->update([
-            'delivery_status'               => 'delivered_to_client',
+            'delivery_status'               => 'approved',
             'delivery_approved_at'          => now(),
             'delivery_approved_by_admin_id' => $this->admin()->id,
         ]);
 
-        ProjectDeliverySubmission::create([
-            'project_id'            => $project->id,
-            'file_path'             => $project->delivery_file_path,
-            'file_name'             => $project->delivery_file_name,
-            'file_type'             => $project->delivery_file_type,
-            'file_size'             => $project->delivery_file_size,
-            'delivered_by_admin_id' => $this->admin()->id,
-            'delivered_at'          => now(),
-        ]);
-
-        $project->logActivity('project_delivery_approved', "{$this->adminName()} approved the final project package and delivered it to the client.", $this->adminName(), [
+        $project->logActivity('project_delivery_approved', "{$this->adminName()} approved the final project package. It's ready to send to the client.", $this->adminName(), [
             'file_name' => $project->delivery_file_name,
         ]);
 
@@ -902,13 +890,69 @@ class ProjectController extends Controller
                 'actor_admin_id'     => $this->admin()->id,
                 'module'             => 'project_management',
                 'type'               => 'project_delivery_approved',
-                'title'              => 'Project delivered to client',
-                'message'            => "\"{$project->name}\" was approved and delivered to the client.",
+                'title'              => 'Project delivery approved',
+                'message'            => "\"{$project->name}\" was approved by {$this->adminName()} and will be sent to the client.",
                 'entity_type'        => 'Project',
                 'entity_id'          => $project->id,
                 'url'                => "/projects/{$project->id}",
             ]);
         }
+
+        return ApiResponse::success($this->presentProject($project->fresh()), 'Delivery approved — ready to send to the client');
+    }
+
+    // Step 2 of 2 — Admin actually sends the approved package on to the
+    // client, once approveDelivery() above has already run. Only now does a
+    // client-linked project need a real portal (checked below), and only now
+    // does a guest project (no client_id — e.g. a "New Project" invoice paid
+    // by someone with no Client record) need the email address collected on
+    // the Delivery page, sent via emailGuestDelivery() below.
+    public function deliverToClient(Request $request, int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())
+            ->with(['client:id,name,user_id,portal_access'])
+            ->findOrFail($id);
+
+        if ($project->delivery_status !== 'approved' || !$project->delivery_file_path) {
+            return ApiResponse::error('This delivery has not been approved yet.', 422);
+        }
+
+        if ($project->client_id && (!$project->client?->portal_access || !$project->client?->user_id)) {
+            return ApiResponse::error('Enable client portal access before sending this delivery.', 422);
+        }
+
+        $validated = $project->client_id ? [] : $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        if (!Storage::exists($project->delivery_file_path)) {
+            return ApiResponse::error('The delivery file is missing from storage.', 422);
+        }
+
+        $project->update([
+            'delivery_status' => 'delivered_to_client',
+        ]);
+
+        ProjectDeliverySubmission::create([
+            'project_id'            => $project->id,
+            'file_path'             => $project->delivery_file_path,
+            'file_name'             => $project->delivery_file_name,
+            'file_type'             => $project->delivery_file_type,
+            'file_size'             => $project->delivery_file_size,
+            'delivered_by_admin_id' => $this->admin()->id,
+            'delivered_at'          => now(),
+        ]);
+
+        $project->logActivity('project_delivered_to_client', "{$this->adminName()} sent the final project package to the client.", $this->adminName(), [
+            'file_name' => $project->delivery_file_name,
+        ]);
+
+        SystemAuditLog::create([
+            'company_id' => $project->company_id, 'user_id' => null,
+            'action' => 'project_delivered_to_client', 'module_key' => 'project_management',
+            'entity_type' => 'Project', 'entity_id' => $project->id,
+            'new_values' => ['file_name' => $project->delivery_file_name],
+        ]);
 
         if ($project->client?->user_id) {
             Notification::create([
@@ -930,9 +974,13 @@ class ProjectController extends Controller
             'company_id'      => $project->company_id,
             'project_id'      => $project->id,
             'author_admin_id' => $this->admin()->id,
-            'body'            => "Final project package approved and delivered to the client.",
+            'body'            => "Final project package delivered to the client.",
             'visibility'      => 'client',
         ]);
+
+        if (!$project->client_id) {
+            $this->emailGuestDelivery($project, $validated['email']);
+        }
 
         return ApiResponse::success($this->presentProject($project->fresh()), 'Project delivered to client');
     }
@@ -958,7 +1006,8 @@ class ProjectController extends Controller
         }
 
         $validated = $request->validate([
-            'file' => ['required', 'file', 'mimes:' . self::DELIVERY_MIMES, 'max:' . self::DELIVERY_MAX_KB],
+            'file'  => ['required', 'file', 'mimes:' . self::DELIVERY_MIMES, 'max:' . self::DELIVERY_MAX_KB],
+            'email' => [$project->client_id ? 'nullable' : 'required', 'email'],
         ]);
 
         $file = $validated['file'];
@@ -1025,7 +1074,69 @@ class ProjectController extends Controller
             'visibility'      => 'client',
         ]);
 
+        if (!$project->client_id) {
+            $this->emailGuestDelivery($project, $validated['email']);
+        }
+
         return ApiResponse::success($this->presentProject($project->fresh()), 'Project delivered to client');
+    }
+
+    // A guest project's only delivery channel is the public payment-link
+    // page (Api\PublicInvoiceController::downloadDelivery(), keyed off the
+    // invoice's payment_token) — this emails that link to the address the
+    // admin entered on the Delivery page. A failed/missing send must never
+    // fail the delivery itself, since the file is already stored either way.
+    // A guest email larger than this rides a real risk of bouncing off the
+    // recipient's own inbound limit (Gmail/Outlook cap around 20-25MB) on
+    // top of whatever the sending relay allows — better to fail loud in the
+    // log than send-and-silently-bounce.
+    private const MAX_EMAIL_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+    private function emailGuestDelivery(Project $project, string $email): void
+    {
+        $companyName = \App\Models\Company::find($project->company_id)?->invoicingProfile()['name'] ?? config('app.name');
+        $invoice = $project->invoice;
+
+        try {
+            // Preferred path — this project was paid through a public
+            // payment link, so its invoice already carries (or can carry) a
+            // payment_token, and the client's own pay page can show the
+            // Download button (Api\PublicInvoiceController::downloadDelivery()).
+            if ($invoice) {
+                if (!$invoice->payment_token || ($invoice->token_expires_at && $invoice->token_expires_at->isPast())) {
+                    $invoice->generatePublicToken(90);
+                    $invoice->refresh();
+                }
+
+                $downloadUrl = config('app.frontend_url') . '/pay/invoice/' . $invoice->payment_token;
+                Mail::to($email)->send(new ProjectDeliveredMail($project, $downloadUrl, $companyName));
+                return;
+            }
+
+            // No invoice at all (e.g. a project created without ever going
+            // through the payment-link flow) — there is no portal and no
+            // pay page to link to, so the only channel left is attaching
+            // the file straight to the email.
+            if (!$project->delivery_file_path || !Storage::exists($project->delivery_file_path)) {
+                Log::warning('Cannot email guest delivery — no invoice to link to and no delivery file to attach', ['project_id' => $project->id]);
+                return;
+            }
+
+            if (($project->delivery_file_size ?? 0) > self::MAX_EMAIL_ATTACHMENT_BYTES) {
+                Log::warning('Cannot email guest delivery — no invoice to link to and the file is too large to attach', ['project_id' => $project->id, 'file_size' => $project->delivery_file_size]);
+                return;
+            }
+
+            Mail::to($email)->send(
+                (new ProjectDeliveredMail($project, null, $companyName))
+                    ->attach(Storage::path($project->delivery_file_path), array_filter([
+                        'as'   => $project->delivery_file_name,
+                        'mime' => $project->delivery_file_type,
+                    ]))
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send ProjectDeliveredMail: ' . $e->getMessage(), ['project_id' => $project->id]);
+        }
     }
 
     // GET /admin/projects/{id}/deliveries — full history of every time this

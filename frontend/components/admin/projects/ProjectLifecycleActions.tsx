@@ -8,7 +8,11 @@ interface LifecycleService {
   activate: (id: number) => Promise<Project>;
   complete: (id: number) => Promise<Project>;
   submitDelivery?: (id: number, file: File) => Promise<Project>;
+  // Two-step review: approveDelivery() is the internal sign-off (no client
+  // contact), deliverToClient() is the actual send — see
+  // Api\Admin\ProjectController's methods of the same names.
   approveDelivery?: (id: number) => Promise<Project>;
+  deliverToClient?: (id: number, email?: string) => Promise<Project>;
   uploadAndDeliver?: (id: number, file: File) => Promise<Project>;
   downloadDelivery?: (id: number, fileName: string) => Promise<void>;
   close: (id: number, payload?: { force?: boolean; reason?: string; confirm_unpaid_invoice?: boolean }) => Promise<Project>;
@@ -186,16 +190,31 @@ export default function ProjectLifecycleActions({
     } finally { setSubmitting(false); }
   };
 
+  // Step 1 of 2 — internal sign-off only, the client hears nothing yet.
   const approveDelivery = async () => {
     if (!service.approveDelivery) { toast.error('Delivery approval is not available'); return; }
-    if (!confirm('Approve this delivery and make it available to the client?')) return;
+    if (!confirm('Approve this delivery? The client will not be notified yet.')) return;
     setSubmitting(true);
     try {
       const updated = await service.approveDelivery(projectId);
-      toast.success('Project delivered to client');
+      toast.success('Delivery approved — ready to send to the client');
       onUpdated(updated);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to approve project delivery');
+    } finally { setSubmitting(false); }
+  };
+
+  // Step 2 of 2 — actually sends the already-approved package on.
+  const deliverToClient = async () => {
+    if (!service.deliverToClient) { toast.error('Delivery is not available'); return; }
+    if (!confirm('Send this delivery to the client now?')) return;
+    setSubmitting(true);
+    try {
+      const updated = await service.deliverToClient(projectId);
+      toast.success('Project delivered to client');
+      onUpdated(updated);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to deliver project');
     } finally { setSubmitting(false); }
   };
 
@@ -287,15 +306,20 @@ export default function ProjectLifecycleActions({
         <button onClick={downloadDelivery} style={secondaryBtn}>Download PM Package</button>
       )}
       {status === 'completed' && canApproveDelivery && service.approveDelivery && deliveryStatus === 'pending_admin_review' && (
-        <button onClick={approveDelivery} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#0d9488', '#fff')}>
-          {submitting ? 'Approving…' : 'Approve & Deliver to Client'}
+        <button onClick={approveDelivery} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#7c3aed', '#fff')}>
+          {submitting ? 'Approving…' : 'Approve'}
+        </button>
+      )}
+      {status === 'completed' && canApproveDelivery && service.deliverToClient && deliveryStatus === 'approved' && (
+        <button onClick={deliverToClient} disabled={submitting} style={btn(submitting ? '#93c5fd' : '#0d9488', '#fff')}>
+          {submitting ? 'Sending…' : 'Send to Client'}
         </button>
       )}
       {/* Admin's own direct upload — no Project Manager to submit for review
-          first. Deliberately hidden while a PM submission is already
-          pending review, so Admin approves that one instead of silently
-          overwriting it with a fresh upload. */}
-      {status === 'completed' && canUploadAndDeliver && service.uploadAndDeliver && deliveryStatus !== 'delivered_to_client' && deliveryStatus !== 'pending_admin_review' && (
+          first. Deliberately hidden while a PM submission is still working
+          through approve/send, so Admin finishes that one instead of
+          silently overwriting it with a fresh upload. */}
+      {status === 'completed' && canUploadAndDeliver && service.uploadAndDeliver && deliveryStatus !== 'delivered_to_client' && deliveryStatus !== 'pending_admin_review' && deliveryStatus !== 'approved' && (
         <button onClick={openUploadDeliver} style={btn('#0d9488', '#fff')}>Upload &amp; Deliver</button>
       )}
       </>

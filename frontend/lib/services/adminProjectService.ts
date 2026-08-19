@@ -71,7 +71,7 @@ export interface Project {
   close_reason?: string | null;
   reopened_at?: string | null;
   reopen_reason?: string | null;
-  delivery_status?: 'pending_admin_review' | 'delivered_to_client' | null;
+  delivery_status?: 'pending_admin_review' | 'approved' | 'delivered_to_client' | null;
   delivery_file_name?: string | null;
   delivery_file_type?: string | null;
   delivery_file_size?: number | null;
@@ -87,7 +87,7 @@ export interface Project {
   my_role?: string;
   company?: { id: number; name: string } | null;
   client?: { id: number; name: string; email?: string; portal_access?: boolean; user_id?: number | null } | null;
-  invoice?: { id: number; invoice_number: string; total_amount: number; status: string } | null;
+  invoice?: { id: number; invoice_number: string; total_amount: number; status: string; customer_email?: string | null } | null;
   // Every invoice billed under this project (deposit/milestone/final/change
   // request) — distinct from the single `invoice` above (this project's
   // originating invoice). Only present when the viewer holds
@@ -496,16 +496,28 @@ export const adminProjectService = {
     return res.data.data;
   },
 
+  // Step 1 of 2 — internal sign-off on the PM's submission. Moves
+  // delivery_status from 'pending_admin_review' to 'approved'; the client
+  // hears nothing yet. See deliverToClient() for step 2.
   approveDelivery: async (id: number): Promise<Project> => {
     const res = await api.post(`/admin/projects/${id}/approve-delivery`);
     return res.data.data;
   },
 
+  // Step 2 of 2 — actually sends the approved package to the client. email
+  // is required when the project has no client_id (a guest/payment-link
+  // project) — that's the only address it can deliver to.
+  deliverToClient: async (id: number, email?: string): Promise<Project> => {
+    const res = await api.post(`/admin/projects/${id}/deliver-to-client`, email ? { email } : {});
+    return res.data.data;
+  },
+
   // Company Admin's own upload — no Project Manager to submit-for-review
   // first, goes straight to delivered_to_client.
-  uploadAndDeliver: async (id: number, file: File): Promise<Project> => {
+  uploadAndDeliver: async (id: number, file: File, email?: string): Promise<Project> => {
     const form = new FormData();
     form.append('file', file);
+    if (email) form.append('email', email);
     const res = await api.post(`/admin/projects/${id}/upload-and-deliver`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

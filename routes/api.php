@@ -441,6 +441,7 @@ Route::prefix('admin')->group(function () {
             Route::post('projects/{id}/complete',                   [AdminProjectController::class, 'complete']);
             Route::get('projects/{id}/delivery/download',           [AdminProjectController::class, 'downloadDelivery']);
             Route::post('projects/{id}/approve-delivery',           [AdminProjectController::class, 'approveDelivery']);
+            Route::post('projects/{id}/deliver-to-client',          [AdminProjectController::class, 'deliverToClient']);
             Route::post('projects/{id}/upload-and-deliver',         [AdminProjectController::class, 'uploadAndDeliver']);
             Route::get('projects/{id}/deliveries',                  [AdminProjectController::class, 'deliveryHistory']);
             Route::get('projects/{id}/deliveries/{deliveryId}/download', [AdminProjectController::class, 'downloadDeliverySubmission']);
