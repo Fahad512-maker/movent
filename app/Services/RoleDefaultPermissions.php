@@ -29,7 +29,13 @@ class RoleDefaultPermissions
             // canAssignProjectSeller/canActivateProjects/canForceCloseProjects.
             'project_management' => [
                 'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-                'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
+                // canManageProjectInvoices deliberately excluded (reverted
+                // 2026-08-19) — it is otherwise part of the pm_manage_projects
+                // bundle, but Company Admin does not want PM to have
+                // invoice-management ability by default; a stray backfill
+                // migration had force-granted it to every PM regardless of
+                // this list, see 2026_08_19_*_revoke_unintended_pm_invoice_permission.
+                'canCreateProjects', 'canCreateProjectHandoff', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
                 'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
                 'canOverrideTaskStatus',
                 'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',

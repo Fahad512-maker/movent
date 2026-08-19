@@ -448,6 +448,7 @@ Route::prefix('admin')->group(function () {
             Route::get('projects/{id}/deliveries/{deliveryId}/download', [AdminProjectController::class, 'downloadDeliverySubmission']);
             Route::post('projects/{id}/close',                      [AdminProjectController::class, 'close']);
             Route::post('projects/{id}/reopen',                     [AdminProjectController::class, 'reopen']);
+            Route::post('projects/{id}/invoices',                   [AdminProjectController::class, 'createInvoice']);
             Route::post('projects/{id}/invoices/link',              [AdminProjectController::class, 'linkInvoice']);
             Route::delete('projects/{id}/invoices/{invoiceId}',     [AdminProjectController::class, 'unlinkInvoice']);
 

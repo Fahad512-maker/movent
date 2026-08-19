@@ -97,9 +97,23 @@ class TaskStatusService
         $actorKey = $actor['type'] === 'admin' ? ['actor_admin_id' => $actor['id']] : ['actor_user_id' => $actor['id']];
         $actorAdminIdForCoAdmins = $actor['type'] === 'admin' ? $actor['id'] : null;
 
+        // The project manager gets notified on every status change,
+        // whatever the new status is — pointed at the project detail page
+        // (not the task sub-page) so they land on the full task list to
+        // review, rather than a single task. sendToMany() already self-skips
+        // when the actor IS the PM, so a PM changing their own task's
+        // status doesn't notify themselves.
+        if ($project->project_manager_id) {
+            NotificationService::sendToMany([['user_id' => $project->project_manager_id]], array_merge($common, $actorKey, [
+                'url'     => "/projects/{$project->id}",
+                'type'    => 'task_status_changed',
+                'title'   => 'Task status updated',
+                'message' => "Task '{$task->task_number} - {$task->title}' status changed to " . self::label($to) . '.',
+            ]));
+        }
+
         if ($to === 'ready_for_production') {
             $recipients = [];
-            if ($project->project_manager_id) $recipients[] = ['user_id' => $project->project_manager_id];
             // A specific Production/Deployment user handoff (optional) takes
             // priority; otherwise fall back to broadcasting to every
             // production_user-role team member on the project, as before.

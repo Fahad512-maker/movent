@@ -806,6 +806,7 @@ class ProjectController extends Controller
     {
         $project->load([
             'client:id,name,email',
+            'invoice:id,customer_email',
             'projectManager:id,name,role_type,custom_role_label',
             'seller:id,name,email',
             'createdBy:id,name',

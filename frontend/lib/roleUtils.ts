@@ -166,7 +166,9 @@ const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
     // canActivateProjects in ModuleCatalog.php.
     project_management: [
       'canViewProjectDashboard', 'canViewProjects', 'canViewLinkedProjects',
-      'canCreateProjects', 'canCreateProjectHandoff', 'canManageProjectInvoices', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
+      // canManageProjectInvoices deliberately excluded (reverted 2026-08-19)
+      // — see the matching comment in App\Services\RoleDefaultPermissions::MAP.
+      'canCreateProjects', 'canCreateProjectHandoff', 'canEditProjects', 'canCompleteProjects', 'canCloseProjects', 'canReopenProjects',
       'canViewTasks', 'canCreateTasks', 'canCreateLinkedProjectTask', 'canEditTasks', 'canAssignTasks',
       'canOverrideTaskStatus',
       'canViewTeamResources', 'canAssignTeamResources', 'canRequestPMAssignment',

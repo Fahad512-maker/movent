@@ -583,6 +583,18 @@ export const adminProjectService = {
     return res.data.data;
   },
 
+  createInvoice: async (id: number, payload: {
+    due_date?: string | null; currency?: string; tax_rate?: number; discount_amount?: number;
+    notes?: string | null; items: { description: string; quantity: number; unit_price: number }[];
+    // Required only when the project has no linked client — the invoice is
+    // always emailed immediately once created (see
+    // Api\Admin\ProjectController::createInvoice()).
+    recipient_email?: string;
+  }): Promise<{ id: number; invoice_number: string; payment_url?: string }> => {
+    const res = await api.post(`/admin/projects/${id}/invoices`, payload);
+    return res.data.data;
+  },
+
   linkInvoice: async (id: number, invoiceId: number): Promise<void> => {
     await api.post(`/admin/projects/${id}/invoices/link`, { invoice_id: invoiceId });
   },
