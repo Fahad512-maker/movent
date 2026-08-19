@@ -183,7 +183,6 @@ export default function UserProjectDetailPage() {
   // Invoices & billing
   const [invoiceBusy, setInvoiceBusy]     = useState(false);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
-  const [newInvDesc, setNewInvDesc]   = useState('');
   const [newInvAmount, setNewInvAmount] = useState('');
   const [newInvDueDate, setNewInvDueDate] = useState('');
   // Only asked for when the project has no linked client — otherwise the
@@ -211,7 +210,7 @@ export default function UserProjectDetailPage() {
 
   const handleCreateProjectInvoice = async () => {
     if (invoiceBusy) return; // Guards a double-click re-submit before the disabled prop re-renders.
-    if (!newInvDesc.trim() || !newInvAmount) { toast.error('Description and amount are required'); return; }
+    if (!newInvAmount) { toast.error('Amount is required'); return; }
     if (!project?.client && !newInvEmail.trim()) { toast.error('This project has no linked client — enter an email to send the invoice to'); return; }
     setInvoiceBusy(true);
     try {
@@ -219,12 +218,12 @@ export default function UserProjectDetailPage() {
       const invoice = await userProjectService.createInvoice(id, {
         due_date: newInvDueDate || null,
         currency: projectInvoiceCurrency,
-        items: [{ description: newInvDesc.trim(), quantity: 1, unit_price: Number(newInvAmount) }],
+        items: [{ description: `Invoice for ${project?.name ?? 'project'}`, quantity: 1, unit_price: Number(newInvAmount) }],
         recipient_email: project?.client ? undefined : newInvEmail.trim(),
       });
       toast.success('Invoice created and sent');
       setCreatedInvoice({ id: invoice.id, invoiceNumber: invoice.invoice_number, sentTo, paymentUrl: invoice.payment_url });
-      setNewInvDesc(''); setNewInvAmount(''); setNewInvDueDate(''); setNewInvEmail('');
+      setNewInvAmount(''); setNewInvDueDate('');
       setShowCreateInvoice(false);
       // Refresh in place (no full-page loading flash) so the new invoice
       // shows up in the Invoices & Billing table below right away.
@@ -244,6 +243,15 @@ export default function UserProjectDetailPage() {
     loadComments();
     if (canViewAttachments) loadAttachments();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A guest (no-client) project already has a real recipient address on file
+  // — the customer_email its originating invoice was created with — so the
+  // Create Invoice mini-form starts pre-filled instead of asking for it
+  // fresh every time. Still editable/overridable.
+  useEffect(() => {
+    if (!project || project.client || newInvEmail) return;
+    if (project.invoice?.customer_email) setNewInvEmail(project.invoice.customer_email);
+  }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Comments have no realtime push — poll so a teammate's new comment shows
   // up without the viewer having to manually reload the page.
@@ -581,7 +589,7 @@ export default function UserProjectDetailPage() {
   const projectTotalInvoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
   const projectTotalPaid = projectInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
   const projectOutstanding = Math.max(0, projectTotalInvoiced - projectTotalPaid);
-  const showInvoicesBilling = isSeller && canManageProjectInvoices;
+  const showInvoicesBilling = canManageProjectInvoices;
 
   return (
     <DashboardLayout title={project.name}>
@@ -798,9 +806,8 @@ export default function UserProjectDetailPage() {
 
             {showCreateInvoice && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input value={newInvDesc} onChange={e => setNewInvDesc(e.target.value)} placeholder="Description (e.g. Milestone 2)" style={{ ...inp, flex: '1 1 220px' }} />
                 <input type="number" min={0} step="0.01" value={newInvAmount} onChange={e => setNewInvAmount(e.target.value)} placeholder={`Amount (${projectInvoiceCurrency ?? 'USD'})`} style={{ ...inp, width: 160 }} />
-                <input type="date" value={newInvDueDate} onChange={e => setNewInvDueDate(e.target.value)} style={{ ...inp, width: 160 }} />
+                <input type="date" value={newInvDueDate} onChange={e => setNewInvDueDate(e.target.value)} placeholder="Due date (optional)" style={{ ...inp, width: 160 }} />
                 {project.client ? (
                   <div style={{ fontSize: 12, color: '#64748b' }}>Will be sent to {project.client.email ?? project.client.name}</div>
                 ) : (

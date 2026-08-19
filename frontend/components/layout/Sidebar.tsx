@@ -8,7 +8,6 @@ import {
   HiDocumentText, HiShieldCheck, HiChatBubbleLeftRight,
   HiCog6Tooth, HiArrowRightOnRectangle, HiChartBar,
   HiCurrencyDollar, HiCalendarDays,
-  HiDocumentCheck,
 } from 'react-icons/hi2';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthType, getAuthUser, getActiveCompany, can } from '@/lib/auth';
@@ -62,9 +61,6 @@ const ADMIN_NAV_GROUPS = [
       { href: '/admin/tasks',              icon: HiCheckCircle,       label: 'Tasks',              module: 'tasks', badgeKey: 'tasks' },
       { href: '/admin/timesheets',         icon: HiClock,             label: 'Timesheets',         module: 'timesheets' },
       { href: '/admin/projects/team',      icon: HiUserGroup,         label: 'Team / Resources',   module: 'projects' },
-      // Deliverables are a section INSIDE Project Management, not a
-      // separate module — gated on 'projects' only, never a standalone key.
-      { href: '/admin/projects/deliverables', icon: HiDocumentCheck,   label: 'Deliverables',  module: 'projects' },
       { href: '/admin/projects/reports',   icon: HiChartBar,          label: 'Project Reports',    module: 'projects' },
     ],
   },
@@ -176,7 +172,6 @@ const USER_NAV_GROUPS = [
       { href: '/tasks',                  icon: HiCheckCircle,       label: 'Tasks',              permAny: ['canViewTasks'], fallbackLabel: 'My Tasks', badgeKey: 'tasks', hideForSeller: true },
       { href: '/timesheets',             icon: HiClock,             label: 'Timesheets',         permAny: ['canViewTimesheets'] },
       { href: '/projects/team',          icon: HiUserGroup,         label: 'Team / Resources',   permAny: ['canViewTeamResources', 'canAssignTeamResources', 'canAddUsers'] },
-      { href: '/projects/deliverables',  icon: HiDocumentCheck,     label: 'Deliverables',      permAny: ['canViewDeliverables', 'canUploadDeliverables', 'canApproveDeliverables'] },
       { href: '/projects/reports',       icon: HiChartBar,          label: 'Project Reports',    permAny: ['canViewProjectReports', 'canViewTaskReports'] },
     ],
   },

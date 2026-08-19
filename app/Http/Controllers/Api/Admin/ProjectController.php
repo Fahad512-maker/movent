@@ -435,6 +435,139 @@ class ProjectController extends Controller
         return ApiResponse::success(null, 'Invoice unlinked from project');
     }
 
+    // POST /admin/projects/{id}/invoices — create a brand-new invoice already
+    // linked to this project ("Create Invoice for this Project"). Mirrors
+    // Api\User\ProjectController::createInvoice() exactly, adapted for the
+    // Admin guard (no permission check — Company Admin already has full
+    // authority; created_by_admin_id instead of created_by, since Admin
+    // isn't a `users` row).
+    public function createInvoice(Request $request, int $id): JsonResponse
+    {
+        $project = Project::whereIn('company_id', $this->companyIds())->findOrFail($id);
+        $admin = $this->admin();
+
+        // The invoice is always emailed immediately once created below — to
+        // the project's own client if it has one, otherwise to a one-off
+        // address collected right here (a project can legitimately have no
+        // client, see 2026_07_04_000003_make_projects_client_id_nullable).
+        $data = $request->validate([
+            'due_date'            => 'nullable|date',
+            'currency'            => 'nullable|string|max:10',
+            'tax_rate'            => 'nullable|numeric|min:0|max:100',
+            'discount_amount'     => 'nullable|numeric|min:0',
+            'notes'               => 'nullable|string|max:2000',
+            'items'               => 'required|array|min:1',
+            'items.*.description' => 'required|string|max:500',
+            'items.*.quantity'    => 'required|numeric|min:0.01',
+            'items.*.unit_price'  => 'required|numeric|min:0',
+            'recipient_email'     => [$project->client_id ? 'nullable' : 'required', 'email', 'max:255'],
+        ], [
+            'recipient_email.required' => 'This project has no linked client — an email address is required to send the invoice.',
+        ]);
+
+        $taxRate  = (float) ($data['tax_rate']        ?? 0);
+        $discount = (float) ($data['discount_amount'] ?? 0);
+
+        $subtotal = 0;
+        $items    = $data['items'];
+        foreach ($items as &$item) {
+            $item['total'] = round((float) $item['quantity'] * (float) $item['unit_price'], 2);
+            $subtotal += $item['total'];
+        }
+        unset($item);
+        $taxAmt = round($subtotal * $taxRate / 100, 2);
+
+        $year   = now()->year;
+        $prefix = \App\Models\Company::find($project->company_id)?->invoicingProfile()['invoice_prefix'] ?? 'INV';
+        $last   = \App\Models\Invoice::whereYear('created_at', $year)->where('invoice_number', 'like', "{$prefix}-{$year}-%")->latest('id')->value('invoice_number');
+        $seq    = $last ? ((int) substr($last, -4)) + 1 : 1;
+        do {
+            $number = sprintf('%s-%d-%04d', $prefix, $year, $seq++);
+        } while (\App\Models\Invoice::where('invoice_number', $number)->exists());
+
+        // A milestone invoice must match whatever currency this project has
+        // already been invoiced in — never a hardcoded default — so its
+        // amounts (and, transitively, paid_amount, which carries no currency
+        // of its own) read consistently against every other invoice on this
+        // project. A project with no prior invoice at all falls back to
+        // Company Admin's own configured currency, then the request's own
+        // currency, then USD as the last resort.
+        $existingCurrency = $project->invoices()->oldest('created_at')->value('currency')
+            ?? $project->company?->invoicingProfile()['currency'] ?? null;
+
+        $invoice = \App\Models\Invoice::create([
+            'company_id'          => $project->company_id,
+            'client_id'           => $project->client_id,
+            'lead_id'             => $project->lead_id,
+            'project_id'          => $project->id,
+            'created_by_admin_id' => $admin->id,
+            'invoice_number'      => $number,
+            'subtotal'            => $subtotal,
+            'tax_rate'            => $taxRate,
+            'tax_amount'          => $taxAmt,
+            'discount_amount'     => $discount,
+            'total_amount'        => $subtotal + $taxAmt - $discount,
+            'paid_amount'         => 0,
+            'currency'            => $existingCurrency ?? $data['currency'] ?? 'USD',
+            'status'              => 'draft',
+            'due_date'            => $data['due_date'] ?? null,
+            'notes'               => $data['notes']    ?? null,
+            // Recorded only for a no-client project — a client-linked
+            // invoice always resolves its recipient from client.email
+            // instead, same as everywhere else in the app.
+            'customer_name'       => $project->client_id ? null : $project->name,
+            'customer_email'      => $project->client_id ? null : $data['recipient_email'],
+        ]);
+
+        foreach ($items as $i => $item) {
+            \App\Models\InvoiceItem::create([
+                'invoice_id'  => $invoice->id,
+                'description' => $item['description'],
+                'quantity'    => $item['quantity'],
+                'unit_price'  => $item['unit_price'],
+                'total'       => $item['total'],
+                'sort_order'  => $i,
+            ]);
+        }
+
+        $project->logActivity('invoice_created', "{$this->adminName()} created invoice {$invoice->invoice_number} for this project.", $this->adminName(), [
+            'invoice_id' => $invoice->id, 'invoice_number' => $invoice->invoice_number,
+        ]);
+
+        // Send it right away — the project's own client if there is one,
+        // else the one-off address collected above. Mirrors
+        // Api\User\ProjectController::createInvoice() exactly.
+        $recipientEmail = $project->client?->email ?? $data['recipient_email'];
+
+        $company     = \App\Models\Company::find($project->company_id);
+        $invoice->generatePublicToken(30);
+        $invoice->refresh();
+        $paymentUrl  = config('app.frontend_url') . '/pay/invoice/' . $invoice->payment_token;
+        $companyName = $company->invoicingProfile()['name'];
+
+        try {
+            Mail::to($recipientEmail)->send(new \App\Mail\InvoiceMail($invoice, $paymentUrl, $companyName));
+        } catch (\Throwable $e) {
+            Log::error('[admin-project-invoice] email send failed', ['invoice_id' => $invoice->id, 'error' => $e->getMessage()]);
+            $responseData = $invoice->load('items')->toArray();
+            $responseData['payment_url'] = $paymentUrl;
+            return ApiResponse::success($responseData, 'Invoice created, but the email could not be sent. You can copy the payment link below or resend it from the invoice page.', 201);
+        }
+
+        $invoice->update(['status' => 'sent', 'sent_at' => now()]);
+        \App\Services\InvoiceNotificationService::notifyClientInvoiceSent($invoice);
+
+        $project->logActivity('invoice_sent', "Invoice {$invoice->invoice_number} sent to {$recipientEmail}.", $this->adminName(), [
+            'invoice_number' => $invoice->invoice_number, 'sent_to' => $recipientEmail,
+        ]);
+
+        $responseData = $invoice->load('items')->toArray();
+        $responseData['payment_url'] = $paymentUrl;
+        $responseData['sent_to']     = $recipientEmail;
+
+        return ApiResponse::success($responseData, "Invoice created and sent to {$recipientEmail}", 201);
+    }
+
     public function update(Request $request, int $id): JsonResponse
     {
         $companyIds = $this->companyIds();

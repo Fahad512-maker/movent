@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 class NotificationController extends Controller
 {
     private const CATEGORY_TYPES = [
-        'tasks'    => ['task_assigned', 'production_task_assigned'],
+        'tasks'    => ['task_assigned', 'production_task_assigned', 'task_status_changed'],
         'projects' => ['project_assigned', 'project_team_assigned'],
     ];
 
