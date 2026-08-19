@@ -38,7 +38,15 @@ function CreateProjectForm() {
     const invoiceId = searchParams.get("invoice_id")
         ? Number(searchParams.get("invoice_id"))
         : null;
-    const admin = getAuthUser() as Admin | null;
+    // getAuthUser() reads a cookie, which doesn't exist during Next.js's
+    // server render — reading it directly here (instead of deferring to an
+    // effect, like DashboardLayout/Navbar do) made this component's SSR
+    // output disagree with its first client render whenever admin actually
+    // has the client_portal module, triggering a hydration-mismatch tree
+    // regeneration that visibly corrupted the layout and could interrupt the
+    // post-submit router.push() below.
+    const [admin, setAdmin] = useState<Admin | null>(null);
+    useEffect(() => { setAdmin(getAuthUser() as Admin | null); }, []);
     // 'client_portal' is the real purchasable module_key — 'clients' was never
     // a real CompanyModule row (see ModuleSeeder.php).
     const hasClients = admin?.modules?.includes("client_portal") ?? false;

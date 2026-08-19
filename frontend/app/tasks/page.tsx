@@ -166,7 +166,7 @@ export default function UserTasksPage() {
 
   return (
     <DashboardLayout title={title}>
-      <div style={{ maxWidth: 1100 }}>
+      <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>{title}</h1>

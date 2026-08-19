@@ -349,7 +349,7 @@ export default function UserTaskDetailPage() {
 
   return (
     <DashboardLayout title="Task">
-      <div style={{ maxWidth: 900 }}>
+      <div>
         <button onClick={() => router.push(`/projects/${projectId}`)} style={{
           background: '#f1f5f9', border: 'none', borderRadius: 8,
           padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#64748b', marginBottom: 16,
