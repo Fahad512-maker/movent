@@ -73,7 +73,7 @@ class TaskController extends Controller
     public function indexAll(Request $request): JsonResponse
     {
         // Company-Wise Dashboard Filtering — scoped to the active company.
-        $companyIds = [$this->activeCompanyId()];
+        $companyIds = $this->activeCompanyIds();
 
         // project.teamMembers.user is here so the frontend's "Assigned To"
         // reassignment picker can scope its options to this task's own

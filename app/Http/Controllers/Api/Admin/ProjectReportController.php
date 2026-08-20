@@ -23,12 +23,12 @@ class ProjectReportController extends Controller
 
     private function projectIds(): array
     {
-        return Project::where('company_id', $this->activeCompanyId())->pluck('id')->toArray();
+        return Project::whereIn('company_id', $this->activeCompanyIds())->pluck('id')->toArray();
     }
 
     public function statusReport(): JsonResponse
     {
-        $counts = Project::where('company_id', $this->activeCompanyId())
+        $counts = Project::whereIn('company_id', $this->activeCompanyIds())
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -93,7 +93,7 @@ class ProjectReportController extends Controller
 
     public function completedProjectsReport(): JsonResponse
     {
-        $completed = Project::where('company_id', $this->activeCompanyId())
+        $completed = Project::whereIn('company_id', $this->activeCompanyIds())
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
             ->with(['client:id,name', 'projectManager:id,name'])

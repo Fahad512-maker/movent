@@ -104,7 +104,7 @@ class InvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         // Company-Wise Dashboard Filtering — scoped to the active company.
-        $q = Invoice::where('company_id', $this->activeCompanyId())
+        $q = Invoice::whereIn('company_id', $this->activeCompanyIds())
             ->with(['client:id,name,company_name,email'])
             ->latest();
 

@@ -172,7 +172,7 @@ class ProjectController extends Controller
         if ($request->filled('company_id')) {
             $q->where('company_id', $request->company_id);
         } else {
-            $q->where('company_id', $this->activeCompanyId());
+            $q->whereIn('company_id', $this->activeCompanyIds());
         }
         if ($request->filled('status'))     $q->where('status', $request->status);
         if ($request->filled('priority'))   $q->where('priority', $request->priority);

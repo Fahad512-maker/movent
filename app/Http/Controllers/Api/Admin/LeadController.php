@@ -60,7 +60,7 @@ class LeadController extends Controller
         if ($request->filled('company_id')) {
             $q->where('company_id', $request->company_id);
         } else {
-            $q->where('company_id', $this->activeCompanyId());
+            $q->whereIn('company_id', $this->activeCompanyIds());
         }
         if ($request->filled('status'))      $q->where('status',      $request->status);
         if ($request->filled('priority'))    $q->where('priority',    $request->priority);
@@ -422,7 +422,7 @@ class LeadController extends Controller
     // Pipeline: update status via drag-and-drop
     public function pipeline(Request $request): JsonResponse
     {
-        $leads = Lead::where('company_id', $this->activeCompanyId())
+        $leads = Lead::whereIn('company_id', $this->activeCompanyIds())
             ->whereNotIn('status', ['won', 'lost'])
             ->with(['assignedTo:id,name'])
             ->orderByRaw("FIELD(status,'new','contacted','qualified','proposal','negotiation')")

@@ -21,14 +21,21 @@ export const getToken    = () => Cookies.get('auth_token') || null;
 export const isAuthenticated = () => !!Cookies.get('auth_token');
 
 // ── Active company (Rule 8: sidebar and permissions based on selected company) ──
+// 'all' is the Company Admin-only "All Companies" sentinel (set exclusively
+// by CompanySelector.tsx) — staff/user sessions never write it, since their
+// equivalent picker (/select-company) only ever calls setActiveCompany with
+// a real company id.
 
-export const setActiveCompany = (id: number) => {
+export const setActiveCompany = (id: number | 'all') => {
   Cookies.set('active_company_id', String(id), { expires: 7 });
 };
 
-export const getActiveCompany = (): number | null => {
+export const getActiveCompany = (): number | 'all' | null => {
   const id = Cookies.get('active_company_id');
-  return id ? parseInt(id, 10) : null;
+  if (!id) return null;
+  if (id === 'all') return 'all';
+  const parsed = parseInt(id, 10);
+  return Number.isNaN(parsed) ? null : parsed;
 };
 
 export const clearActiveCompany = () => {
@@ -47,8 +54,9 @@ export const getUserModulePermissions = (moduleKey: string): string[] => {
   const activeId   = getActiveCompany();
   const all        = u?.company_assignments ?? [];
 
-  // Filter by active company if one is selected
-  const assignments = activeId ? all.filter(a => a.company_id === activeId) : all;
+  // Filter by active company if one is selected — 'all' is the Admin-only
+  // sentinel and never applies to a staff/user session's own assignments.
+  const assignments = typeof activeId === 'number' ? all.filter(a => a.company_id === activeId) : all;
 
   for (const a of assignments) {
     if (a.permissions?.[moduleKey]) return a.permissions[moduleKey] as string[];

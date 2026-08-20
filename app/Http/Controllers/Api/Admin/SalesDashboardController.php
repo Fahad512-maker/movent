@@ -23,12 +23,12 @@ class SalesDashboardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $companyId  = $this->activeCompanyId();
+        $companyIds = $this->activeCompanyIds();
         $today      = now()->toDateString();
         $month      = $request->get('month', now()->month);
         $year       = $request->get('year',  now()->year);
 
-        $base = Lead::where('company_id', $companyId);
+        $base = Lead::whereIn('company_id', $companyIds);
 
         // ── Summary counts ──────────────────────────────────────────────────
         $total     = (clone $base)->count();
@@ -44,12 +44,12 @@ class SalesDashboardController extends Controller
         $pipelineVal  = (clone $base)->whereIn('status', $openStatuses)->sum('estimated_value');
         $wonValue     = (clone $base)->where('status', 'won')->sum('estimated_value');
 
-        $todayFollowUps = FollowUp::where('company_id', $companyId)
+        $todayFollowUps = FollowUp::whereIn('company_id', $companyIds)
             ->where('status', 'pending')
             ->whereDate('scheduled_at', $today)
             ->count();
 
-        $overdueFollowUps = FollowUp::where('company_id', $companyId)
+        $overdueFollowUps = FollowUp::whereIn('company_id', $companyIds)
             ->where('status', 'pending')
             ->whereDate('scheduled_at', '<', $today)
             ->count();

@@ -85,7 +85,7 @@ class PaymentController extends Controller
         // Company-Wise Dashboard Filtering — scoped to the active company;
         // $summary below is computed from this same already-scoped $payments
         // collection, so it's correct automatically.
-        $companyIds = [$this->activeCompanyId()];
+        $companyIds = $this->activeCompanyIds();
 
         $query = Payment::whereHas('invoice', fn($q) => $q->whereIn('company_id', $companyIds))
             ->with(['invoice:id,invoice_number,client_id,currency', 'invoice.client:id,name'])

@@ -40,7 +40,7 @@ class DashboardController extends Controller
         // already just filters on this one array, so narrowing it to a
         // single active company (instead of every company this admin owns)
         // is the entire change; a 1-element whereIn() behaves like where().
-        $companyIds = [$this->activeCompanyId()];
+        $companyIds = $this->activeCompanyIds();
 
         // ── Leads ───────────────────────────────────────────────────────
         $leads = Lead::whereIn('company_id', $companyIds);

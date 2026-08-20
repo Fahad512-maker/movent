@@ -25,4 +25,27 @@ trait ScopesToActiveCompany
 
         return ($requested && in_array($requested, $owned, true)) ? $requested : ($owned[0] ?? 0);
     }
+
+    // "All Companies" support — the header carries the literal string "all"
+    // (never a numeric 0, which already means "nothing valid resolved" in
+    // activeCompanyId() above) when the dropdown's All Companies option is
+    // selected. Every other value resolves to exactly one company, same as
+    // activeCompanyId(), just wrapped in an array so callers can use
+    // whereIn() uniformly regardless of which mode is active.
+    protected function activeCompanyIds(): array
+    {
+        $owned  = $this->companyIds();
+        $header = request()->header('X-Active-Company-Id');
+
+        if ($header === 'all') {
+            return $owned;
+        }
+
+        $requested = (int) $header;
+        if ($requested && in_array($requested, $owned, true)) {
+            return [$requested];
+        }
+
+        return isset($owned[0]) ? [$owned[0]] : [];
+    }
 }

@@ -406,11 +406,16 @@ class ClientController extends Controller
             $query->where('portal_access', $request->portal === 'enabled');
         }
 
-        // Company-Wise Dashboard Filtering — defaults to the active company,
+        // Company-Wise Dashboard Filtering — defaults to the active company
+        // (or every owned company when "All Companies" is selected),
         // narrowed further by an explicit ?company_id= override when given.
-        $cid = $request->filled('company_id') ? (int) $request->company_id : $this->activeCompanyId();
-        if (in_array($cid, $companyIds, true)) {
-            $query->where('company_id', $cid);
+        if ($request->filled('company_id')) {
+            $cid = (int) $request->company_id;
+            if (in_array($cid, $companyIds, true)) {
+                $query->where('company_id', $cid);
+            }
+        } else {
+            $query->whereIn('company_id', $this->activeCompanyIds());
         }
 
         $clients = $query->get([

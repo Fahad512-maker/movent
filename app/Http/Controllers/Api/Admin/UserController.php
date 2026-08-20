@@ -183,7 +183,7 @@ class UserController extends Controller
         // must stay bound to every company this admin owns (orgCompanyIds),
         // not just the active one, or a genuinely multi-company user would
         // wrongly appear to belong to only whichever company is active.
-        $activeCompanyIds = [$this->activeCompanyId()];
+        $activeCompanyIds = $this->activeCompanyIds();
         $orgCompanyIds = $this->companyIds();
 
         // Include users assigned to any of the admin's companies (not just primary company)
