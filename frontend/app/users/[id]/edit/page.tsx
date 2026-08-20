@@ -367,9 +367,42 @@ function EditUserPageContent() {
               </div>
 
               <div style={{ padding: 24 }}>
-                {assignedIds.length === 0 ? (
-                  <div style={{ color: '#94a3b8', fontSize: 13 }}>This user has no company assignments.</div>
-                ) : (
+                {assignedIds.length === 0 && (
+                  <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16 }}>
+                    This user has no company assignments — add one below to restore their access.
+                  </div>
+                )}
+
+                {/* Assign Multiple Companies to User — always available, even
+                    (especially) when the user currently has zero companies,
+                    so an admin who unassigned someone's last company can
+                    give them a new one right here instead of the account
+                    being stuck with no way back in. Hidden once the user is
+                    already on every company the admin owns. */}
+                {unassignedCompanies.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20 }}>
+                    <select value={pickCompanyId} onChange={e => setPickCompanyId(e.target.value)} style={{ ...inp, width: 'auto', flex: '0 1 260px' }}>
+                      <option value="">+ Add another company…</option>
+                      {unassignedCompanies.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={addCompany}
+                      disabled={!pickCompanyId}
+                      style={{
+                        padding: '10px 18px', borderRadius: 8, border: 'none',
+                        background: pickCompanyId ? '#2563eb' : '#cbd5e1', color: '#fff',
+                        fontWeight: 600, fontSize: 13, cursor: pickCompanyId ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+
+                {assignedIds.length > 0 && (
                   <>
                     {/* Role default-permissions helper text + selected count */}
                     {activeCompanyId !== null && (() => {
@@ -413,32 +446,6 @@ function EditUserPageContent() {
                             </button>
                           );
                         })}
-                      </div>
-                    )}
-
-                    {/* Assign Multiple Companies to User — add another of this
-                        admin's companies to this user. Hidden once the user
-                        is already on every company the admin owns. */}
-                    {unassignedCompanies.length > 0 && (
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20 }}>
-                        <select value={pickCompanyId} onChange={e => setPickCompanyId(e.target.value)} style={{ ...inp, width: 'auto', flex: '0 1 260px' }}>
-                          <option value="">+ Add another company…</option>
-                          {unassignedCompanies.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={addCompany}
-                          disabled={!pickCompanyId}
-                          style={{
-                            padding: '10px 18px', borderRadius: 8, border: 'none',
-                            background: pickCompanyId ? '#2563eb' : '#cbd5e1', color: '#fff',
-                            fontWeight: 600, fontSize: 13, cursor: pickCompanyId ? 'pointer' : 'not-allowed',
-                          }}
-                        >
-                          Add
-                        </button>
                       </div>
                     )}
 

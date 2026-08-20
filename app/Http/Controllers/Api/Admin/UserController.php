@@ -187,8 +187,25 @@ class UserController extends Controller
         $orgCompanyIds = $this->companyIds();
 
         // Include users assigned to any of the admin's companies (not just primary company)
-        $userIds = CompanyUserAssignment::whereIn('company_id', $activeCompanyIds)
-            ->pluck('user_id')
+        $assignedUserIds = CompanyUserAssignment::whereIn('company_id', $activeCompanyIds)
+            ->pluck('user_id');
+
+        // Unassign Company from User — removing someone's LAST company
+        // deliberately leaves users.company_id pointing at that now-stale
+        // company (destroy() above), with no CompanyUserAssignment row left
+        // to back it, precisely so CheckCompanyModule denies them access.
+        // But that also means the query above alone can never find them
+        // again — with zero assignment rows, they can't match any company
+        // filter, so they'd vanish from this list entirely with no way for
+        // the admin to reassign them a company. Fall back to that stale
+        // company_id (still validated against this admin's own companies,
+        // so a foreign admin's orphan can never leak in) for exactly the
+        // zero-assignment case.
+        $orphanedUserIds = User::whereIn('company_id', $activeCompanyIds)
+            ->whereDoesntHave('companyAssignments')
+            ->pluck('id');
+
+        $userIds = $assignedUserIds->merge($orphanedUserIds)
             ->unique()
             ->values()
             ->toArray();
