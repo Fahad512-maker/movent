@@ -1272,10 +1272,7 @@ function RegisterContent() {
                     label="Company Name"
                     required
                     value={companyName}
-                    // No spaces, no special characters — letters/digits only.
-                    // Mirrored server-side in PublicController::register()'s
-                    // validator so a direct API call can't bypass this.
-                    onChange={e => setCompanyName(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                    onChange={e => setCompanyName(e.target.value)}
                     placeholder=""
                     error={companyNameOk === false ? 'This company name is already registered' : undefined}
                     rightEl={

@@ -50,16 +50,12 @@ export default function CreateCompanyPage() {
   const set = (k: keyof FormState) => (e: { target: { value: string } }) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
   const setCompanyName = (e: { target: { value: string } }) =>
-    setForm(f => ({ ...f, name: e.target.value.replace(/[^A-Za-z0-9]/g, '') }));
+    setForm(f => ({ ...f, name: e.target.value }));
 
   const submit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     if (saving) return; // Guards a double-click/Enter re-submit before the disabled prop re-renders.
     if (!form.name.trim()) { toast.error('Company name is required'); return; }
-    if (!/^[A-Za-z0-9]+$/.test(form.name)) {
-      toast.error('Company name can only contain letters and numbers');
-      return;
-    }
     setSaving(true);
     try {
       await api.post('/admin/companies', form);
@@ -111,8 +107,7 @@ export default function CreateCompanyPage() {
               <input
                 value={form.name}
                 onChange={setCompanyName}
-                placeholder="e.g. AcmeCorp"
-                pattern="[A-Za-z0-9]+"
+                placeholder="e.g. Acme Corp"
                 style={inputStyle}
                 required
               />

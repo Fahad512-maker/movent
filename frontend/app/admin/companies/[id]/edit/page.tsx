@@ -61,15 +61,11 @@ export default function EditCompanyPage() {
   const set = (k: keyof FormState) => (e: { target: { value: string } }) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
   const setCompanyName = (e: { target: { value: string } }) =>
-    setForm(f => ({ ...f, name: e.target.value.replace(/[^A-Za-z0-9]/g, '') }));
+    setForm(f => ({ ...f, name: e.target.value }));
 
   const submit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     if (!form.name.trim()) { toast.error('Company name is required'); return; }
-    if (!/^[A-Za-z0-9]+$/.test(form.name)) {
-      toast.error('Company name can only contain letters and numbers');
-      return;
-    }
     setSaving(true);
     try {
       await api.put(`/admin/companies/${companyId}`, form);
@@ -122,8 +118,7 @@ export default function EditCompanyPage() {
               <input
                 value={form.name}
                 onChange={setCompanyName}
-                placeholder="e.g. AcmeCorp"
-                pattern="[A-Za-z0-9]+"
+                placeholder="e.g. Acme Corp"
                 style={inputStyle}
                 required
               />
