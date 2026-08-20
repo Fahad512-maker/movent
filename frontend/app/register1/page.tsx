@@ -714,6 +714,7 @@ import { publicService, PublicModule } from '../../lib/services/publicService';
 import { setAuthData } from '../../lib/auth';
 import toast from 'react-hot-toast';
 import Container from '../../components/ui/Conatiner';
+import PhoneInput from '../../components/ui/PhoneInput';
 
 type Category = {
   key: string;
@@ -1222,12 +1223,10 @@ function RegisterContent() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 }}>
-                  <InputField
-                    label="Phone (Optional)"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder=""
-                  />
+                  <div>
+                    <label style={labelBase}>Phone (Optional)</label>
+                    <PhoneInput value={phone} onChange={setPhone} />
+                  </div>
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelBase}>Timezone</label>
                     <div style={{ position: 'relative' }}>

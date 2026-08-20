@@ -16,6 +16,7 @@ use App\Models\Timesheet;
 use App\Models\User;
 use App\Models\UserCompanyPermission;
 use App\Models\UserPermission;
+use App\Rules\ValidPhoneNumber;
 use App\Services\ModuleCatalog;
 use App\Services\RoleDefaultPermissions;
 use App\Support\CrossAccountEmail;
@@ -631,7 +632,7 @@ class UserController extends Controller
             'password'          => ['nullable', 'string', 'min:8'],
             'role_type'         => ['sometimes', 'string', 'in:' . implode(',', self::VALID_ROLES)],
             'custom_role_label' => ['nullable', 'string', 'max:100'],
-            'phone'             => ['nullable', 'string', 'max:30'],
+            'phone'             => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'is_active'         => ['sometimes', 'boolean'],
         ]);
 

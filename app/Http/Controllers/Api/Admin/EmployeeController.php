@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\Employee;
 use App\Models\EmployeeNote;
 use App\Models\SystemAuditLog;
+use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -70,7 +71,7 @@ class EmployeeController extends Controller
             'employee_code'   => ['nullable', 'string', 'max:50', 'unique:employees,employee_code'],
             'name'            => ['required', 'string', 'max:150'],
             'email'           => ['nullable', 'email', 'max:255'],
-            'phone'           => ['nullable', 'string', 'max:30'],
+            'phone'           => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'department'      => ['nullable', 'string', 'max:100'],
             'designation'     => ['nullable', 'string', 'max:100'],
             'employment_type' => ['nullable', 'in:full_time,part_time,contract,intern'],
@@ -113,7 +114,7 @@ class EmployeeController extends Controller
             'employee_code'   => ['nullable', 'string', 'max:50', 'unique:employees,employee_code,' . $employee->id],
             'name'            => ['sometimes', 'string', 'max:150'],
             'email'           => ['nullable', 'email', 'max:255'],
-            'phone'           => ['nullable', 'string', 'max:30'],
+            'phone'           => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'department'      => ['nullable', 'string', 'max:100'],
             'designation'     => ['nullable', 'string', 'max:100'],
             'employment_type' => ['sometimes', 'in:full_time,part_time,contract,intern'],

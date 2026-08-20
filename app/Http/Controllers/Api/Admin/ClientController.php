@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\CompanyUserAssignment;
 use App\Models\User;
 use App\Mail\ClientPortalWelcomeMail;
+use App\Rules\ValidPhoneNumber;
 use App\Support\CompanyName;
 use App\Support\CrossAccountEmail;
 use Illuminate\Http\JsonResponse;
@@ -274,17 +275,17 @@ class ClientController extends Controller
         }
 
         $data = $request->validate([
-            'name'     => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
+            'name'     => ['required', 'string', 'max:200'],
             'currency' => 'required|in:PKR,USD',
             'industry' => 'nullable|string|max:100',
             'email'    => 'nullable|email|max:255',
-            'phone'    => 'nullable|string|max:30',
+            'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'address'  => 'nullable|string|max:500',
             'timezone' => 'nullable|string|max:100',
         ]);
 
         $data['name'] = CompanyName::normalize($data['name']);
-        CompanyName::throwIfTaken($data['name'], 'name', null, $admin->id);
+        CompanyName::throwIfTaken($data['name'], 'name', $admin->id);
 
         $company = Company::create([
             'admin_id'       => $admin->id,
@@ -351,17 +352,17 @@ class ClientController extends Controller
         $company = $this->admin()->companies()->findOrFail($id);
 
         $data = $request->validate([
-            'name'     => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
+            'name'     => ['required', 'string', 'max:200'],
             'currency' => 'required|in:PKR,USD',
             'industry' => 'nullable|string|max:100',
             'email'    => 'nullable|email|max:255',
-            'phone'    => 'nullable|string|max:30',
+            'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'address'  => 'nullable|string|max:500',
             'timezone' => 'nullable|string|max:100',
         ]);
 
         $data['name'] = CompanyName::normalize($data['name']);
-        CompanyName::throwIfTaken($data['name'], 'name', $company->id, $this->admin()->id);
+        CompanyName::throwIfTaken($data['name'], 'name', $this->admin()->id, $company->id);
 
         $company->update($data);
 
@@ -491,7 +492,7 @@ class ClientController extends Controller
             'company_id'      => 'required|integer|in:' . implode(',', $companyIds),
             'name'            => 'required|string|max:150',
             'email'           => 'nullable|email|max:255',
-            'phone'           => 'nullable|string|max:30',
+            'phone'           => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'    => 'nullable|string|max:150',
             'address'         => 'nullable|string|max:500',
             'notes'           => 'nullable|string|max:1000',
@@ -588,7 +589,7 @@ class ClientController extends Controller
         $data = $request->validate([
             'name'         => 'sometimes|required|string|max:150',
             'email'        => 'nullable|email|max:255',
-            'phone'        => 'nullable|string|max:30',
+            'phone'        => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name' => 'nullable|string|max:150',
             'address'      => 'nullable|string|max:500',
             'notes'        => 'nullable|string|max:1000',

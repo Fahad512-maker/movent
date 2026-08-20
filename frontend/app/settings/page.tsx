@@ -7,6 +7,7 @@ import api from '@/lib/axios';
 import { getAuthType, getAuthUser } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { moduleUpgradeService, ModuleCatalog } from '@/lib/services/moduleUpgradeService';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface CompanySettings {
@@ -425,7 +426,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label style={lbl}>Phone</label>
-                    <input style={inp} value={company.phone} onChange={e => setCompany(p => ({ ...p, phone: e.target.value }))} placeholder="+1 (555) 000-0000" />
+                    <PhoneInput value={company.phone} onChange={v => setCompany(p => ({ ...p, phone: v }))} />
                   </div>
                   <div>
                     <label style={lbl}>Timezone</label>

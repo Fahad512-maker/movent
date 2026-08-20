@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Lead;
 use App\Models\Project;
+use App\Rules\ValidPhoneNumber;
 use App\Services\InvoiceNotificationService;
 use App\Services\PaymentProjectStartService;
 use Illuminate\Http\JsonResponse;
@@ -142,7 +143,7 @@ class InvoiceController extends Controller
             'notes'               => 'nullable|string|max:2000',
             'customer_name'       => 'nullable|string|max:255',
             'customer_email'      => 'nullable|email|max:255',
-            'customer_phone'      => 'nullable|string|max:50',
+            'customer_phone'      => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'customer_address'    => 'nullable|string|max:500',
             'items'               => 'required|array|min:1',
             'items.*.description' => 'required|string|max:500',
@@ -395,7 +396,7 @@ class InvoiceController extends Controller
             'expiry_days'      => 'nullable|integer|min:1|max:365',
             'customer_name'    => 'nullable|string|max:255',
             'customer_email'   => 'nullable|email|max:255',
-            'customer_phone'   => 'nullable|string|max:50',
+            'customer_phone'   => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'customer_address' => 'nullable|string|max:500',
         ]);
 

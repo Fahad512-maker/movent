@@ -6,6 +6,7 @@ import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 interface Company { id: number; name: string; currency: string }
 
@@ -155,7 +156,7 @@ export default function CreateClientPage() {
                 </div>
                 <div>
                   <label style={lbl}>Phone</label>
-                  <input value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="+1 (555) 000-0000" style={inp} />
+                  <PhoneInput value={form.phone} onChange={v => setF('phone', v)} />
                 </div>
               </div>
 

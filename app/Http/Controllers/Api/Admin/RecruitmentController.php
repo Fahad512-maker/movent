@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\JobApplicant;
 use App\Models\Recruitment;
 use App\Models\SystemAuditLog;
+use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -106,7 +107,7 @@ class RecruitmentController extends Controller
         $validated = $request->validate([
             'name'  => ['required', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 

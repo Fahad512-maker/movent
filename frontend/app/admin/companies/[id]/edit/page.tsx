@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 interface FormState {
   name: string;
@@ -154,12 +155,7 @@ export default function EditCompanyPage() {
               </div>
               <div>
                 <label style={labelStyle}>Phone</label>
-                <input
-                  value={form.phone}
-                  onChange={set('phone')}
-                  placeholder="+1 (555) 000-0000"
-                  style={inputStyle}
-                />
+                <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
               </div>
             </div>
 

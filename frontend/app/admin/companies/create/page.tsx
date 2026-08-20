@@ -6,6 +6,7 @@ import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 interface FormState {
   name: string;
@@ -143,12 +144,7 @@ export default function CreateCompanyPage() {
               </div>
               <div>
                 <label style={labelStyle}>Phone</label>
-                <input
-                  value={form.phone}
-                  onChange={set('phone')}
-                  placeholder="+1 (555) 000-0000"
-                  style={inputStyle}
-                />
+                <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
               </div>
             </div>
 

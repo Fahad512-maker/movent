@@ -6,6 +6,7 @@ import { adminService, UpdateAdminPayload } from '@/lib/services/adminService';
 import { packageService } from '@/lib/services/packageService';
 import { Package } from '@/types';
 import { HiArrowLeft } from 'react-icons/hi2';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 13px',
@@ -129,7 +130,7 @@ export default function EditAdminPage() {
                 {pwdErr && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 16 }}>{pwdErr}</div>}
                 <div>
                   <label style={lbl}>Phone Number</label>
-                  <input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
+                  <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
                 </div>
               </div>
 

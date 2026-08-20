@@ -9,6 +9,7 @@ import { inp, lbl, card } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 export default function CreateEmployeePage() {
   useModuleGuard('employees');
@@ -86,7 +87,7 @@ export default function CreateEmployeePage() {
             </div>
             <div>
               <label style={lbl}>Phone</label>
-              <input style={inp} value={phone} onChange={e => setPhone(e.target.value)} />
+              <PhoneInput value={phone} onChange={setPhone} />
             </div>
             <div>
               <label style={lbl}>Department</label>

@@ -6,6 +6,7 @@ import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminHrService, EmployeeStatus, EmploymentType } from '@/lib/services/adminHrService';
 import { inp, lbl, card } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 export default function EditEmployeePage() {
   useModuleGuard('employees');
@@ -77,7 +78,7 @@ export default function EditEmployeePage() {
             </div>
             <div>
               <label style={lbl}>Phone</label>
-              <input style={inp} value={phone} onChange={e => setPhone(e.target.value)} />
+              <PhoneInput value={phone} onChange={setPhone} />
             </div>
             <div>
               <label style={lbl}>Department</label>

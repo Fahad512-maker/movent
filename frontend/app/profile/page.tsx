@@ -6,6 +6,7 @@ import { getAuthType, getAuthUser, getToken, setAuthData } from '@/lib/auth';
 import { Admin, User } from '@/types';
 import { card, inp, lbl } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 const ROLE_TYPE_LABEL: Record<string, string> = {
   company_admin: 'Company Admin', project_manager: 'Project Manager', production: 'Production User',
@@ -176,7 +177,7 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label style={lbl}>Phone</label>
-                <input value={phone} onChange={e => setPhone(e.target.value)} style={inp} placeholder="Optional" />
+                <PhoneInput value={phone} onChange={setPhone} />
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 18 }}>

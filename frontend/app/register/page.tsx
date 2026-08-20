@@ -716,6 +716,9 @@ import toast from 'react-hot-toast';
 import Container from '../../components/ui/Conatiner';
 import SubmitButton from '../../components/ui/SubmitButton';
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
+import PhoneInput from '../../components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '../../lib/countries';
+import type { Country } from 'react-phone-number-input';
 import { MdOutlineDone } from 'react-icons/md';
 
 type Category = {
@@ -837,27 +840,6 @@ const COMPANY_OPTIONS: CompanyOption[] = [
   { label: '3 Companies', value: 3, price_pkr: 500, price_usd: 2 },
   { label: '5 Companies', value: 5, price_pkr: 1000, price_usd: 4 },
   { label: 'Unlimited', value: null, price_pkr: 2500, price_usd: 10 },
-];
-
-type CountryOption = { code: string; name: string; dial: string; timezone: string; phoneFormat: string };
-
-// USA first — primary target market (mirrors the backend's own
-// America/New_York fallback in Api\PublicController::register()). Drives
-// both the phone field's dial code and the timezone sent at submit —
-// there's no separate timezone picker in the UI. `phoneFormat` is a
-// display-only example of that country's typical local number grouping
-// (shown as the input's placeholder, dial code excluded since that's
-// already shown as its own overlay) — not a mask or validation pattern, the
-// field still accepts free-form text.
-const COUNTRIES: CountryOption[] = [
-  { code: 'US', name: 'United States',        dial: '+1',   timezone: 'America/New_York', phoneFormat: '(555) 000-0000' },
-  { code: 'CA', name: 'Canada',                dial: '+1',   timezone: 'America/New_York', phoneFormat: '(555) 000-0000' },
-  { code: 'GB', name: 'United Kingdom',        dial: '+44',  timezone: 'Europe/London',    phoneFormat: '7400 123456' },
-  { code: 'AE', name: 'United Arab Emirates',  dial: '+971', timezone: 'Asia/Dubai',       phoneFormat: '50 123 4567' },
-  { code: 'PK', name: 'Pakistan',               dial: '+92',  timezone: 'Asia/Karachi',     phoneFormat: '300 1234567' },
-  { code: 'IN', name: 'India',                  dial: '+91',  timezone: 'Asia/Kolkata',     phoneFormat: '98765 43210' },
-  { code: 'AU', name: 'Australia',              dial: '+61',  timezone: 'Australia/Sydney', phoneFormat: '412 345 678' },
-  { code: 'SG', name: 'Singapore',              dial: '+65',  timezone: 'Asia/Singapore',   phoneFormat: '8123 4567' },
 ];
 
 type PwStrength = { label: string; color: string; pct: number };
@@ -1064,8 +1046,8 @@ function RegisterContent() {
     setShowConfirm(true);
   };
   const [phone, setPhone] = useState<string>('');
-  const [countryCode, setCountryCode] = useState<string>('US');
-  const selectedCountry = COUNTRIES.find(c => c.code === countryCode) ?? COUNTRIES[0];
+  const [countryCode, setCountryCode] = useState<Country>('US');
+  const selectedCountry = ALL_COUNTRIES.find(c => c.code === countryCode) ?? ALL_COUNTRIES[0];
 
   useEffect(() => {
     setLoadingPackages(true);
@@ -1175,7 +1157,7 @@ function RegisterContent() {
       const res = await publicService.register({
         company_name: companyName, name, email, password,
         password_confirmation: confirm,
-        phone: phone.trim() ? `${selectedCountry.dial} ${phone.trim()}` : undefined,
+        phone: phone || undefined,
         package_id: pkgToUse.id,
         selected_modules: modulesToUse,
         currency, start_type: 'paid', timezone: selectedCountry.timezone,
@@ -1402,33 +1384,24 @@ function RegisterContent() {
                     <div style={{ position: 'relative' }}>
                       <select
                         value={countryCode}
-                        onChange={e => setCountryCode(e.target.value)}
+                        onChange={e => setCountryCode(e.target.value as Country)}
                         style={{ ...inputBase, paddingLeft: 14, paddingRight: 14, appearance: 'none' }}
                         onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
                         onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
                       >
-                        {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name} ({c.dial})</option>)}
+                        {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name} (+{c.callingCode})</option>)}
                       </select>
                     </div>
                   </div>
                   <div style={{ marginBottom: 18 }}>
                     <label style={labelBase}>Phone (Optional)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{
-                        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
-                        color: '#6b7280', fontSize: 15, fontWeight: 500, pointerEvents: 'none',
-                      }}>
-                        {selectedCountry.dial}
-                      </span>
-                      <input
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        placeholder={selectedCountry.phoneFormat}
-                        style={{ ...inputBase, paddingLeft: 56 }}
-                        onFocus={e => (e.target.style.borderColor = 'var(--brand-blue)')}
-                        onBlur={e => (e.target.style.borderColor = 'var(--bg-blue-light1)')}
-                      />
-                    </div>
+                    <PhoneInput
+                      key={countryCode}
+                      value={phone}
+                      onChange={setPhone}
+                      defaultCountry={countryCode}
+                      onCountryChange={c => c && setCountryCode(c)}
+                    />
                   </div>
                 </div>
 
