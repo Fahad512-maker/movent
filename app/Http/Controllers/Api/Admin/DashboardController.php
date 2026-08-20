@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Invoice;
 use App\Models\Lead;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()
     {
         return auth('admin')->user();
@@ -32,7 +36,11 @@ class DashboardController extends Controller
     {
         $admin      = $this->admin();
         $package    = $admin->package;
-        $companyIds = $this->companyIds();
+        // Company-Wise Dashboard Filtering — every metric block below
+        // already just filters on this one array, so narrowing it to a
+        // single active company (instead of every company this admin owns)
+        // is the entire change; a 1-element whereIn() behaves like where().
+        $companyIds = [$this->activeCompanyId()];
 
         // ── Leads ───────────────────────────────────────────────────────
         $leads = Lead::whereIn('company_id', $companyIds);
@@ -147,8 +155,12 @@ class DashboardController extends Controller
 
         $compInfo = $this->companyInfo($admin, $package);
 
-        // Modules enabled for this admin's first company
-        $enabledModules = $admin->companies()->first()?->modules()
+        // Modules enabled for the ACTIVE company (not just "first" — these
+        // gate which dashboard sections even render, so they must match
+        // whichever company the stats above were just scoped to, or
+        // switching companies would show one company's stats under
+        // another's module set).
+        $enabledModules = Company::find($companyIds[0])?->modules()
             ->where('is_enabled', true)
             ->pluck('module_key')
             ->toArray() ?? [];

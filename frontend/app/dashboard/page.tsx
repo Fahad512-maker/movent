@@ -125,6 +125,21 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [modules, setModules] = useState<string[]>([]);
 
+  // Re-called by CompanySelector's onChange too — switching companies just
+  // needs this same fetch to run again; the axios interceptor already
+  // attaches the newly-active company's X-Active-Company-Id header.
+  const loadAdminDashboard = () => {
+    setLoading(true);
+    api.get('/admin/dashboard')
+      .then(r => {
+        const d: DashData = r.data.data;
+        setData(d);
+        setModules(d.modules ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     const type = getAuthType();
     setIsAdmin(type === 'admin');
@@ -170,15 +185,8 @@ export default function DashboardPage() {
       return;
     }
 
-    api.get('/admin/dashboard')
-      .then(r => {
-        const d: DashData = r.data.data;
-        setData(d);
-        setModules(d.modules ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    loadAdminDashboard();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const s  = data?.stats;
   const pl = data?.plan;
@@ -304,6 +312,10 @@ export default function DashboardPage() {
     has('invoices') &&      { label: 'Invoices',     value: invoiceStats.total,           sub: `${invoiceStats.unpaid} unpaid · ${invoiceStats.overdue} overdue`,       color: '#d97706', href: '/admin/invoices' },
     has('invoices') &&      { label: 'Total Billed', value: PKR(invoiceStats.total_billed),  sub: `${PKR(invoiceStats.total_unpaid)} pending`,                        color: '#059669', href: '/admin/invoices' },
     hasFinance      &&      { label: 'Revenue',      value: PKR(payStats.total_received),    sub: `${PKR(payStats.this_month)} this month`,                            color: '#16a34a', href: '/admin/payments' },
+    // Placeholder — no Expense model/table exists in this codebase yet.
+    // Reserves the card's spot in the layout for when that feature lands;
+    // deliberately not wired to any query.
+    hasFinance      &&      { label: 'Expenses',     value: '—',                              sub: 'Coming soon',                                                      color: '#94a3b8', href: '' },
     has('hr')       && s && { label: 'Employees',    value: s.employees.total,            sub: `${s.employees.users} system users`,                                    color: '#64748b', href: '/admin/hr' },
   ].filter(Boolean) as { label: string; value: string | number; sub: string; color: string; href: string }[];
 

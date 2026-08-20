@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Models\Invoice;
 use App\Models\Notification;
 use App\Models\Payment;
@@ -14,6 +15,8 @@ use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function companyIds(): array
     {
         return auth('admin')->user()->companies()->pluck('id')->toArray();
@@ -79,7 +82,10 @@ class PaymentController extends Controller
     // GET /admin/payments
     public function index(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        // Company-Wise Dashboard Filtering — scoped to the active company;
+        // $summary below is computed from this same already-scoped $payments
+        // collection, so it's correct automatically.
+        $companyIds = [$this->activeCompanyId()];
 
         $query = Payment::whereHas('invoice', fn($q) => $q->whereIn('company_id', $companyIds))
             ->with(['invoice:id,invoice_number,client_id,currency', 'invoice.client:id,name'])

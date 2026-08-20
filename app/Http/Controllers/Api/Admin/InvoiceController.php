@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Mail\InvoiceMail;
 use App\Models\Client;
 use App\Models\Company;
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\Mail;
 
 class InvoiceController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin() { return auth('admin')->user(); }
 
     private function companyIds(): array
@@ -99,7 +102,8 @@ class InvoiceController extends Controller
     // GET /admin/invoices
     public function index(Request $request): JsonResponse
     {
-        $q = Invoice::whereIn('company_id', $this->companyIds())
+        // Company-Wise Dashboard Filtering — scoped to the active company.
+        $q = Invoice::where('company_id', $this->activeCompanyId())
             ->with(['client:id,name,company_name,email'])
             ->latest();
 

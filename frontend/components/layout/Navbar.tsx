@@ -8,6 +8,7 @@ import { User, Admin } from "@/types";
 import { notificationService } from "@/lib/services/notificationService";
 import { adminNotificationService } from "@/lib/services/adminNotificationService";
 import { resolveAvatarUrl } from "@/lib/services/profileService";
+import CompanySelector from "@/components/admin/CompanySelector";
 
 // Common shape both the staff (notifications table) and admin (SystemAuditLog
 // activity feed) sources are normalized into for display — the two backends
@@ -254,6 +255,18 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
             </h1>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* Company-Wise Dashboard Filtering — shown on every admin
+                    page (not just the Dashboard), so switching companies here
+                    scopes whichever page the admin navigates to next.
+                    Renders nothing for a single-company Admin. A full reload
+                    is the simplest correct way to make every already-loaded
+                    page's data (not just this one) re-fetch under the newly
+                    active company's X-Active-Company-Id header. */}
+                {authType === "admin" && (
+                    <CompanySelector
+                        onChange={() => window.location.reload()}
+                    />
+                )}
                 {/* Rule 9: Company switcher — only shown for sub-users with multiple companies */}
                 {authType === "user" && multiCompany && activeCompanyName && (
                     <button
