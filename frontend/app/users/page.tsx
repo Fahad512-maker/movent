@@ -216,7 +216,7 @@ export default function UsersPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #f1f5f9' }}>
-                    {['Name', 'Role', 'Active Modules', 'Status', 'Last Login', 'Created', 'Actions'].map(h => (
+                    {['Name', 'Role', 'Companies', 'Active Modules', 'Status', 'Last Login', 'Created', 'Actions'].map(h => (
                       <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                         {h}
                       </th>
@@ -245,6 +245,31 @@ export default function UsersPage() {
                           <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 50, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap' }}>
                             {roleDisplayLabel(user)}
                           </span>
+                        </td>
+
+                        {/* Companies — every company this user is assigned to
+                            within this admin's org (not just whichever is
+                            currently active in the top-of-page filter). */}
+                        <td style={{ padding: '14px 16px', maxWidth: 200 }}>
+                          {(user.company_assignments ?? []).length > 0 ? (
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {(user.company_assignments ?? []).map(a => (
+                                <span
+                                  key={a.company_id}
+                                  title={a.status === 'suspended' ? 'Suspended' : undefined}
+                                  style={{
+                                    fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500, whiteSpace: 'nowrap',
+                                    background: a.status === 'suspended' ? '#fef2f2' : '#eff6ff',
+                                    color: a.status === 'suspended' ? '#dc2626' : '#2563eb',
+                                  }}
+                                >
+                                  {a.company_name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>—</span>
+                          )}
                         </td>
 
                         {/* Active modules */}

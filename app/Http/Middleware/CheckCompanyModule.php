@@ -51,10 +51,24 @@ class CheckCompanyModule
                 ->exists()) {
                 $companyId = 0;
             }
-            $companyId = $companyId ?: (int) $user->company_id;
+
+            // Unassign Company from User — company_id is a NOT NULL column
+            // that can outlive the assignment backing it (e.g. a user whose
+            // last company was just unassigned still has *some* stale value
+            // sitting there). Never trust it on its own; require the exact
+            // same active-assignment check the header just went through.
+            if (!$companyId) {
+                $fallbackId = (int) $user->company_id;
+                if ($fallbackId && CompanyUserAssignment::where('user_id', $user->id)
+                    ->where('company_id', $fallbackId)
+                    ->where('status', 'active')
+                    ->exists()) {
+                    $companyId = $fallbackId;
+                }
+            }
 
             if (!$companyId) {
-                return ApiResponse::error('Unauthorized', 401);
+                return ApiResponse::error('No company assigned to your account. Contact your admin.', 403);
             }
             $enabled = CompanyModule::where('company_id', $companyId)
                 ->where('module_key', $moduleKey)

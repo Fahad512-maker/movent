@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CompanyPaymentGateway;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\PaymentGateways\GatewayCurrencySupport;
 use App\Services\PaymentGateways\PaymentGatewayManager;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -62,6 +63,38 @@ class InvoiceGatewayChargeService
         return round((float) $invoice->total_amount - (float) $invoice->paid_amount, 2);
     }
 
+    // Decides what currency/amount a gateway call should actually use for
+    // this invoice: unchanged if the gateway already supports the invoice's
+    // own currency (exchange_rate stays null — no conversion happened),
+    // otherwise converted to USD via CurrencyConversionService. The
+    // original figures are always preserved separately so callers can keep
+    // Payment.amount/currency (and therefore invoice balance math) in the
+    // invoice's original currency regardless of what was actually charged.
+    private static function resolveChargeAmount(Invoice $invoice, string $gateway, float $originalAmount): array
+    {
+        $originalCurrency = $invoice->currency ?: 'USD';
+
+        if (GatewayCurrencySupport::supports($gateway, $originalCurrency)) {
+            return [
+                'currency'          => $originalCurrency,
+                'amount'            => $originalAmount,
+                'original_currency' => $originalCurrency,
+                'original_amount'   => $originalAmount,
+                'exchange_rate'     => null,
+            ];
+        }
+
+        $converted = CurrencyConversionService::convert($originalAmount, $originalCurrency, 'USD');
+
+        return [
+            'currency'          => 'USD',
+            'amount'            => $converted['amount'],
+            'original_currency' => $originalCurrency,
+            'original_amount'   => $originalAmount,
+            'exchange_rate'     => $converted['rate'],
+        ];
+    }
+
     // GET .../gateways/{gateway}/init — public-safe credentials only, mirrors
     // Api\Admin\SubscriptionPaymentController::init()'s exact field selection
     // per gateway, just sourced from the company's own gateway config.
@@ -101,6 +134,8 @@ class InvoiceGatewayChargeService
             throw new \RuntimeException('Invoice is already paid.');
         }
 
+        $charge = self::resolveChargeAmount($invoice, 'paypal', $amount);
+
         $baseUrl = $mode === 'live'
             ? 'https://api-m.paypal.com'
             : 'https://api-m.sandbox.paypal.com';
@@ -120,8 +155,8 @@ class InvoiceGatewayChargeService
                     'reference_id' => (string) $invoice->id,
                     'invoice_id'   => $invoice->invoice_number . '-' . $invoice->id,
                     'amount'       => [
-                        'currency_code' => strtoupper($invoice->currency ?: 'USD'),
-                        'value'         => number_format($amount, 2, '.', ''),
+                        'currency_code' => strtoupper($charge['currency']),
+                        'value'         => number_format($charge['amount'], 2, '.', ''),
                     ],
                 ]],
             ]);
@@ -158,10 +193,19 @@ class InvoiceGatewayChargeService
             throw new \RuntimeException('A payment is already being processed for this invoice. Please wait a moment and try again.');
         }
 
+        $charge = self::resolveChargeAmount($invoice, $gateway, $amount);
+
         $payment = Payment::create([
             'invoice_id'          => $invoice->id,
             'recorded_by'         => $recordedBy,
+            // amount/currency stay the invoice's ORIGINAL figures — this is
+            // what InvoicePaymentService::applyToInvoice() sums against the
+            // invoice balance. converted_* is audit data only.
             'amount'              => $amount,
+            'currency'            => $charge['original_currency'],
+            'converted_amount'    => $charge['exchange_rate'] !== null ? $charge['amount'] : null,
+            'converted_currency'  => $charge['exchange_rate'] !== null ? $charge['currency'] : null,
+            'exchange_rate'       => $charge['exchange_rate'],
             'method'              => 'gateway',
             'gateway'             => $gateway,
             'company_gateway_id'  => $gatewayRow->id,
@@ -172,8 +216,8 @@ class InvoiceGatewayChargeService
 
         try {
             $gatewayRef = (new PaymentGatewayCharger)->charge($gateway, $gatewayRow->config, $data + [
-                'amount'   => $amount,
-                'currency' => $invoice->currency,
+                'amount'   => $charge['amount'],
+                'currency' => $charge['currency'],
             ]);
         } catch (\RuntimeException $e) {
             InvoicePaymentService::finalizeGatewayFailure($payment, $e->getMessage());

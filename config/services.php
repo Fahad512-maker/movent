@@ -46,4 +46,11 @@ return [
         'admin_redirect' => env('GOOGLE_ADMIN_REDIRECT_URI'),
     ],
 
+    // Used by App\Services\CurrencyConversionService to convert an
+    // invoice's amount into a currency its payment gateway actually
+    // supports. Free-tier key from https://www.exchangerate-api.com/.
+    'exchange_rate' => [
+        'key' => env('EXCHANGE_RATE_API_KEY'),
+    ],
+
 ];

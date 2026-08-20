@@ -659,7 +659,13 @@ export default function NewUserPage() {
   // true when step 2 can be skipped (single company, already selected)
   const singleCompany = companies.length === 1;
 
-  const selectCompany = (id: number) => setSelectedIds([id]);
+  // Assign Multiple Companies to User — toggles one company in/out of the
+  // selection rather than replacing it, so an admin can pick several.
+  // Everything downstream (step 3's per-company tabs, handleSubmit's
+  // company_assignments mapping) already iterates selectedIds and needs no
+  // change for N > 1.
+  const toggleCompany = (id: number) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const togglePerm = (companyId: number, moduleKey: string, permKey: string) => {
     setPerms(prev => {
@@ -955,7 +961,7 @@ export default function NewUserPage() {
                       const sel = selectedIds.includes(c.id);
                       return (
                         <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 10, border: `1.5px solid ${sel ? '#bfdbfe' : '#e2e8f0'}`, background: sel ? '#eff6ff' : '#fafafa', cursor: 'pointer' }}>
-                          <input type="radio" name="company" checked={sel} onChange={() => selectCompany(c.id)} style={{ accentColor: '#2563eb', width: 16, height: 16, flexShrink: 0 }} />
+                          <input type="checkbox" checked={sel} onChange={() => toggleCompany(c.id)} style={{ accentColor: '#2563eb', width: 16, height: 16, flexShrink: 0 }} />
                           <span style={{ fontWeight: sel ? 700 : 500, color: sel ? '#1d4ed8' : '#0f172a', fontSize: 14 }}>{c.name}</span>
                         </label>
                       );

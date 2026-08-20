@@ -148,6 +148,63 @@ function EditUserPageContent() {
     });
   };
 
+  // Assign Multiple Companies to User — purely local state, same as every
+  // other edit on this page; nothing is persisted until the existing Save
+  // button runs its existing per-company loop (userService.
+  // updateCompanyPermissions), which already firstOrCreate()s the
+  // CompanyUserAssignment row server-side, so no new endpoint is needed.
+  const [pickCompanyId, setPickCompanyId] = useState('');
+  const unassignedCompanies = companies.filter(c => !assignedIds.includes(c.id));
+
+  const addCompany = () => {
+    if (!pickCompanyId) return;
+    const cid = Number(pickCompanyId);
+    if (assignedIds.includes(cid)) return;
+
+    const co = companies.find(c => c.id === cid);
+    const rawDb = co?.modules ?? [];
+    const availMods = getAvailableModules(rawDb);
+    const allPerms = visiblePermsByModule(availMods, rawDb);
+    setPerms(prev => ({ ...prev, [cid]: getRoleDefaultPermissions(form.role_type, availMods.map(m => m.key), allPerms) }));
+    setAssignedIds(prev => [...prev, cid]);
+    setActiveCompanyId(cid);
+    setPickCompanyId('');
+  };
+
+  // Unassign Company from User — reuses the already-existing
+  // userService.remove(id, companyId), the same call the Users list page's
+  // "Delete" button already makes (bare, without a companyId, for the
+  // "remove their only company" case). This is an immediate, destructive
+  // API call (unlike Add Company above) — it doesn't wait for the page's
+  // own Save button, matching how the list page's delete already behaves.
+  const [removingCompanyId, setRemovingCompanyId] = useState<number | null>(null);
+
+  const removeCompany = async (companyId: number) => {
+    const co = companies.find(c => c.id === companyId);
+    const remainingIds = assignedIds.filter(cid => cid !== companyId);
+    const confirmMsg = remainingIds.length === 0
+      ? `Remove ${co?.name ?? 'this company'} from this user? This is their only company — they will lose all company-specific CRM access until a company is assigned again.`
+      : `Remove ${co?.name ?? 'this company'} from this user?`;
+    if (!confirm(confirmMsg)) return;
+
+    setRemovingCompanyId(companyId);
+    try {
+      await userService.remove(id, companyId);
+      setAssignedIds(remainingIds);
+      setPerms(prev => {
+        const next = { ...prev };
+        delete next[companyId];
+        return next;
+      });
+      if (activeCompanyId === companyId) setActiveCompanyId(remainingIds[0] ?? null);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message ?? 'Failed to remove company');
+    } finally {
+      setRemovingCompanyId(null);
+    }
+  };
+
   // Changing the role is a meaningful action (it implies "this person's job
   // changed"), so it's confirmed before touching anything, and — unlike Add
   // User, where defaults just pre-fill a blank slate — it REPLACES whatever
@@ -321,8 +378,23 @@ function EditUserPageContent() {
                           <span style={{ fontSize: 12, color: '#64748b' }}>
                             Default permissions are selected based on role. You can customize them before saving.
                           </span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap', marginLeft: 12 }}>
-                            {totalSelected} permission{totalSelected === 1 ? '' : 's'} selected
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 12 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>
+                              {totalSelected} permission{totalSelected === 1 ? '' : 's'} selected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeCompany(activeCompanyId)}
+                              disabled={removingCompanyId === activeCompanyId}
+                              title="Remove this company from this user"
+                              style={{
+                                border: 'none', background: 'transparent', color: '#dc2626',
+                                fontSize: 12, fontWeight: 600, cursor: removingCompanyId === activeCompanyId ? 'not-allowed' : 'pointer',
+                                opacity: removingCompanyId === activeCompanyId ? 0.5 : 1, whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {removingCompanyId === activeCompanyId ? 'Removing…' : '✕ Remove company'}
+                            </button>
                           </span>
                         </div>
                       );
@@ -340,6 +412,32 @@ function EditUserPageContent() {
                             </button>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* Assign Multiple Companies to User — add another of this
+                        admin's companies to this user. Hidden once the user
+                        is already on every company the admin owns. */}
+                    {unassignedCompanies.length > 0 && (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20 }}>
+                        <select value={pickCompanyId} onChange={e => setPickCompanyId(e.target.value)} style={{ ...inp, width: 'auto', flex: '0 1 260px' }}>
+                          <option value="">+ Add another company…</option>
+                          {unassignedCompanies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={addCompany}
+                          disabled={!pickCompanyId}
+                          style={{
+                            padding: '10px 18px', borderRadius: 8, border: 'none',
+                            background: pickCompanyId ? '#2563eb' : '#cbd5e1', color: '#fff',
+                            fontWeight: 600, fontSize: 13, cursor: pickCompanyId ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Add
+                        </button>
                       </div>
                     )}
 

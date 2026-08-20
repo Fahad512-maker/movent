@@ -1,8 +1,8 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken, logout } from '@/lib/auth';
-import { Admin } from '@/types';
+import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken, logout, getActiveCompany, setActiveCompany } from '@/lib/auth';
+import { Admin, User } from '@/types';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import api from '@/lib/axios';
@@ -15,6 +15,12 @@ export default function DashboardLayout({
   title?: string;
 }) {
   const router = useRouter();
+  // Unassign Company from User — set once the periodic refresh below finds
+  // this User session has zero active company_assignments left. Renders in
+  // place of the normal sidebar/content rather than navigating away, so
+  // "block company-specific CRM access" holds no matter which page they
+  // were on when their last company was unassigned.
+  const [noCompanyAssigned, setNoCompanyAssigned] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/login'); return; }
@@ -71,6 +77,27 @@ export default function DashboardLayout({
               logout();
               router.replace('/login');
             }
+
+            // Unassign Company from User — react the moment THIS session's
+            // own company list shrinks (an admin removing them from a
+            // company happens in a different session entirely, so this poll
+            // is how the affected user's own browser finds out).
+            if (type === 'user') {
+              const active = ((fresh as User).company_assignments ?? []).filter(a => a.status === 'active');
+              setNoCompanyAssigned(active.length === 0);
+
+              const activeId = getActiveCompany();
+              const stillValid = activeId !== null && active.some(a => a.company_id === activeId);
+              if (active.length > 0 && !stillValid) {
+                if (active.length === 1) {
+                  // Automatically switch — nothing to ask, there's only one.
+                  setActiveCompany(active[0].company_id);
+                } else if (window.location.pathname !== '/select-company') {
+                  // Ask them to pick, same as the post-login flow.
+                  router.replace('/select-company');
+                }
+              }
+            }
           }
         }).catch(() => {});
       };
@@ -79,6 +106,29 @@ export default function DashboardLayout({
       return () => clearInterval(interval);
     }
   }, [router]);
+
+  if (noCompanyAssigned) {
+    return (
+      <div>
+        <div className="main-content" style={{ marginLeft: 0 }}>
+          <Navbar title={title} />
+          <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
+            <div style={{
+              maxWidth: 480, marginTop: 60, textAlign: 'center', background: '#fff',
+              border: '1px solid #f1f5f9', borderRadius: 14, padding: '40px 32px',
+            }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>No company assigned</h2>
+              <p style={{ fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
+                You&apos;re not currently assigned to any company. Contact your Company Admin — CRM access
+                will resume automatically as soon as you&apos;re assigned to one again.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

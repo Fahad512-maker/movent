@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\PaymentGatewayWebhookEvent;
 use App\Models\SystemAuditLog;
 use App\Models\UserCompanyPermission;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class InvoicePaymentService
@@ -56,6 +57,19 @@ class InvoicePaymentService
      */
     public static function applyToInvoice(Invoice $invoice, Payment $payment): void
     {
+        // Payment.amount/currency must always be in the invoice's own
+        // currency (converted_amount/converted_currency are separate audit
+        // fields for whatever was actually sent to the gateway) — reject
+        // rather than silently corrupt paid_amount/status against the wrong
+        // currency's number.
+        if ($payment->currency && $invoice->currency && strcasecmp($payment->currency, $invoice->currency) !== 0) {
+            Log::error('Refusing to apply payment with mismatched currency to invoice', [
+                'invoice_id' => $invoice->id, 'payment_id' => $payment->id,
+                'invoice_currency' => $invoice->currency, 'payment_currency' => $payment->currency,
+            ]);
+            throw new \RuntimeException('Payment currency does not match invoice currency.');
+        }
+
         $newPaid         = round((float) $invoice->paid_amount + (float) $payment->amount, 2);
         $invoice->paid_amount = $newPaid;
         $invoice->status      = $newPaid >= (float) $invoice->total_amount

@@ -8,8 +8,10 @@ use App\Models\Client;
 use App\Models\CompanyPaymentGateway;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\CurrencyConversionService;
 use App\Services\InvoiceGatewayChargeService;
 use App\Services\InvoicePaymentService;
+use App\Services\PaymentGateways\GatewayCurrencySupport;
 use App\Services\PaymentGateways\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -127,7 +129,7 @@ class InvoiceController extends Controller
                 ->groupBy('gateway')
                 ->map(fn($rows) => $rows->firstWhere('is_default', true) ?? $rows->first());
 
-            return [$this->formatGatewayAccounts($rows), null];
+            return [$this->formatGatewayAccounts($rows, $invoice), null];
         }
 
         $active = $allowed->where('is_active', true);
@@ -136,16 +138,40 @@ class InvoiceController extends Controller
             return [[], 'No active payment gateway is available for this invoice. Please contact support.'];
         }
 
-        return [$this->formatGatewayAccounts($active), null];
+        return [$this->formatGatewayAccounts($active, $invoice), null];
     }
 
-    private function formatGatewayAccounts($rows): array
+    private function formatGatewayAccounts($rows, Invoice $invoice): array
     {
-        return $rows->map(fn($g) => [
-            'id'    => $g->id,
-            'type'  => $g->gateway,
-            'label' => $g->label ?: (CompanyPaymentGateway::GATEWAYS[$g->gateway] ?? $g->gateway),
-        ])->values()->toArray();
+        $outstanding = round((float) $invoice->total_amount - (float) $invoice->paid_amount, 2);
+
+        return $rows->map(function ($g) use ($invoice, $outstanding) {
+            $supportsInvoiceCurrency = GatewayCurrencySupport::supports($g->gateway, $invoice->currency);
+            $conversionPreview       = null;
+
+            if (!$supportsInvoiceCurrency && $outstanding > 0) {
+                try {
+                    $converted = CurrencyConversionService::convert($outstanding, $invoice->currency ?: 'USD', 'USD');
+                    $conversionPreview = [
+                        'amount'   => $converted['amount'],
+                        'currency' => 'USD',
+                        'rate'     => $converted['rate'],
+                    ];
+                } catch (\Throwable $e) {
+                    Log::warning('Conversion preview failed for client invoice gateway', [
+                        'invoice_id' => $invoice->id, 'gateway' => $g->gateway, 'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            return [
+                'id'                        => $g->id,
+                'type'                      => $g->gateway,
+                'label'                     => $g->label ?: (CompanyPaymentGateway::GATEWAYS[$g->gateway] ?? $g->gateway),
+                'supports_invoice_currency' => $supportsInvoiceCurrency,
+                'conversion_preview'        => $conversionPreview,
+            ];
+        })->values()->toArray();
     }
 
     public function payRequest(Request $request, int $id): JsonResponse

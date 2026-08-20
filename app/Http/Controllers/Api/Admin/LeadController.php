@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Lead;
@@ -17,6 +18,8 @@ use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()   { return auth('admin')->user(); }
     private function adminName(): string { return $this->admin()->name ?? 'Admin'; }
 
@@ -50,7 +53,14 @@ class LeadController extends Controller
             ->with(['assignedTo:id,name'])
             ->orderByDesc('created_at');
 
-        if ($request->filled('company_id'))  $q->where('company_id',  $request->company_id);
+        // Company-Wise Dashboard Filtering — defaults to the active company
+        // (matches ProjectController/ClientController::index()'s identical
+        // default), narrowed further by an explicit ?company_id= override.
+        if ($request->filled('company_id')) {
+            $q->where('company_id', $request->company_id);
+        } else {
+            $q->where('company_id', $this->activeCompanyId());
+        }
         if ($request->filled('status'))      $q->where('status',      $request->status);
         if ($request->filled('priority'))    $q->where('priority',    $request->priority);
         if ($request->filled('source'))      $q->where('source',      $request->source);

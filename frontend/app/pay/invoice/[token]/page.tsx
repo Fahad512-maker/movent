@@ -11,10 +11,18 @@ interface PublicInvoiceItem {
   total: number;
 }
 
+interface ConversionPreview {
+  amount: number;
+  currency: string;
+  rate: number;
+}
+
 interface Gateway {
   id: number | null;
   type: string;
   label: string;
+  supports_invoice_currency?: boolean;
+  conversion_preview?: ConversionPreview | null;
 }
 
 interface BankDetails {
@@ -416,6 +424,12 @@ function PublicInvoicePayContent() {
   const isPartial       = invoice.status === 'partially_paid';
   const isBankSelected  = selectedGateway === 'bank_transfer';
   const isOnlineGateway = selectedGateway && selectedGateway !== 'bank_transfer';
+  const selectedGw      = invoice.available_gateways.find(g => g.id === selectedAccountId) ?? invoice.available_gateways.find(g => g.type === selectedGateway);
+  // PayPal's Buttons SDK is loaded with a `currency` query param that must
+  // match the order it's about to create — once the backend converts an
+  // unsupported invoice currency, that's the converted currency, not the
+  // invoice's own.
+  const chargeCurrency  = selectedGw?.conversion_preview?.currency ?? invoice.currency;
 
   return (
     <div style={wrap}>
@@ -554,32 +568,44 @@ function PublicInvoicePayContent() {
                 const meta   = GATEWAY_META[gw.type] ?? { icon: '💰', desc: '' };
                 const active = gw.id !== null ? selectedAccountId === gw.id : selectedGateway === gw.type;
                 return (
-                  <button
-                    key={gw.id ?? gw.type}
-                    type="button"
-                    onClick={() => { setSelectedGateway(gw.type); setSelectedAccountId(gw.id); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 14, width: '100%',
-                      padding: '14px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                      border: `2px solid ${active ? '#3b82f6' : '#e2e8f0'}`,
-                      background: active ? '#eff6ff' : '#fff',
-                    }}
-                  >
-                    <span style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{gw.label}</div>
-                      {meta.desc && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{meta.desc}</div>}
-                    </div>
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${active ? '#3b82f6' : '#cbd5e1'}`,
-                      background: active ? '#3b82f6' : 'transparent',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 11, fontWeight: 700,
-                    }}>
-                      {active ? '✓' : ''}
-                    </div>
-                  </button>
+                  <div key={gw.id ?? gw.type}>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedGateway(gw.type); setSelectedAccountId(gw.id); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+                        padding: '14px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                        border: `2px solid ${active ? '#3b82f6' : '#e2e8f0'}`,
+                        background: active ? '#eff6ff' : '#fff',
+                      }}
+                    >
+                      <span style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{gw.label}</div>
+                        {meta.desc && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{meta.desc}</div>}
+                      </div>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                        border: `2px solid ${active ? '#3b82f6' : '#cbd5e1'}`,
+                        background: active ? '#3b82f6' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: 11, fontWeight: 700,
+                      }}>
+                        {active ? '✓' : ''}
+                      </div>
+                    </button>
+                    {gw.conversion_preview && (
+                      <div style={{
+                        fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a',
+                        borderRadius: 6, padding: '6px 10px', marginTop: 6,
+                      }}>
+                        {gw.label} doesn&apos;t support {invoice.currency} — you&apos;ll be charged{' '}
+                        <strong>{fmt(gw.conversion_preview.amount, gw.conversion_preview.currency)}</strong>
+                        {' '}for {fmt(invoice.total_amount - invoice.paid_amount, invoice.currency)}
+                        {' '}(1 {invoice.currency} = {gw.conversion_preview.rate.toFixed(4)} {gw.conversion_preview.currency}).
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -625,7 +651,7 @@ function PublicInvoicePayContent() {
               createOrderUrl={selectedGateway === 'paypal' ? `${base}/public/invoices/${token}/gateways/paypal/create-order` : undefined}
               chargeUrl={`${base}/public/invoices/${token}/gateways/${selectedGateway}/charge`}
               companyGatewayId={selectedAccountId}
-              currency={invoice.currency}
+              currency={chargeCurrency}
               disabled={paying}
               onProcessingChange={setPaying}
               onSuccess={result => {

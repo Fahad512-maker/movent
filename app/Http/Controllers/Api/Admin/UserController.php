@@ -176,15 +176,17 @@ class UserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        // Company-Wise Dashboard Filtering — every downstream use of
-        // $companyIds in this method (which users are included, which of
-        // their company-scoped relations are shown, seat count/limit below)
-        // now narrows to the one active company instead of every company
-        // this admin owns.
-        $companyIds = [$this->activeCompanyId()];
+        // Company-Wise Dashboard Filtering narrows WHICH USERS show up in
+        // this list to the active company — but each shown user's own
+        // companyAssignments/userCompanyPermissions/primary-company display
+        // must stay bound to every company this admin owns (orgCompanyIds),
+        // not just the active one, or a genuinely multi-company user would
+        // wrongly appear to belong to only whichever company is active.
+        $activeCompanyIds = [$this->activeCompanyId()];
+        $orgCompanyIds = $this->companyIds();
 
         // Include users assigned to any of the admin's companies (not just primary company)
-        $userIds = CompanyUserAssignment::whereIn('company_id', $companyIds)
+        $userIds = CompanyUserAssignment::whereIn('company_id', $activeCompanyIds)
             ->pluck('user_id')
             ->unique()
             ->values()
@@ -194,8 +196,8 @@ class UserController extends Controller
                 // Scoped to the admin's own companies only — a user who also
                 // belongs to a company outside this admin's org must never
                 // leak that other membership/permissions in this response.
-                'companyAssignments' => fn ($q) => $q->whereIn('company_id', $companyIds)->with('company:id,name'),
-                'userCompanyPermissions' => fn ($q) => $q->whereIn('company_id', $companyIds),
+                'companyAssignments' => fn ($q) => $q->whereIn('company_id', $orgCompanyIds)->with('company:id,name'),
+                'userCompanyPermissions' => fn ($q) => $q->whereIn('company_id', $orgCompanyIds),
                 'company:id,name',
                 'createdBy:id,name',
             ])
@@ -208,8 +210,8 @@ class UserController extends Controller
         $users = $query->latest()->get();
 
         // Never surface a "primary company" the admin doesn't own.
-        $users->each(function (User $u) use ($companyIds) {
-            if ($u->company_id && !in_array($u->company_id, $companyIds)) {
+        $users->each(function (User $u) use ($orgCompanyIds) {
+            if ($u->company_id && !in_array($u->company_id, $orgCompanyIds)) {
                 $u->setRelation('company', null);
             }
         });
@@ -676,8 +678,14 @@ class UserController extends Controller
         $remaining = CompanyUserAssignment::where('user_id', $user->id)->first();
 
         if (!$remaining) {
-            // No company left at all — the global account has nothing to belong to.
-            $user->delete();
+            // No company left at all — keep the account (Unassign Company
+            // from User: never delete the user/project/invoice data, just
+            // block company-specific access until they're assigned again).
+            // company_id is NOT NULL with no nullable migration, so it's left
+            // pointing at the company they were just removed from — that's
+            // fine, since it's now a stale value with no backing active
+            // CompanyUserAssignment row, and CheckCompanyModule verifies
+            // exactly that before trusting it for module access.
         } elseif ($user->company_id === $companyId) {
             // Their "primary" company_id — which every permission check in
             // this app reads — just lost its membership row. Repoint it to a

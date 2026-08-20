@@ -129,7 +129,7 @@ export default function EditInvoicePage() {
 
   return (
     <DashboardLayout title={`Edit ${invoice.invoice_number}`}>
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%' }}>
         <button onClick={() => router.push(`/invoices/${invoiceId}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
           <HiArrowLeft size={16} /> Back to {invoice.invoice_number}
         </button>

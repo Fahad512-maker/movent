@@ -8,10 +8,18 @@ import toast from 'react-hot-toast';
 
 const GREEN = '#10b981';
 
+interface ConversionPreview {
+  amount: number;
+  currency: string;
+  rate: number;
+}
+
 interface Gateway {
   id: number | null;
   type: string;
   label: string;
+  supports_invoice_currency?: boolean;
+  conversion_preview?: ConversionPreview | null;
 }
 
 interface BankDetails {
@@ -161,16 +169,24 @@ export default function ClientPaymentPage() {
   const isGateway    = ['paypal', 'stripe', 'authorize_net'].includes(selectedMethod);
   const isBankXfer   = selectedMethod === 'bank_transfer';
 
-  const allMethods: Array<{ optionKey: string | number; type: string; accountId: number | null; label: string; icon: string }> = [
+  const allMethods: Array<{ optionKey: string | number; type: string; accountId: number | null; label: string; icon: string; conversionPreview?: ConversionPreview | null }> = [
     ...data.gateways.map(g => ({
       optionKey: g.id ?? g.type,
       type:      g.type,
       accountId: g.id,
       label:     g.label,
       icon:      GATEWAY_ICONS[g.type] ?? '💳',
+      conversionPreview: g.conversion_preview,
     })),
     ...(data.bank ? [{ optionKey: 'bank_transfer', type: 'bank_transfer', accountId: null, label: 'Bank Transfer', icon: '🏦' }] : []),
   ];
+
+  const selectedMethodMeta = allMethods.find(m => (m.accountId !== null ? m.accountId === selectedAccountId : m.type === selectedMethod));
+  // PayPal's Buttons SDK loads with a `currency` query param that must match
+  // the order it's about to create — once the backend converts an
+  // unsupported invoice currency, that's the converted currency, not the
+  // invoice's own.
+  const chargeCurrency = selectedMethodMeta?.conversionPreview?.currency ?? data.invoice.currency;
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0',
@@ -223,25 +239,37 @@ export default function ClientPaymentPage() {
             {allMethods.map(m => {
               const active = m.accountId !== null ? selectedAccountId === m.accountId : selectedMethod === m.type;
               return (
-                <label
-                  key={m.optionKey}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                    border: `2px solid ${active ? GREEN : '#e2e8f0'}`,
-                    borderRadius: 10, cursor: 'pointer',
-                    background: active ? '#f0fdf4' : '#fff',
-                  }}>
-                  <input
-                    type="radio"
-                    name="method"
-                    value={m.optionKey}
-                    checked={active}
-                    onChange={() => { setSelected(m.type); setSelectedAccountId(m.accountId); }}
-                    style={{ accentColor: GREEN, width: 16, height: 16 }}
-                  />
-                  <span style={{ fontSize: 20, lineHeight: 1 }}>{m.icon}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>{m.label}</span>
-                </label>
+                <div key={m.optionKey}>
+                  <label
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                      border: `2px solid ${active ? GREEN : '#e2e8f0'}`,
+                      borderRadius: 10, cursor: 'pointer',
+                      background: active ? '#f0fdf4' : '#fff',
+                    }}>
+                    <input
+                      type="radio"
+                      name="method"
+                      value={m.optionKey}
+                      checked={active}
+                      onChange={() => { setSelected(m.type); setSelectedAccountId(m.accountId); }}
+                      style={{ accentColor: GREEN, width: 16, height: 16 }}
+                    />
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>{m.icon}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>{m.label}</span>
+                  </label>
+                  {m.conversionPreview && (
+                    <div style={{
+                      fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a',
+                      borderRadius: 6, padding: '6px 10px', marginTop: 6,
+                    }}>
+                      {m.label} doesn&apos;t support {data.invoice.currency} — you&apos;ll be charged{' '}
+                      <strong>{m.conversionPreview.currency} {m.conversionPreview.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                      {' '}for {data.invoice.currency} {due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {' '}(1 {data.invoice.currency} = {m.conversionPreview.rate.toFixed(4)} {m.conversionPreview.currency}).
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -283,7 +311,7 @@ export default function ClientPaymentPage() {
               createOrderUrl={selectedMethod === 'paypal' ? `/client/invoices/${invoiceId}/gateways/paypal/create-order` : undefined}
               chargeUrl={`/client/invoices/${invoiceId}/gateways/${selectedMethod}/charge`}
               companyGatewayId={selectedAccountId}
-              currency={data.invoice.currency}
+              currency={chargeCurrency}
               disabled={paying}
               onProcessingChange={setPaying}
               onSuccess={result => {

@@ -25,7 +25,7 @@ export default function AdminCompaniesPage() {
 
   return (
     <DashboardLayout title="Companies">
-      <div style={{ width: '100%', maxWidth: 1180 }}>
+      <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Companies</h1>
