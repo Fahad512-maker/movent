@@ -173,7 +173,12 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
             setAuthType(type);
 
             if (type === "user") {
-                const assignments = (u as User)?.company_assignments ?? [];
+                // Filtered to active-only — a suspended assignment must not
+                // count toward "has multiple companies" or supply the
+                // fallback active company name (matches DashboardLayout's
+                // noCompanyAssigned check), otherwise the switcher can show
+                // for a user with zero *active* assignments.
+                const assignments = ((u as User)?.company_assignments ?? []).filter((a) => a.status === "active");
                 setMultiCompany(assignments.length > 1);
                 const activeId = getActiveCompany();
                 const active = activeId

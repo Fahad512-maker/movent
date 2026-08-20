@@ -968,10 +968,21 @@ export default function NewUserPage() {
                     })}
                   </div>
                 )}
+                {companies.length > 0 && selectedIds.length === 0 && (
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 18 }}>
+                    Leaving this unchecked creates the user with no company — they&apos;ll see a &quot;not assigned&quot; message until you assign one via Edit User.
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
+                    disabled={saving}
                     onClick={() => {
-                      if (selectedIds.length === 0) { setError('Select at least one company.'); return; }
+                      // No company selected — nothing to configure permissions
+                      // for, so create the user directly with zero
+                      // company_assignments rather than blocking. They'll
+                      // land in the "not assigned to any company" empty
+                      // state until an admin assigns one via Edit User.
+                      if (selectedIds.length === 0) { handleSubmit(); return; }
                       setError('');
 
                       // Pre-select this role's default permissions for companies that have none yet
@@ -990,9 +1001,9 @@ export default function NewUserPage() {
                       setActiveCompanyId(selectedIds[0]);
                       setStep(3);
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 28px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 28px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg,#2563eb,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
                   >
-                    Next <HiArrowRight size={16} />
+                    {selectedIds.length === 0 ? (saving ? 'Creating…' : 'Create User (no company)') : <>Next <HiArrowRight size={16} /></>}
                   </button>
                   <button onClick={() => { setError(''); setStep(1); }} style={{ padding: '12px 20px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Back</button>
                 </div>

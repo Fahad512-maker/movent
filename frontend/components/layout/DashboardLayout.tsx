@@ -19,8 +19,17 @@ export default function DashboardLayout({
   // this User session has zero active company_assignments left. Renders in
   // place of the normal sidebar/content rather than navigating away, so
   // "block company-specific CRM access" holds no matter which page they
-  // were on when their last company was unassigned.
-  const [noCompanyAssigned, setNoCompanyAssigned] = useState(false);
+  // were on when their last company was unassigned. Initialized synchronously
+  // from the cached login cookie (not just `false`) so a session that's
+  // already zero-company right after login never flashes the real
+  // Sidebar/page content (and their data-fetches) before the async refresh
+  // below gets a chance to run.
+  const [noCompanyAssigned, setNoCompanyAssigned] = useState(() => {
+    if (typeof window === 'undefined' || !isAuthenticated() || getAuthType() !== 'user') return false;
+    const cachedUser = getAuthUser() as User | null;
+    const active = (cachedUser?.company_assignments ?? []).filter(a => a.status === 'active');
+    return active.length === 0;
+  });
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/login'); return; }
@@ -118,10 +127,11 @@ export default function DashboardLayout({
               border: '1px solid #f1f5f9', borderRadius: 14, padding: '40px 32px',
             }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>No company assigned</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>
+                You have not been assigned to any company yet. Please contact your administrator.
+              </h2>
               <p style={{ fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
-                You&apos;re not currently assigned to any company. Contact your Company Admin — CRM access
-                will resume automatically as soon as you&apos;re assigned to one again.
+                Access will resume automatically as soon as you&apos;re assigned to a company.
               </p>
             </div>
           </div>

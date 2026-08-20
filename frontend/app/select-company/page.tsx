@@ -18,10 +18,16 @@ export default function SelectCompanyPage() {
     const u = getAuthUser() as User | null;
     if (!u) { router.replace('/login'); return; }
 
-    // Single company — no need to pick, set it and proceed
+    // Single ACTIVE company (regardless of how many suspended ones also
+    // exist) — no need to pick, set it and proceed. A suspended-only
+    // assignment must never get auto-selected as the active company; with
+    // zero active ones this falls through to resolveStaffRedirect(undefined)
+    // → '/dashboard', where DashboardLayout's own active-only check already
+    // shows the "not assigned to any company" empty state.
     const assignments = u.company_assignments ?? [];
-    if (assignments.length <= 1) {
-      const active = assignments[0];
+    const activeAssignments = assignments.filter(a => a.status === 'active');
+    if (activeAssignments.length <= 1) {
+      const active = activeAssignments[0];
       if (active) setActiveCompany(active.company_id);
       router.replace(resolveStaffRedirect(active));
       return;
