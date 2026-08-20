@@ -107,7 +107,7 @@ export default function PaymentsPage() {
 
   return (
     <DashboardLayout title="Payments">
-      <div style={{ maxWidth: 1200 }}>
+      <div style={{ width: '100%' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 20 }}>
@@ -207,6 +207,11 @@ export default function PaymentsPage() {
                         </td>
                         <td style={{ padding: '13px 14px', fontWeight: 700, color: '#059669', fontSize: 13, whiteSpace: 'nowrap' }}>
                           {fmt(parseFloat(p.amount), p.invoice?.currency ?? 'USD')}
+                          {p.exchange_rate != null && p.converted_amount != null && (
+                            <div style={{ fontWeight: 600, color: '#92400e', fontSize: 10.5, marginTop: 2 }} title={`Gateway charged ${p.converted_currency} ${p.converted_amount}`}>
+                              🔄 → {p.converted_currency} {parseFloat(p.converted_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '13px 14px' }}>
                           {p.method ? (

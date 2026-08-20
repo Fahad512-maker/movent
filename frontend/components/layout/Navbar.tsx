@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import { HiBell, HiChevronDown, HiBuildingOffice2 } from "react-icons/hi2";
-import { getAuthUser, getAuthType, getActiveCompany } from "@/lib/auth";
+import { getAuthUser, getAuthType, getActiveCompany, setActiveCompany } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { User, Admin } from "@/types";
 import { notificationService } from "@/lib/services/notificationService";
@@ -24,6 +25,11 @@ interface NotifItem {
     is_read: boolean;
     created_at: string;
     link: string | null;
+    // Cross-Company Notifications — only populated for staff notifications,
+    // used to label which company a row belongs to and to know whether
+    // clicking it needs to switch the active company first.
+    companyId?: number | null;
+    companyName?: string | null;
 }
 
 export default function Navbar({ title = "Dashboard" }: { title?: string }) {
@@ -70,6 +76,8 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                         res.notifications.map((n) => ({
                             ...n,
                             link: n.data?.link ?? null,
+                            companyId: n.company_id ?? null,
+                            companyName: n.company?.name ?? null,
                         })),
                     );
                     setUnreadCount(res.unread_count);
@@ -101,13 +109,43 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
     // Clicking any notification — audit-log-backed or a real row — marks it
     // read so the bell's unread count/red dot clears; the admin backend
     // figures out which table `id` belongs to.
-    const handleNotifClick = (n: NotifItem) => {
+    //
+    // Staff notifications go through a dedicated path (Cross-Company
+    // Notifications): a notification's company may not be the frontend's
+    // currently active one, so before navigating we call open() to (1) mark
+    // read, (2) freshly validate the user still has active access to that
+    // company (never trusting the cached company_assignments cookie, which
+    // can be up to 60s stale), and (3) get back the link to redirect to.
+    // Admin's own feed has no "active company" concept (it's already all
+    // owned companies at once) so it keeps its original synchronous path.
+    const handleNotifClick = async (n: NotifItem) => {
+        if (authType === "user") {
+            const wasUnread = !n.is_read;
+            const res = await notificationService.open(n.id).catch(() => null);
+            if (wasUnread) {
+                setNotifications((prev) =>
+                    prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)),
+                );
+                setUnreadCount((c) => Math.max(0, c - 1));
+            }
+            if (!res) return;
+            if (!res.access_granted) {
+                toast.error(
+                    `You no longer have access to ${res.company_name ?? "that company"}.`,
+                );
+                setNotifOpen(false);
+                return;
+            }
+            if (res.company_id && res.company_id !== getActiveCompany()) {
+                setActiveCompany(res.company_id);
+            }
+            setNotifOpen(false);
+            if (res.link) router.push(res.link);
+            return;
+        }
+
         if (!n.is_read) {
-            const svc =
-                authType === "admin"
-                    ? adminNotificationService
-                    : notificationService;
-            svc.markRead(n.id).catch(() => {});
+            adminNotificationService.markRead(n.id).catch(() => {});
             setNotifications((prev) =>
                 prev.map((x) =>
                     (x.key ?? x.id) === (n.key ?? n.id)
@@ -487,6 +525,29 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                                                         n.created_at,
                                                     ).toLocaleString()}
                                                 </div>
+                                                {multiCompany &&
+                                                    n.companyName && (
+                                                        <div
+                                                            style={{
+                                                                display:
+                                                                    "inline-flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                gap: 4,
+                                                                marginTop: 4,
+                                                                fontSize: 10.5,
+                                                                fontWeight: 600,
+                                                                color: "#2563eb",
+                                                                background:
+                                                                    "#eff6ff",
+                                                                borderRadius: 5,
+                                                                padding:
+                                                                    "2px 7px",
+                                                            }}
+                                                        >
+                                                            🏢 {n.companyName}
+                                                        </div>
+                                                    )}
                                             </div>
                                             {(authType === "user" ||
                                                 (authType === "admin" &&

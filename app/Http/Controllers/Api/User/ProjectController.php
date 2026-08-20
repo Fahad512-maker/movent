@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\User\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyModule;
 use App\Models\Invoice;
@@ -30,6 +31,8 @@ use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private const DELIVERY_MIMES = 'zip,pdf,doc,docx,xls,xlsx,png,jpg,jpeg';
     private const DELIVERY_MAX_KB = 51200;
 
@@ -88,7 +91,7 @@ class ProjectController extends Controller
     private function visibleProjects()
     {
         $user = $this->user();
-        $base = Project::where('company_id', $user->company_id);
+        $base = Project::where('company_id', $this->activeCompanyId());
 
         // Draft (and still-unpaid placeholder) projects are name-only stubs —
         // auto-created either the moment an invoice is raised ('unpaid') or

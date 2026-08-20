@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\User\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\Project;
@@ -18,6 +19,8 @@ use Illuminate\Validation\Rule;
 
 class TaskController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function user() { return auth('sanctum')->user(); }
     // trim()->? , not `?? 'User'` — a blank/whitespace-only name would
     // otherwise pass through and leave a History entry with an empty actor.
@@ -71,7 +74,7 @@ class TaskController extends Controller
     private function project(int $projectId): Project
     {
         $user = $this->user();
-        $base = Project::where('company_id', $user->company_id);
+        $base = Project::where('company_id', $this->activeCompanyId());
 
         if ($this->can('canViewAllCompanyProjects')) {
             return $base->findOrFail($projectId);

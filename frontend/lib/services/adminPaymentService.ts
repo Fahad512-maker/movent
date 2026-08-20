@@ -4,6 +4,10 @@ export interface PaymentRecord {
   id: number;
   invoice_id: number;
   amount: string;
+  currency: string | null;
+  converted_amount: string | null;
+  converted_currency: string | null;
+  exchange_rate: string | null;
   method: string | null;
   gateway: string | null;
   gateway_ref: string | null;

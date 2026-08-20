@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\User\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Mail\InvoiceMail;
 use App\Models\Client;
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\Mail;
 
 class InvoiceController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function user() { return auth('sanctum')->user(); }
 
     private function can(string $permKey): bool
@@ -168,7 +171,7 @@ class InvoiceController extends Controller
 
         $user    = $this->user();
         $invoice = Invoice::where('id', $id)
-            ->where('company_id', $user->company_id)
+            ->where('company_id', $this->activeCompanyId())
             ->where('created_by', $user->id)
             ->with(['client:id,name,company_name,email,phone,address', 'items', 'payments', 'lead:id,deal_reference,proposed_project_title,fulfillment_status'])
             ->first();
