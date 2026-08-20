@@ -13,6 +13,14 @@ const SC: Record<string, { bg: string; color: string }> = {
 
 const STATUS_OPTS = ['', 'sent', 'paid', 'overdue', 'partially_paid'];
 
+// A named month reads unambiguously everywhere, unlike a raw ISO timestamp
+// or numeric D/M/Y (which reads as M/D/Y to half the audience). Matches
+// frontend/app/pay/invoice/[token]/page.tsx's fmtDate.
+const fmtDate = (d?: string | null) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 export default function ClientInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [status, setStatus]     = useState('');
@@ -64,8 +72,8 @@ export default function ClientInvoicesPage() {
                 return (
                   <tr key={inv.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                     <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{inv.invoice_number}</td>
-                    <td style={{ padding: '12px 20px', fontSize: 13, color: '#64748b' }}>{inv.created_at?.split('T')[0]}</td>
-                    <td style={{ padding: '12px 20px', fontSize: 13, color: '#64748b' }}>{inv.due_date || '—'}</td>
+                    <td style={{ padding: '12px 20px', fontSize: 13, color: '#64748b' }}>{fmtDate(inv.created_at)}</td>
+                    <td style={{ padding: '12px 20px', fontSize: 13, color: '#64748b' }}>{fmtDate(inv.due_date)}</td>
                     <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>
                       {inv.currency} {Number(inv.total_amount).toLocaleString()}
                     </td>

@@ -62,6 +62,13 @@ const ago = (d: string) => {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
   return Math.floor(diff / 86400) + 'd ago';
 };
+// Matches frontend/app/pay/invoice/[token]/page.tsx's fmtDate — a named
+// month reads unambiguously everywhere, unlike raw ISO strings or numeric
+// D/M/Y (which reads as M/D/Y to half the audience).
+const fmtDate = (d?: string | null) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
 
 function StatCard({ label, value, sub, color, href }: { label: string; value: string | number; sub?: string; color: string; href?: string }) {
   const inner = (
@@ -363,7 +370,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{p.name}</div>
               <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: c.bg, color: c.color, fontWeight: 600, whiteSpace: 'nowrap', marginLeft: 6, flexShrink: 0 }}>{cap(p.status)}</span>
             </div>
-            {p.deadline && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Due: {p.deadline}</div>}
+            {p.deadline && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Due: {fmtDate(p.deadline)}</div>}
             <div suppressHydrationWarning style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{ago(p.created_at)}</div>
           </Link>
         );
@@ -382,7 +389,7 @@ export default function DashboardPage() {
               </div>
               <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: c.bg, color: c.color, fontWeight: 600, flexShrink: 0, marginLeft: 6 }}>{cap(inv.status)}</span>
             </div>
-            {inv.due_date && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Due: {inv.due_date}</div>}
+            {inv.due_date && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Due: {fmtDate(inv.due_date)}</div>}
             <div suppressHydrationWarning style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{ago(inv.created_at)}</div>
           </Link>
         );

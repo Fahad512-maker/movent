@@ -13,6 +13,14 @@ const SC: Record<string, { bg: string; color: string }> = {
   cancelled:       { bg: '#f1f5f9', color: '#64748b' },
 };
 
+// A named month reads unambiguously everywhere, unlike a raw ISO timestamp
+// or numeric D/M/Y (which reads as M/D/Y to half the audience). Matches
+// frontend/app/pay/invoice/[token]/page.tsx's fmtDate.
+const fmtDate = (d?: string | null) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 export default function ClientInvoiceDetailPage() {
   const { id }  = useParams();
   const router  = useRouter();
@@ -61,12 +69,12 @@ export default function ClientInvoiceDetailPage() {
           </div>
           <div>
             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3 }}>Issue Date</div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#1e293b' }}>{inv.created_at?.split('T')[0]}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#1e293b' }}>{fmtDate(inv.created_at)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3 }}>Due Date</div>
             <div style={{ fontSize: 14, fontWeight: 500, color: inv.status === 'overdue' ? '#dc2626' : '#1e293b' }}>
-              {inv.due_date || '—'}
+              {fmtDate(inv.due_date)}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>

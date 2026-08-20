@@ -1,44 +1,91 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useAdminGuard } from '@/hooks/useAdminGuard';
-import { userProjectService, ProjectAttachment } from '@/lib/services/userProjectService';
-import { Project, Task, TaskStatus, ProjectStatus, Priority, ProjectComment, MentionableUser, ProjectCommentAttachment } from '@/lib/services/adminProjectService';
-import { can, getAuthUser } from '@/lib/auth';
-import { ROLE_LABELS, roleDisplayLabel } from '@/lib/roleUtils';
-import { User } from '@/types';
-import { Badge, StatCard, ThumbIcon, STATUS_SC, PRIORITY_SC, TASK_SC, TEAM_ROLE_LABEL, card, inp, lbl, fmtDate, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize, asRelation, DRAFT_HINT, DraftNotice } from '@/components/admin/projects/shared';
-import ProjectLifecycleActions from '@/components/admin/projects/ProjectLifecycleActions';
-import { TASK_STATUS_LABELS, getAllowedNextTaskStatuses } from '@/lib/taskStatusFlow';
-import toast from 'react-hot-toast';
-import SubmitButton from '@/components/ui/SubmitButton';
-import LoadingOverlay from '@/components/ui/LoadingOverlay';
+"use client";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useAdminGuard } from "@/hooks/useAdminGuard";
+import {
+    userProjectService,
+    ProjectAttachment,
+} from "@/lib/services/userProjectService";
+import {
+    Project,
+    Task,
+    TaskStatus,
+    ProjectStatus,
+    Priority,
+    ProjectComment,
+    MentionableUser,
+    ProjectCommentAttachment,
+} from "@/lib/services/adminProjectService";
+import { can, getAuthUser } from "@/lib/auth";
+import { ROLE_LABELS, roleDisplayLabel } from "@/lib/roleUtils";
+import { User } from "@/types";
+import {
+    Badge,
+    StatCard,
+    ThumbIcon,
+    STATUS_SC,
+    PRIORITY_SC,
+    TASK_SC,
+    TEAM_ROLE_LABEL,
+    card,
+    inp,
+    lbl,
+    fmtDate,
+    ALLOWED_ATTACHMENT_TYPES,
+    MAX_ATTACHMENT_MB,
+    fmtFileSize,
+    asRelation,
+    DRAFT_HINT,
+    DraftNotice,
+} from "@/components/admin/projects/shared";
+import ProjectLifecycleActions from "@/components/admin/projects/ProjectLifecycleActions";
+import {
+    TASK_STATUS_LABELS,
+    getAllowedNextTaskStatuses,
+} from "@/lib/taskStatusFlow";
+import toast from "react-hot-toast";
+import SubmitButton from "@/components/ui/SubmitButton";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 
 const TASK_TYPE_LABEL: Record<string, string> = {
-  general: 'General', production: 'Production', client_request: 'Client Request', internal: 'Internal',
+    general: "General",
+    production: "Production",
+    client_request: "Client Request",
+    internal: "Internal",
 };
 
 // section heading — a lighter-weight variant of the bordered card header
 // used elsewhere in this file, just for the h3 above a group of cards.
-const sectionTitle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 12px' };
+const sectionTitle: React.CSSProperties = {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#0f172a",
+    margin: "0 0 12px",
+};
 
 function assignedToId(t: Task): number | null {
-  if (t.assigned_to == null) return null;
-  return typeof t.assigned_to === 'object' ? t.assigned_to.id : t.assigned_to;
+    if (t.assigned_to == null) return null;
+    return typeof t.assigned_to === "object" ? t.assigned_to.id : t.assigned_to;
 }
 
 // Unwraps a relation-or-id field (production_assigned_to comes back as the
 // loaded {id,name} relation on GET but must round-trip as a bare id on PUT)
 // into the plain numeric id the update payload expects.
-function relationId(v: number | { id: number } | null | undefined): number | undefined {
-  if (v == null) return undefined;
-  return typeof v === 'object' ? v.id : v;
+function relationId(
+    v: number | { id: number } | null | undefined,
+): number | undefined {
+    if (v == null) return undefined;
+    return typeof v === "object" ? v.id : v;
 }
 
 function isOverdue(t: Task): boolean {
-  return !!t.due_date && new Date(t.due_date) < new Date() && !['completed', 'cancelled'].includes(t.status);
+    return (
+        !!t.due_date &&
+        new Date(t.due_date) < new Date() &&
+        !["completed", "cancelled"].includes(t.status)
+    );
 }
 
 // Groups a flat, newest-first comment list into proper reply threads — each
@@ -47,1292 +94,3952 @@ function isOverdue(t: Task): boolean {
 // comments the way a flat list would. A reply whose parent isn't in this
 // viewer's own visible set (e.g. an internal comment a Seller can't see) is
 // treated as its own root — it has nothing visible to nest under.
-function buildThreadOrder(comments: ProjectComment[]): { comment: ProjectComment; depth: number }[] {
-  const byId = new Map(comments.map(c => [c.id, c]));
-  const childrenOf = new Map<number, ProjectComment[]>();
-  const roots: ProjectComment[] = [];
-  for (const c of comments) {
-    if (c.parent_comment_id && byId.has(c.parent_comment_id)) {
-      const siblings = childrenOf.get(c.parent_comment_id) ?? [];
-      siblings.push(c);
-      childrenOf.set(c.parent_comment_id, siblings);
-    } else {
-      roots.push(c);
+function buildThreadOrder(
+    comments: ProjectComment[],
+): { comment: ProjectComment; depth: number }[] {
+    const byId = new Map(comments.map((c) => [c.id, c]));
+    const childrenOf = new Map<number, ProjectComment[]>();
+    const roots: ProjectComment[] = [];
+    for (const c of comments) {
+        if (c.parent_comment_id && byId.has(c.parent_comment_id)) {
+            const siblings = childrenOf.get(c.parent_comment_id) ?? [];
+            siblings.push(c);
+            childrenOf.set(c.parent_comment_id, siblings);
+        } else {
+            roots.push(c);
+        }
     }
-  }
-  const byCreatedAtAsc = (a: ProjectComment, b: ProjectComment) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  const ordered: { comment: ProjectComment; depth: number }[] = [];
-  const walk = (c: ProjectComment, depth: number) => {
-    ordered.push({ comment: c, depth });
-    const kids = (childrenOf.get(c.id) ?? []).slice().sort(byCreatedAtAsc);
-    for (const k of kids) walk(k, depth + 1);
-  };
-  for (const r of roots.slice().sort(byCreatedAtAsc)) walk(r, 0);
-  return ordered;
+    const byCreatedAtAsc = (a: ProjectComment, b: ProjectComment) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    const ordered: { comment: ProjectComment; depth: number }[] = [];
+    const walk = (c: ProjectComment, depth: number) => {
+        ordered.push({ comment: c, depth });
+        const kids = (childrenOf.get(c.id) ?? []).slice().sort(byCreatedAtAsc);
+        for (const k of kids) walk(k, depth + 1);
+    };
+    for (const r of roots.slice().sort(byCreatedAtAsc)) walk(r, 0);
+    return ordered;
 }
 
 export default function UserProjectDetailPage() {
-  useAdminGuard();
-  const router = useRouter();
-  const params = useParams();
-  const id = Number(params.id);
-  const me = getAuthUser() as User | null;
+    useAdminGuard();
+    const router = useRouter();
+    const params = useParams();
+    const id = Number(params.id);
+    const me = getAuthUser() as User | null;
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [comments, setComments] = useState<ProjectComment[]>([]);
-  const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [attachmentVisibleToClient, setAttachmentVisibleToClient] = useState(false);
+    const [project, setProject] = useState<Project | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [comments, setComments] = useState<ProjectComment[]>([]);
+    const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [attachmentVisibleToClient, setAttachmentVisibleToClient] =
+        useState(false);
 
-  const canEditProjects = can('project_management', 'canEditProjects');
-  const canManageProjectInvoices = can('project_management', 'canManageProjectInvoices');
-  const canEditTasks   = can('project_management', 'canEditTasks');
-  const canCreateTasks = can('project_management', 'canCreateTasks');
-  const canAssignTasks = can('project_management', 'canAssignTasks');
-  // Seller-tier: submit a Client Requirement/General Request for PM review —
-  // never an internal production/dev task, and status is always forced to
-  // "review" server-side regardless of what's shown here.
-  const canCreateLinkedTask = can('project_management', 'canCreateLinkedProjectTask');
-  const canCreateAnyTask = canCreateTasks || canCreateLinkedTask;
-  // Mirrors Api\User\ProjectCommentController::isInternalStaff() — a Seller
-  // following up on a linked project never sees/posts 'internal' notes, no
-  // matter what permissions they hold.
-  const isInternalCommentStaff = me?.role_type !== 'seller'
-    && (can('project_management', 'canViewTasks') || can('project_management', 'canViewAllCompanyProjects'));
-  const canAssignTeamResources = can('project_management', 'canAssignTeamResources');
-  const isSeller = me?.role_type === 'seller';
-  // A Seller never gets the full attachment list/delete — only ever to
-  // view+download the "Visible to client" subset, no permission needed for
-  // that narrower path (see Api\User\ProjectAttachmentController). Upload IS
-  // permission-gated even for a Seller (canUploadProjectAttachments) — unlike
-  // view/download/delete, store() has no seller-only bypass, it's a real
-  // grant on their own linked project.
-  const canViewAttachments   = isSeller || can('project_management', 'canViewProjectAttachments');
-  // File upload + the "visible to client" toggle are Admin/PM territory —
-  // hard-restricted to this project's actual assigned PM here regardless of
-  // any canUploadProjectAttachments grant, so a Developer/Team
-  // Member/Designer/QA/Production user never gets it just because that
-  // permission was left checked in their role's bundle. A Seller keeps their
-  // separate, deliberate upload-on-own-project allowance untouched.
-  const isProjectPmTier = project?.project_manager?.id === me?.id
-    || (me?.role_type === 'project_manager' && can('project_management', 'canViewAllCompanyProjects'));
-  const canUploadAttachments = isSeller
-    ? can('project_management', 'canUploadProjectAttachments')
-    : isProjectPmTier && (canEditProjects || can('project_management', 'canUploadProjectAttachments'));
-  const canDownloadAttachments = isSeller || can('project_management', 'canDownloadProjectAttachments');
-  const canDeleteAttachments = !isSeller && can('project_management', 'canDeleteProjectAttachments');
-  const canCompleteProjects   = can('project_management', 'canCompleteProjects');
-  const canCloseProjects      = can('project_management', 'canCloseProjects');
-  const canReopenProjects     = can('project_management', 'canReopenProjects');
-  const canForceCloseProjects = can('project_management', 'canForceCloseProjects');
-  const canActivateProjects   = can('project_management', 'canActivateProjects');
+    const canEditProjects = can("project_management", "canEditProjects");
+    const canManageProjectInvoices = can(
+        "project_management",
+        "canManageProjectInvoices",
+    );
+    const canEditTasks = can("project_management", "canEditTasks");
+    const canCreateTasks = can("project_management", "canCreateTasks");
+    const canAssignTasks = can("project_management", "canAssignTasks");
+    // Seller-tier: submit a Client Requirement/General Request for PM review —
+    // never an internal production/dev task, and status is always forced to
+    // "review" server-side regardless of what's shown here.
+    const canCreateLinkedTask = can(
+        "project_management",
+        "canCreateLinkedProjectTask",
+    );
+    const canCreateAnyTask = canCreateTasks || canCreateLinkedTask;
+    // Mirrors Api\User\ProjectCommentController::isInternalStaff() — a Seller
+    // following up on a linked project never sees/posts 'internal' notes, no
+    // matter what permissions they hold.
+    const isInternalCommentStaff =
+        me?.role_type !== "seller" &&
+        (can("project_management", "canViewTasks") ||
+            can("project_management", "canViewAllCompanyProjects"));
+    const canAssignTeamResources = can(
+        "project_management",
+        "canAssignTeamResources",
+    );
+    const isSeller = me?.role_type === "seller";
+    // A Seller never gets the full attachment list/delete — only ever to
+    // view+download the "Visible to client" subset, no permission needed for
+    // that narrower path (see Api\User\ProjectAttachmentController). Upload IS
+    // permission-gated even for a Seller (canUploadProjectAttachments) — unlike
+    // view/download/delete, store() has no seller-only bypass, it's a real
+    // grant on their own linked project.
+    const canViewAttachments =
+        isSeller || can("project_management", "canViewProjectAttachments");
+    // File upload + the "visible to client" toggle are Admin/PM territory —
+    // hard-restricted to this project's actual assigned PM here regardless of
+    // any canUploadProjectAttachments grant, so a Developer/Team
+    // Member/Designer/QA/Production user never gets it just because that
+    // permission was left checked in their role's bundle. A Seller keeps their
+    // separate, deliberate upload-on-own-project allowance untouched.
+    const isProjectPmTier =
+        project?.project_manager?.id === me?.id ||
+        (me?.role_type === "project_manager" &&
+            can("project_management", "canViewAllCompanyProjects"));
+    const canUploadAttachments = isSeller
+        ? can("project_management", "canUploadProjectAttachments")
+        : isProjectPmTier &&
+          (canEditProjects ||
+              can("project_management", "canUploadProjectAttachments"));
+    const canDownloadAttachments =
+        isSeller || can("project_management", "canDownloadProjectAttachments");
+    const canDeleteAttachments =
+        !isSeller && can("project_management", "canDeleteProjectAttachments");
+    const canCompleteProjects = can(
+        "project_management",
+        "canCompleteProjects",
+    );
+    const canCloseProjects = can("project_management", "canCloseProjects");
+    const canReopenProjects = can("project_management", "canReopenProjects");
+    const canForceCloseProjects = can(
+        "project_management",
+        "canForceCloseProjects",
+    );
+    const canActivateProjects = can(
+        "project_management",
+        "canActivateProjects",
+    );
 
-  // Task status is a Jira-style free jump for an allowed actor — see
-  // TaskStatusService::canChangeTaskStatus(). QA (any task) and the manual
-  // canOverrideTaskStatus escape hatch are the two flags
-  // getAllowedNextTaskStatuses() needs beyond isAssignee/isPm/isAdmin.
-  const isQa = me?.role_type === 'qa';
-  const canOverrideTaskStatus = can('project_management', 'canOverrideTaskStatus');
-  const isProjectPm = isProjectPmTier;
-  const canSubmitProjectDelivery = !!project && me?.role_type === 'project_manager' && canCompleteProjects && (
-    project.project_manager_id === me.id
-    || !!project.team_members?.some(member => member.user_id === me.id && member.user?.role_type === 'project_manager')
-  );
+    // Task status is a Jira-style free jump for an allowed actor — see
+    // TaskStatusService::canChangeTaskStatus(). QA (any task) and the manual
+    // canOverrideTaskStatus escape hatch are the two flags
+    // getAllowedNextTaskStatuses() needs beyond isAssignee/isPm/isAdmin.
+    const isQa = me?.role_type === "qa";
+    const canOverrideTaskStatus = can(
+        "project_management",
+        "canOverrideTaskStatus",
+    );
+    const isProjectPm = isProjectPmTier;
+    const canSubmitProjectDelivery =
+        !!project &&
+        me?.role_type === "project_manager" &&
+        canCompleteProjects &&
+        (project.project_manager_id === me.id ||
+            !!project.team_members?.some(
+                (member) =>
+                    member.user_id === me.id &&
+                    member.user?.role_type === "project_manager",
+            ));
 
-  // Edit Project (inline form, toggled from the header)
-  const [editingProject, setEditingProject] = useState(false);
-  const [savingProject, setSavingProject]   = useState(false);
-  const [editForm, setEditForm] = useState<{ name: string; description: string; status: ProjectStatus; priority: Priority; start_date: string; deadline: string }>({
-    name: '', description: '', status: 'planning', priority: 'medium', start_date: '', deadline: '',
-  });
-
-  // New comment form
-  const [commentBody, setCommentBody]   = useState('');
-  const [postingComment, setPostingComment] = useState(false);
-  const [commentFile, setCommentFile]   = useState<File | null>(null);
-  const [mentionCandidates, setMentionCandidates] = useState<MentionableUser[]>([]);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null); // non-null while the '@' picker is open
-  const [selectedMentions, setSelectedMentions] = useState<MentionableUser[]>([]);
-  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
-  const [editCommentBody, setEditCommentBody] = useState('');
-  const [replyingToCommentId, setReplyingToCommentId] = useState<number | null>(null);
-  const [replyBody, setReplyBody] = useState('');
-  const [postingReply, setPostingReply] = useState(false);
-  const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(null);
-  const [replySelectedMentions, setReplySelectedMentions] = useState<MentionableUser[]>([]);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      setProject(await userProjectService.getOne(id));
-    } catch {
-      toast.error('Project not found or not accessible');
-      router.replace('/projects');
-    } finally { setLoading(false); }
-  };
-
-  const loadComments = async () => {
-    try { setComments(await userProjectService.comments.list(id)); } catch { /* silent */ }
-  };
-
-  const loadAttachments = async () => {
-    try { setAttachments(await userProjectService.attachments.list(id)); } catch { /* silent */ }
-  };
-
-  // Invoices & billing
-  const [invoiceBusy, setInvoiceBusy]     = useState(false);
-  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
-  const [newInvAmount, setNewInvAmount] = useState('');
-  const [newInvDueDate, setNewInvDueDate] = useState('');
-  // Only asked for when the project has no linked client — otherwise the
-  // invoice always goes straight to that client's own email (matches
-  // Api\User\ProjectController::createInvoice()'s recipient_email rule).
-  const [newInvEmail, setNewInvEmail] = useState('');
-  // Shown as an inline confirmation right here on the project page instead of
-  // navigating away — the user asked for the link to stay visible where they
-  // just created it, not to be forced onto the invoice's own page.
-  const [createdInvoice, setCreatedInvoice] = useState<{ id: number; invoiceNumber: string; sentTo: string; paymentUrl?: string } | null>(null);
-  const [invoiceLinkCopied, setInvoiceLinkCopied] = useState(false);
-  const copyInvoiceLink = () => {
-    if (!createdInvoice?.paymentUrl) return;
-    navigator.clipboard.writeText(createdInvoice.paymentUrl).then(() => {
-      setInvoiceLinkCopied(true);
-      setTimeout(() => setInvoiceLinkCopied(false), 2500);
+    // Edit Project (inline form, toggled from the header)
+    const [editingProject, setEditingProject] = useState(false);
+    const [savingProject, setSavingProject] = useState(false);
+    const [editForm, setEditForm] = useState<{
+        name: string;
+        description: string;
+        status: ProjectStatus;
+        priority: Priority;
+        start_date: string;
+        deadline: string;
+    }>({
+        name: "",
+        description: "",
+        status: "planning",
+        priority: "medium",
+        start_date: "",
+        deadline: "",
     });
-  };
 
-  // A milestone invoice must always match whatever currency this project's
-  // existing invoices already use — never a hardcoded default (matches
-  // Api\User\ProjectController::createInvoice()'s own inheritance). Only a
-  // project with no prior invoice at all has nothing to inherit.
-  const projectInvoiceCurrency = (project?.invoices ?? []).find(inv => inv.project_id === project?.id)?.currency;
+    // New comment form
+    const [commentBody, setCommentBody] = useState("");
+    const [postingComment, setPostingComment] = useState(false);
+    const [commentFile, setCommentFile] = useState<File | null>(null);
+    const [mentionCandidates, setMentionCandidates] = useState<
+        MentionableUser[]
+    >([]);
+    const [mentionQuery, setMentionQuery] = useState<string | null>(null); // non-null while the '@' picker is open
+    const [selectedMentions, setSelectedMentions] = useState<MentionableUser[]>(
+        [],
+    );
+    const [editingCommentId, setEditingCommentId] = useState<number | null>(
+        null,
+    );
+    const [editCommentBody, setEditCommentBody] = useState("");
+    const [replyingToCommentId, setReplyingToCommentId] = useState<
+        number | null
+    >(null);
+    const [replyBody, setReplyBody] = useState("");
+    const [postingReply, setPostingReply] = useState(false);
+    const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(
+        null,
+    );
+    const [replySelectedMentions, setReplySelectedMentions] = useState<
+        MentionableUser[]
+    >([]);
 
-  const handleCreateProjectInvoice = async () => {
-    if (invoiceBusy) return; // Guards a double-click re-submit before the disabled prop re-renders.
-    if (!newInvAmount) { toast.error('Amount is required'); return; }
-    if (!project?.client && !newInvEmail.trim()) { toast.error('This project has no linked client — enter an email to send the invoice to'); return; }
-    setInvoiceBusy(true);
-    try {
-      const sentTo = project?.client?.email ?? newInvEmail.trim();
-      const invoice = await userProjectService.createInvoice(id, {
-        due_date: newInvDueDate || null,
-        currency: projectInvoiceCurrency,
-        items: [{ description: `Invoice for ${project?.name ?? 'project'}`, quantity: 1, unit_price: Number(newInvAmount) }],
-        recipient_email: project?.client ? undefined : newInvEmail.trim(),
-      });
-      toast.success('Invoice created and sent');
-      setCreatedInvoice({ id: invoice.id, invoiceNumber: invoice.invoice_number, sentTo, paymentUrl: invoice.payment_url });
-      setNewInvAmount(''); setNewInvDueDate('');
-      setShowCreateInvoice(false);
-      // Refresh in place (no full-page loading flash) so the new invoice
-      // shows up in the Invoices & Billing table below right away.
-      userProjectService.getOne(id).then(setProject).catch(() => {});
-    } catch (err: unknown) {
-      const ex = err as { response?: { data?: { message?: string } } };
-      toast.error(ex.response?.data?.message ?? 'Failed to create invoice');
-    } finally { setInvoiceBusy(false); }
-  };
+    const load = async () => {
+        setLoading(true);
+        try {
+            setProject(await userProjectService.getOne(id));
+        } catch {
+            toast.error("Project not found or not accessible");
+            router.replace("/projects");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  useEffect(() => {
-    if (!can('project_management', 'canViewProjects') && !can('project_management', 'canViewLinkedProjects')) {
-      router.replace('/dashboard');
-      return;
-    }
-    load();
-    loadComments();
-    if (canViewAttachments) loadAttachments();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const loadComments = async () => {
+        try {
+            setComments(await userProjectService.comments.list(id));
+        } catch {
+            /* silent */
+        }
+    };
 
-  // A guest (no-client) project already has a real recipient address on file
-  // — the customer_email its originating invoice was created with — so the
-  // Create Invoice mini-form starts pre-filled instead of asking for it
-  // fresh every time. Still editable/overridable.
-  useEffect(() => {
-    if (!project || project.client || newInvEmail) return;
-    if (project.invoice?.customer_email) setNewInvEmail(project.invoice.customer_email);
-  }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
+    const loadAttachments = async () => {
+        try {
+            setAttachments(await userProjectService.attachments.list(id));
+        } catch {
+            /* silent */
+        }
+    };
 
-  // Comments have no realtime push — poll so a teammate's new comment shows
-  // up without the viewer having to manually reload the page.
-  useEffect(() => {
-    const interval = setInterval(loadComments, 8000);
-    return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Invoices & billing
+    const [invoiceBusy, setInvoiceBusy] = useState(false);
+    const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+    const [newInvAmount, setNewInvAmount] = useState("");
+    const [newInvDueDate, setNewInvDueDate] = useState("");
+    // Only asked for when the project has no linked client — otherwise the
+    // invoice always goes straight to that client's own email (matches
+    // Api\User\ProjectController::createInvoice()'s recipient_email rule).
+    const [newInvEmail, setNewInvEmail] = useState("");
+    // Shown as an inline confirmation right here on the project page instead of
+    // navigating away — the user asked for the link to stay visible where they
+    // just created it, not to be forced onto the invoice's own page.
+    const [createdInvoice, setCreatedInvoice] = useState<{
+        id: number;
+        invoiceNumber: string;
+        sentTo: string;
+        paymentUrl?: string;
+    } | null>(null);
+    const [invoiceLinkCopied, setInvoiceLinkCopied] = useState(false);
+    const copyInvoiceLink = () => {
+        if (!createdInvoice?.paymentUrl) return;
+        navigator.clipboard.writeText(createdInvoice.paymentUrl).then(() => {
+            setInvoiceLinkCopied(true);
+            setTimeout(() => setInvoiceLinkCopied(false), 2500);
+        });
+    };
 
-  // Reload @mention candidates whenever the composer's resolved visibility
-  // changes — internal vs client-facing have different eligible recipients.
-  useEffect(() => {
-    const visibility = isInternalCommentStaff ? 'internal' : 'client';
-    setSelectedMentions([]);
-    userProjectService.comments.mentionableUsers(id, visibility).then(setMentionCandidates).catch(() => setMentionCandidates([]));
-  }, [id, isInternalCommentStaff]);
+    // A milestone invoice must always match whatever currency this project's
+    // existing invoices already use — never a hardcoded default (matches
+    // Api\User\ProjectController::createInvoice()'s own inheritance). Only a
+    // project with no prior invoice at all has nothing to inherit.
+    const projectInvoiceCurrency = (project?.invoices ?? []).find(
+        (inv) => inv.project_id === project?.id,
+    )?.currency;
 
-  useEffect(() => {
-    if (!project) return;
-    setEditForm({
-      name: project.name,
-      description: project.description ?? '',
-      status: project.status,
-      priority: project.priority,
-      start_date: project.start_date ? project.start_date.slice(0, 10) : '',
-      deadline: project.deadline ? project.deadline.slice(0, 10) : '',
-    });
-  }, [project]);
+    const handleCreateProjectInvoice = async () => {
+        if (invoiceBusy) return; // Guards a double-click re-submit before the disabled prop re-renders.
+        if (!newInvAmount) {
+            toast.error("Amount is required");
+            return;
+        }
+        if (!project?.client && !newInvEmail.trim()) {
+            toast.error(
+                "This project has no linked client — enter an email to send the invoice to",
+            );
+            return;
+        }
+        setInvoiceBusy(true);
+        try {
+            const sentTo = project?.client?.email ?? newInvEmail.trim();
+            const invoice = await userProjectService.createInvoice(id, {
+                due_date: newInvDueDate || null,
+                currency: projectInvoiceCurrency,
+                items: [
+                    {
+                        description: `Invoice for ${project?.name ?? "project"}`,
+                        quantity: 1,
+                        unit_price: Number(newInvAmount),
+                    },
+                ],
+                recipient_email: project?.client
+                    ? undefined
+                    : newInvEmail.trim(),
+            });
+            toast.success("Invoice created and sent");
+            setCreatedInvoice({
+                id: invoice.id,
+                invoiceNumber: invoice.invoice_number,
+                sentTo,
+                paymentUrl: invoice.payment_url,
+            });
+            setNewInvAmount("");
+            setNewInvDueDate("");
+            setShowCreateInvoice(false);
+            // Refresh in place (no full-page loading flash) so the new invoice
+            // shows up in the Invoices & Billing table below right away.
+            userProjectService
+                .getOne(id)
+                .then(setProject)
+                .catch(() => {});
+        } catch (err: unknown) {
+            const ex = err as { response?: { data?: { message?: string } } };
+            toast.error(
+                ex.response?.data?.message ?? "Failed to create invoice",
+            );
+        } finally {
+            setInvoiceBusy(false);
+        }
+    };
 
-  const saveProjectEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editForm.name.trim()) { toast.error('Project name is required'); return; }
-    setSavingProject(true);
-    try {
-      const updated = await userProjectService.update(id, {
-        name: editForm.name.trim(),
-        description: editForm.description.trim() || null,
-        status: editForm.status,
-        priority: editForm.priority,
-        start_date: editForm.start_date || null,
-        deadline: editForm.deadline || null,
-      });
-      setProject(updated);
-      toast.success('Project updated');
-      setEditingProject(false);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update project');
-    } finally { setSavingProject(false); }
-  };
+    useEffect(() => {
+        if (
+            !can("project_management", "canViewProjects") &&
+            !can("project_management", "canViewLinkedProjects")
+        ) {
+            router.replace("/dashboard");
+            return;
+        }
+        load();
+        loadComments();
+        if (canViewAttachments) loadAttachments();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const uploadAttachments = async (files: FileList | null) => {
-    if (!files) return;
-    setUploading(true);
-    let failed = 0;
-    for (const file of Array.from(files)) {
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-      if (!ALLOWED_ATTACHMENT_TYPES.includes(ext)) { toast.error(`${file.name}: file type not allowed`); failed++; continue; }
-      if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) { toast.error(`${file.name}: exceeds ${MAX_ATTACHMENT_MB}MB limit`); failed++; continue; }
-      try {
-        // A Seller only ever sees the "visible to client" subset of
-        // attachments (see canViewAttachments above) — uploading with the
-        // box unchecked would make their own file invisible to them
-        // immediately after upload, so force it true for a Seller.
-        await userProjectService.attachments.upload(id, file, isSeller || attachmentVisibleToClient);
-      } catch {
-        failed++;
-        toast.error(`${file.name}: upload failed`);
-      }
-    }
-    if (failed < files.length) toast.success('Attachment(s) uploaded');
-    setUploading(false);
-    loadAttachments();
-  };
+    // A guest (no-client) project already has a real recipient address on file
+    // — the customer_email its originating invoice was created with — so the
+    // Create Invoice mini-form starts pre-filled instead of asking for it
+    // fresh every time. Still editable/overridable.
+    useEffect(() => {
+        if (!project || project.client || newInvEmail) return;
+        if (project.invoice?.customer_email)
+            setNewInvEmail(project.invoice.customer_email);
+    }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const downloadAttachment = async (a: ProjectAttachment) => {
-    try { await userProjectService.attachments.download(id, a.id, a.original_name); }
-    catch { toast.error('Download failed'); }
-  };
+    // Comments have no realtime push — poll so a teammate's new comment shows
+    // up without the viewer having to manually reload the page.
+    useEffect(() => {
+        const interval = setInterval(loadComments, 8000);
+        return () => clearInterval(interval);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const downloadCommentAttachment = async (commentId: number, a: ProjectCommentAttachment) => {
-    try { await userProjectService.comments.attachments.download(id, commentId, a.id, a.original_name); }
-    catch { toast.error('Download failed'); }
-  };
+    // Reload @mention candidates whenever the composer's resolved visibility
+    // changes — internal vs client-facing have different eligible recipients.
+    useEffect(() => {
+        const visibility = isInternalCommentStaff ? "internal" : "client";
+        setSelectedMentions([]);
+        userProjectService.comments
+            .mentionableUsers(id, visibility)
+            .then(setMentionCandidates)
+            .catch(() => setMentionCandidates([]));
+    }, [id, isInternalCommentStaff]);
 
-  const deleteAttachment = async (a: ProjectAttachment) => {
-    if (!confirm(`Delete "${a.original_name}"?`)) return;
-    try {
-      await userProjectService.attachments.remove(id, a.id);
-      toast.success('Attachment deleted');
-      setAttachments(prev => prev.filter(x => x.id !== a.id));
-    } catch { toast.error('Failed to delete attachment'); }
-  };
+    useEffect(() => {
+        if (!project) return;
+        setEditForm({
+            name: project.name,
+            description: project.description ?? "",
+            status: project.status,
+            priority: project.priority,
+            start_date: project.start_date
+                ? project.start_date.slice(0, 10)
+                : "",
+            deadline: project.deadline ? project.deadline.slice(0, 10) : "",
+        });
+    }, [project]);
 
-  const updateTaskStatus = async (task: Task, status: TaskStatus) => {
-    // Optional reason — never required (Jira-style free jump has no
-    // "requires comment" rule), but still worth capturing when offered.
-    let comment: string | undefined;
-    if (status === 'blocked') {
-      const input = window.prompt('Reason for marking this task Blocked (optional):');
-      if (input && input.trim()) comment = input.trim();
-    }
-    // No production-user prompt here — production_assigned_to just carries
-    // through whatever the task already has (set elsewhere, e.g. the task
-    // detail page).
-    const productionAssignedTo = relationId(task.production_assigned_to);
-    try {
-      await userProjectService.tasks.update(id, task.id, {
-        status,
-        ...(comment ? { comment } : {}),
-        ...(status === 'ready_for_production' && productionAssignedTo ? { production_assigned_to: productionAssignedTo } : {}),
-      });
-      toast.success('Task updated');
-      load();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update task');
-    }
-  };
+    const saveProjectEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editForm.name.trim()) {
+            toast.error("Project name is required");
+            return;
+        }
+        setSavingProject(true);
+        try {
+            const updated = await userProjectService.update(id, {
+                name: editForm.name.trim(),
+                description: editForm.description.trim() || null,
+                status: editForm.status,
+                priority: editForm.priority,
+                start_date: editForm.start_date || null,
+                deadline: editForm.deadline || null,
+            });
+            setProject(updated);
+            toast.success("Project updated");
+            setEditingProject(false);
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to update project",
+            );
+        } finally {
+            setSavingProject(false);
+        }
+    };
 
-  const updateTaskAssignee = async (task: Task, assignedTo: string) => {
-    try {
-      await userProjectService.tasks.update(id, task.id, { assigned_to: assignedTo ? Number(assignedTo) : null });
-      toast.success('Task reassigned');
-      load();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to reassign task');
-    }
-  };
+    const uploadAttachments = async (files: FileList | null) => {
+        if (!files) return;
+        setUploading(true);
+        let failed = 0;
+        for (const file of Array.from(files)) {
+            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+            if (!ALLOWED_ATTACHMENT_TYPES.includes(ext)) {
+                toast.error(`${file.name}: file type not allowed`);
+                failed++;
+                continue;
+            }
+            if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
+                toast.error(
+                    `${file.name}: exceeds ${MAX_ATTACHMENT_MB}MB limit`,
+                );
+                failed++;
+                continue;
+            }
+            try {
+                // A Seller only ever sees the "visible to client" subset of
+                // attachments (see canViewAttachments above) — uploading with the
+                // box unchecked would make their own file invisible to them
+                // immediately after upload, so force it true for a Seller.
+                await userProjectService.attachments.upload(
+                    id,
+                    file,
+                    isSeller || attachmentVisibleToClient,
+                );
+            } catch {
+                failed++;
+                toast.error(`${file.name}: upload failed`);
+            }
+        }
+        if (failed < files.length) toast.success("Attachment(s) uploaded");
+        setUploading(false);
+        loadAttachments();
+    };
 
-  const addComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentBody.trim()) return;
-    setPostingComment(true);
-    try {
-      const visibility = isInternalCommentStaff ? 'internal' : 'client';
-      const comment = await userProjectService.comments.add(id, commentBody.trim(), undefined, visibility, selectedMentions.map(m => m.user_id));
-      if (commentFile) {
-        try { await userProjectService.comments.attachments.upload(id, comment.id, commentFile); }
-        catch { toast.error('Comment posted, but the attachment failed to upload.'); }
-      }
-      setCommentBody('');
-      setCommentFile(null);
-      setSelectedMentions([]);
-      loadComments();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to add comment');
-    } finally { setPostingComment(false); }
-  };
+    const downloadAttachment = async (a: ProjectAttachment) => {
+        try {
+            await userProjectService.attachments.download(
+                id,
+                a.id,
+                a.original_name,
+            );
+        } catch {
+            toast.error("Download failed");
+        }
+    };
 
-  // General reply-threading — every comment can chain into a proper
-  // conversation via parent_comment_id (any depth — a reply to a reply is
-  // just another comment whose parent_comment_id points at that reply), so
-  // conversations can run as long as needed instead of a flat message list.
-  // Pre-fills the reply box with "@Name " and pre-selects them in
-  // replySelectedMentions, so the auto-tag sendReply() does is visible, not
-  // just a silent background mention — looked up from the already-fetched
-  // mentionCandidates (same list the main composer's picker uses) so it's a
-  // real, taggable candidate, not an ad-hoc guess. Skipped for a self-reply.
-  const startReply = (commentId: number) => {
-    const parent = comments.find(c => c.id === commentId);
-    const authorId = parent?.author_user && parent.author_user.id !== me?.id
-      ? parent.author_user.id
-      : (parent?.author_admin ? 0 : null); // 0 = Company Admin sentinel
-    const candidate = authorId !== null ? mentionCandidates.find(u => u.user_id === authorId) : undefined;
-    setReplyingToCommentId(commentId);
-    setReplyBody(candidate ? `@${candidate.name} ` : '');
-    setReplySelectedMentions(candidate ? [candidate] : []);
-    setReplyMentionQuery(null);
-  };
-  const cancelReply = () => {
-    setReplyingToCommentId(null);
-    setReplyBody('');
-    setReplySelectedMentions([]);
-    setReplyMentionQuery(null);
-  };
-  const sendReply = async (parentId: number) => {
-    if (!replyBody.trim()) return;
-    setPostingReply(true);
-    try {
-      // Internal staff replying inherits the parent's own visibility tier —
-      // a reply to a client-facing comment must stay client-facing rather
-      // than silently defaulting to 'internal' and vanishing from that
-      // conversation. Leaving it undefined for an 'internal' or
-      // 'seller_reply' parent is fine either way: the backend already
-      // defaults an internal actor to 'internal', and forces 'seller_reply'
-      // for anyone continuing that thread regardless of what's sent (see
-      // store()'s isSellerThreadReply/isTaggedReply handling). A Seller's
-      // own visibility is likewise decided entirely server-side.
-      const parent = comments.find(c => c.id === parentId);
-      const visibility = isInternalCommentStaff && parent?.visibility === 'client' ? 'client' : undefined;
-      await userProjectService.comments.add(id, replyBody.trim(), undefined, visibility, replySelectedMentions.map(m => m.user_id), undefined, parentId);
-      cancelReply();
-      loadComments();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to send reply');
-    } finally { setPostingReply(false); }
-  };
+    const downloadCommentAttachment = async (
+        commentId: number,
+        a: ProjectCommentAttachment,
+    ) => {
+        try {
+            await userProjectService.comments.attachments.download(
+                id,
+                commentId,
+                a.id,
+                a.original_name,
+            );
+        } catch {
+            toast.error("Download failed");
+        }
+    };
 
-  // Typing '@' inside the reply box opens the same candidate picker the main
-  // composer uses (mentionCandidates is already fetched once for the page).
-  const handleReplyBodyChange = (value: string) => {
-    setReplyBody(value);
-    const at = value.lastIndexOf('@');
-    if (at === -1 || /\s/.test(value.slice(at + 1))) { setReplyMentionQuery(null); return; }
-    setReplyMentionQuery(value.slice(at + 1).toLowerCase());
-  };
+    const deleteAttachment = async (a: ProjectAttachment) => {
+        if (!confirm(`Delete "${a.original_name}"?`)) return;
+        try {
+            await userProjectService.attachments.remove(id, a.id);
+            toast.success("Attachment deleted");
+            setAttachments((prev) => prev.filter((x) => x.id !== a.id));
+        } catch {
+            toast.error("Failed to delete attachment");
+        }
+    };
 
-  const pickReplyMention = (u: MentionableUser) => {
-    const at = replyBody.lastIndexOf('@');
-    setReplyBody(replyBody.slice(0, at) + `@${u.name} `);
-    setReplySelectedMentions(prev => prev.some(m => m.user_id === u.user_id) ? prev : [...prev, u]);
-    setReplyMentionQuery(null);
-  };
+    const updateTaskStatus = async (task: Task, status: TaskStatus) => {
+        // Optional reason — never required (Jira-style free jump has no
+        // "requires comment" rule), but still worth capturing when offered.
+        let comment: string | undefined;
+        if (status === "blocked") {
+            const input = window.prompt(
+                "Reason for marking this task Blocked (optional):",
+            );
+            if (input && input.trim()) comment = input.trim();
+        }
+        // No production-user prompt here — production_assigned_to just carries
+        // through whatever the task already has (set elsewhere, e.g. the task
+        // detail page).
+        const productionAssignedTo = relationId(task.production_assigned_to);
+        try {
+            await userProjectService.tasks.update(id, task.id, {
+                status,
+                ...(comment ? { comment } : {}),
+                ...(status === "ready_for_production" && productionAssignedTo
+                    ? { production_assigned_to: productionAssignedTo }
+                    : {}),
+            });
+            toast.success("Task updated");
+            load();
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to update task",
+            );
+        }
+    };
 
-  // Own comment, or this project's PM tier — mirrors
-  // Api\User\ProjectCommentController::destroy()'s isProjectPmTier() check.
-  // Deliberately keyed off role_type='project_manager', not just the
-  // canViewAllCompanyProjects permission alone, so a Developer/Designer/QA/
-  // Team Member/Seller holding it still can't delete someone else's comment.
-  const canDeleteComment = (c: ProjectComment) => {
-    if (c.author_user?.id === me?.id) return true;
-    return project?.project_manager?.id === me?.id
-      || (me?.role_type === 'project_manager' && can('project_management', 'canViewAllCompanyProjects'));
-  };
+    const updateTaskAssignee = async (task: Task, assignedTo: string) => {
+        try {
+            await userProjectService.tasks.update(id, task.id, {
+                assigned_to: assignedTo ? Number(assignedTo) : null,
+            });
+            toast.success("Task reassigned");
+            load();
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to reassign task",
+            );
+        }
+    };
 
-  const deleteComment = async (commentId: number) => {
-    if (!confirm('Delete this comment?')) return;
-    try {
-      await userProjectService.comments.remove(id, commentId);
-      setComments(prev => prev.filter(c => c.id !== commentId));
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to delete comment');
-    }
-  };
+    const addComment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!commentBody.trim()) return;
+        setPostingComment(true);
+        try {
+            const visibility = isInternalCommentStaff ? "internal" : "client";
+            const comment = await userProjectService.comments.add(
+                id,
+                commentBody.trim(),
+                undefined,
+                visibility,
+                selectedMentions.map((m) => m.user_id),
+            );
+            if (commentFile) {
+                try {
+                    await userProjectService.comments.attachments.upload(
+                        id,
+                        comment.id,
+                        commentFile,
+                    );
+                } catch {
+                    toast.error(
+                        "Comment posted, but the attachment failed to upload.",
+                    );
+                }
+            }
+            setCommentBody("");
+            setCommentFile(null);
+            setSelectedMentions([]);
+            loadComments();
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to add comment",
+            );
+        } finally {
+            setPostingComment(false);
+        }
+    };
 
-  // Edit is always self-only (no moderator override, unlike delete above) —
-  // matches Api\User\ProjectCommentController::update()'s own restraint.
-  const startEditComment = (c: ProjectComment) => {
-    setEditingCommentId(c.id);
-    setEditCommentBody(c.body);
-  };
+    // General reply-threading — every comment can chain into a proper
+    // conversation via parent_comment_id (any depth — a reply to a reply is
+    // just another comment whose parent_comment_id points at that reply), so
+    // conversations can run as long as needed instead of a flat message list.
+    // Pre-fills the reply box with "@Name " and pre-selects them in
+    // replySelectedMentions, so the auto-tag sendReply() does is visible, not
+    // just a silent background mention — looked up from the already-fetched
+    // mentionCandidates (same list the main composer's picker uses) so it's a
+    // real, taggable candidate, not an ad-hoc guess. Skipped for a self-reply.
+    const startReply = (commentId: number) => {
+        const parent = comments.find((c) => c.id === commentId);
+        const authorId =
+            parent?.author_user && parent.author_user.id !== me?.id
+                ? parent.author_user.id
+                : parent?.author_admin
+                  ? 0
+                  : null; // 0 = Company Admin sentinel
+        const candidate =
+            authorId !== null
+                ? mentionCandidates.find((u) => u.user_id === authorId)
+                : undefined;
+        setReplyingToCommentId(commentId);
+        setReplyBody(candidate ? `@${candidate.name} ` : "");
+        setReplySelectedMentions(candidate ? [candidate] : []);
+        setReplyMentionQuery(null);
+    };
+    const cancelReply = () => {
+        setReplyingToCommentId(null);
+        setReplyBody("");
+        setReplySelectedMentions([]);
+        setReplyMentionQuery(null);
+    };
+    const sendReply = async (parentId: number) => {
+        if (!replyBody.trim()) return;
+        setPostingReply(true);
+        try {
+            // Internal staff replying inherits the parent's own visibility tier —
+            // a reply to a client-facing comment must stay client-facing rather
+            // than silently defaulting to 'internal' and vanishing from that
+            // conversation. Leaving it undefined for an 'internal' or
+            // 'seller_reply' parent is fine either way: the backend already
+            // defaults an internal actor to 'internal', and forces 'seller_reply'
+            // for anyone continuing that thread regardless of what's sent (see
+            // store()'s isSellerThreadReply/isTaggedReply handling). A Seller's
+            // own visibility is likewise decided entirely server-side.
+            const parent = comments.find((c) => c.id === parentId);
+            const visibility =
+                isInternalCommentStaff && parent?.visibility === "client"
+                    ? "client"
+                    : undefined;
+            await userProjectService.comments.add(
+                id,
+                replyBody.trim(),
+                undefined,
+                visibility,
+                replySelectedMentions.map((m) => m.user_id),
+                undefined,
+                parentId,
+            );
+            cancelReply();
+            loadComments();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Failed to send reply");
+        } finally {
+            setPostingReply(false);
+        }
+    };
 
-  const cancelEditComment = () => {
-    setEditingCommentId(null);
-    setEditCommentBody('');
-  };
+    // Typing '@' inside the reply box opens the same candidate picker the main
+    // composer uses (mentionCandidates is already fetched once for the page).
+    const handleReplyBodyChange = (value: string) => {
+        setReplyBody(value);
+        const at = value.lastIndexOf("@");
+        if (at === -1 || /\s/.test(value.slice(at + 1))) {
+            setReplyMentionQuery(null);
+            return;
+        }
+        setReplyMentionQuery(value.slice(at + 1).toLowerCase());
+    };
 
-  const saveEditComment = async (commentId: number) => {
-    if (!editCommentBody.trim()) return;
-    try {
-      const updated = await userProjectService.comments.update(id, commentId, editCommentBody.trim());
-      setComments(prev => prev.map(c => c.id === commentId ? updated : c));
-      cancelEditComment();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to update comment');
-    }
-  };
+    const pickReplyMention = (u: MentionableUser) => {
+        const at = replyBody.lastIndexOf("@");
+        setReplyBody(replyBody.slice(0, at) + `@${u.name} `);
+        setReplySelectedMentions((prev) =>
+            prev.some((m) => m.user_id === u.user_id) ? prev : [...prev, u],
+        );
+        setReplyMentionQuery(null);
+    };
 
-  // Optimistic toggle — flips liked_by_me/likes_count immediately, then
-  // reconciles with the server's actual count; reverts on failure.
-  const toggleCommentLike = async (c: ProjectComment) => {
-    const wasLiked = !!c.liked_by_me;
-    const prevCount = c.likes_count ?? 0;
-    setComments(prev => prev.map(x => x.id === c.id
-      ? { ...x, liked_by_me: !wasLiked, likes_count: prevCount + (wasLiked ? -1 : 1) }
-      : x));
-    try {
-      const res = await userProjectService.comments.toggleLike(id, c.id);
-      setComments(prev => prev.map(x => x.id === c.id ? { ...x, liked_by_me: res.liked, likes_count: res.likes_count } : x));
-    } catch (err: any) {
-      setComments(prev => prev.map(x => x.id === c.id ? { ...x, liked_by_me: wasLiked, likes_count: prevCount } : x));
-      toast.error(err?.response?.data?.message || 'Failed to update like');
-    }
-  };
+    // Own comment, or this project's PM tier — mirrors
+    // Api\User\ProjectCommentController::destroy()'s isProjectPmTier() check.
+    // Deliberately keyed off role_type='project_manager', not just the
+    // canViewAllCompanyProjects permission alone, so a Developer/Designer/QA/
+    // Team Member/Seller holding it still can't delete someone else's comment.
+    const canDeleteComment = (c: ProjectComment) => {
+        if (c.author_user?.id === me?.id) return true;
+        return (
+            project?.project_manager?.id === me?.id ||
+            (me?.role_type === "project_manager" &&
+                can("project_management", "canViewAllCompanyProjects"))
+        );
+    };
 
-  // Typing '@' opens the mention picker; selecting a candidate inserts
-  // "@Name " into the text and tracks the id separately (sent as
-  // mentioned_user_ids — the backend re-validates eligibility regardless).
-  const handleCommentBodyChange = (value: string) => {
-    setCommentBody(value);
-    const at = value.lastIndexOf('@');
-    if (at === -1 || /\s/.test(value.slice(at + 1))) { setMentionQuery(null); return; }
-    setMentionQuery(value.slice(at + 1).toLowerCase());
-  };
+    const deleteComment = async (commentId: number) => {
+        if (!confirm("Delete this comment?")) return;
+        try {
+            await userProjectService.comments.remove(id, commentId);
+            setComments((prev) => prev.filter((c) => c.id !== commentId));
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to delete comment",
+            );
+        }
+    };
 
-  const pickMention = (u: MentionableUser) => {
-    const at = commentBody.lastIndexOf('@');
-    setCommentBody(commentBody.slice(0, at) + `@${u.name} `);
-    setSelectedMentions(prev => prev.some(m => m.user_id === u.user_id) ? prev : [...prev, u]);
-    setMentionQuery(null);
-  };
+    // Edit is always self-only (no moderator override, unlike delete above) —
+    // matches Api\User\ProjectCommentController::update()'s own restraint.
+    const startEditComment = (c: ProjectComment) => {
+        setEditingCommentId(c.id);
+        setEditCommentBody(c.body);
+    };
 
-  // "Tag All" — mentions every candidate currently eligible for this
-  // comment's visibility tier in one click.
-  const pickAllMentions = () => {
-    const at = commentBody.lastIndexOf('@');
-    setCommentBody(commentBody.slice(0, at) + '@all ');
-    setSelectedMentions(mentionCandidates);
-    setMentionQuery(null);
-  };
+    const cancelEditComment = () => {
+        setEditingCommentId(null);
+        setEditCommentBody("");
+    };
 
-  if (loading) return <DashboardLayout title="Project"><div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>Loading…</div></DashboardLayout>;
-  if (!project) return null;
+    const saveEditComment = async (commentId: number) => {
+        if (!editCommentBody.trim()) return;
+        try {
+            const updated = await userProjectService.comments.update(
+                id,
+                commentId,
+                editCommentBody.trim(),
+            );
+            setComments((prev) =>
+                prev.map((c) => (c.id === commentId ? updated : c)),
+            );
+            cancelEditComment();
+        } catch (err: any) {
+            toast.error(
+                err?.response?.data?.message || "Failed to update comment",
+            );
+        }
+    };
 
-  // A draft (or still-unpaid placeholder) is a name-only stub that nobody has
-  // activated yet, so nothing that PRODUCES work is available on it — no
-  // tasks, files, comments or chat. Setting it up (edit, PM, team, seller,
-  // invoices) stays open, since that is exactly what happens before Activate.
-  // Mirrors the server-side guards (Project::isDraft()); everything here
-  // re-enables by itself the moment the project is activated.
-  const isDraft = project.status === 'draft' || project.status === 'unpaid';
-  // Mirrors Project::isLocked() — 'closed' (existing) or 'approved_locked'
-  // (Project Approval Lock). Backend is the authoritative guard on every one
-  // of these actions; this just avoids a dead click + confusing 422 toast.
-  const isProjectLocked = project.status === 'closed' || project.status === 'approved_locked';
+    // Optimistic toggle — flips liked_by_me/likes_count immediately, then
+    // reconciles with the server's actual count; reverts on failure.
+    const toggleCommentLike = async (c: ProjectComment) => {
+        const wasLiked = !!c.liked_by_me;
+        const prevCount = c.likes_count ?? 0;
+        setComments((prev) =>
+            prev.map((x) =>
+                x.id === c.id
+                    ? {
+                          ...x,
+                          liked_by_me: !wasLiked,
+                          likes_count: prevCount + (wasLiked ? -1 : 1),
+                      }
+                    : x,
+            ),
+        );
+        try {
+            const res = await userProjectService.comments.toggleLike(id, c.id);
+            setComments((prev) =>
+                prev.map((x) =>
+                    x.id === c.id
+                        ? {
+                              ...x,
+                              liked_by_me: res.liked,
+                              likes_count: res.likes_count,
+                          }
+                        : x,
+                ),
+            );
+        } catch (err: any) {
+            setComments((prev) =>
+                prev.map((x) =>
+                    x.id === c.id
+                        ? {
+                              ...x,
+                              liked_by_me: wasLiked,
+                              likes_count: prevCount,
+                          }
+                        : x,
+                ),
+            );
+            toast.error(
+                err?.response?.data?.message || "Failed to update like",
+            );
+        }
+    };
 
-  const tasks = project.tasks ?? [];
-  const team = project.team_members ?? [];
-  // Who a task can actually be reassigned to: this project's own team
-  // (added via "Manage Team"), excluding the Project Manager — this is the
-  // developer-side "who can do the work" list (mirrors
-  // Api\User\TaskController::assignedToRule()).
-  const assignableUsers = team
-    .filter(tm => tm.user && tm.user.role_type !== 'project_manager' && tm.user.role_type !== 'seller' && tm.user.role_type !== 'client')
-    .map(tm => tm.user!);
-  const projectManager = project.project_manager;
-  const createdByName = asRelation(project.created_by)?.name ?? project.created_by_admin?.name ?? null;
+    // Typing '@' opens the mention picker; selecting a candidate inserts
+    // "@Name " into the text and tracks the id separately (sent as
+    // mentioned_user_ids — the backend re-validates eligibility regardless).
+    const handleCommentBodyChange = (value: string) => {
+        setCommentBody(value);
+        const at = value.lastIndexOf("@");
+        if (at === -1 || /\s/.test(value.slice(at + 1))) {
+            setMentionQuery(null);
+            return;
+        }
+        setMentionQuery(value.slice(at + 1).toLowerCase());
+    };
 
-  const totalTasks = tasks.length;
-  const assignedTasksCount = tasks.filter(t => assignedToId(t) != null).length;
-  const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
-  const pendingTasksCount = tasks.filter(t => !['completed', 'cancelled'].includes(t.status)).length;
-  const overdueTasksCount = tasks.filter(isOverdue).length;
+    const pickMention = (u: MentionableUser) => {
+        const at = commentBody.lastIndexOf("@");
+        setCommentBody(commentBody.slice(0, at) + `@${u.name} `);
+        setSelectedMentions((prev) =>
+            prev.some((m) => m.user_id === u.user_id) ? prev : [...prev, u],
+        );
+        setMentionQuery(null);
+    };
 
-  const myTasks = me ? tasks.filter(t => assignedToId(t) === me.id) : [];
-  const projectInvoices = (project.invoices ?? []).filter(inv => inv.project_id === project.id);
-  const projectTotalInvoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-  const projectTotalPaid = projectInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
-  const projectOutstanding = Math.max(0, projectTotalInvoiced - projectTotalPaid);
-  const showInvoicesBilling = canManageProjectInvoices;
+    // "Tag All" — mentions every candidate currently eligible for this
+    // comment's visibility tier in one click.
+    const pickAllMentions = () => {
+        const at = commentBody.lastIndexOf("@");
+        setCommentBody(commentBody.slice(0, at) + "@all ");
+        setSelectedMentions(mentionCandidates);
+        setMentionQuery(null);
+    };
 
-  return (
-    <DashboardLayout title={project.name}>
-      <LoadingOverlay show={invoiceBusy} message="Creating Invoice…" />
-      <div style={{ width: '100%', maxWidth: 'none' }}>
-        {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 16 }} />}
-        {/* ── Header ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <button onClick={() => router.push('/projects')} style={{ background: 'none', border: 'none', padding: 0, marginBottom: 8, cursor: 'pointer', color: '#64748b', fontSize: 13 }}>
-              ← Back to Projects
-            </button>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>{project.name}</h1>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Badge label={project.status} sc={STATUS_SC[project.status]} />
-              <Badge label={project.priority} sc={PRIORITY_SC[project.priority]} />
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>{project.progress ?? 0}% complete</span>
-            </div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 12, color: '#64748b' }}>
-              <span>Due: <strong style={{ color: '#334155' }}>{fmtDate(project.deadline)}</strong></span>
-              <span>Manager: <strong style={{ color: '#334155' }}>
-                {projectManager ? `${projectManager.name}${projectManager.role_type ? ` (${roleDisplayLabel(projectManager)})` : ''}` : '—'}
-              </strong></span>
-              <span>Created by: <strong style={{ color: '#334155' }}>{createdByName ?? '—'}</strong></span>
-              <span>Created: <strong style={{ color: '#334155' }}>{fmtDate(project.created_at)}</strong></span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-            {/* The Seller side has no tab strip — this button is its Chat
+    if (loading)
+        return (
+            <DashboardLayout title="Project">
+                <div
+                    style={{
+                        padding: 48,
+                        textAlign: "center",
+                        color: "#94a3b8",
+                    }}
+                >
+                    Loading…
+                </div>
+            </DashboardLayout>
+        );
+    if (!project) return null;
+
+    // A draft (or still-unpaid placeholder) is a name-only stub that nobody has
+    // activated yet, so nothing that PRODUCES work is available on it — no
+    // tasks, files, comments or chat. Setting it up (edit, PM, team, seller,
+    // invoices) stays open, since that is exactly what happens before Activate.
+    // Mirrors the server-side guards (Project::isDraft()); everything here
+    // re-enables by itself the moment the project is activated.
+    const isDraft = project.status === "draft" || project.status === "unpaid";
+    // Mirrors Project::isLocked() — 'closed' (existing) or 'approved_locked'
+    // (Project Approval Lock). Backend is the authoritative guard on every one
+    // of these actions; this just avoids a dead click + confusing 422 toast.
+    const isProjectLocked =
+        project.status === "closed" || project.status === "approved_locked";
+
+    const tasks = project.tasks ?? [];
+    const team = project.team_members ?? [];
+    // Who a task can actually be reassigned to: this project's own team
+    // (added via "Manage Team"), excluding the Project Manager — this is the
+    // developer-side "who can do the work" list (mirrors
+    // Api\User\TaskController::assignedToRule()).
+    const assignableUsers = team
+        .filter(
+            (tm) =>
+                tm.user &&
+                tm.user.role_type !== "project_manager" &&
+                tm.user.role_type !== "seller" &&
+                tm.user.role_type !== "client",
+        )
+        .map((tm) => tm.user!);
+    const projectManager = project.project_manager;
+    const createdByName =
+        asRelation(project.created_by)?.name ??
+        project.created_by_admin?.name ??
+        null;
+
+    const totalTasks = tasks.length;
+    const assignedTasksCount = tasks.filter(
+        (t) => assignedToId(t) != null,
+    ).length;
+    const completedTasksCount = tasks.filter(
+        (t) => t.status === "completed",
+    ).length;
+    const pendingTasksCount = tasks.filter(
+        (t) => !["completed", "cancelled"].includes(t.status),
+    ).length;
+    const overdueTasksCount = tasks.filter(isOverdue).length;
+
+    const myTasks = me ? tasks.filter((t) => assignedToId(t) === me.id) : [];
+    const projectInvoices = (project.invoices ?? []).filter(
+        (inv) => inv.project_id === project.id,
+    );
+    const projectTotalInvoiced = projectInvoices.reduce(
+        (sum, inv) => sum + Number(inv.total_amount || 0),
+        0,
+    );
+    const projectTotalPaid = projectInvoices.reduce(
+        (sum, inv) => sum + Number(inv.paid_amount || 0),
+        0,
+    );
+    const projectOutstanding = Math.max(
+        0,
+        projectTotalInvoiced - projectTotalPaid,
+    );
+    const showInvoicesBilling = canManageProjectInvoices;
+
+    return (
+        <DashboardLayout title={project.name}>
+            <LoadingOverlay show={invoiceBusy} message="Creating Invoice…" />
+            <div style={{ width: "100%", maxWidth: "none" }}>
+                {isDraft && (
+                    <DraftNotice
+                        status={project.status}
+                        style={{ marginBottom: 16 }}
+                    />
+                )}
+                {/* ── Header ── */}
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 20,
+                        flexWrap: "wrap",
+                        gap: 12,
+                    }}
+                >
+                    <div>
+                        <button
+                            onClick={() => router.push("/projects")}
+                            style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                marginBottom: 8,
+                                cursor: "pointer",
+                                color: "#64748b",
+                                fontSize: 13,
+                            }}
+                        >
+                            ← Back to Projects
+                        </button>
+                        <h1
+                            style={{
+                                fontSize: 22,
+                                fontWeight: 800,
+                                color: "#0f172a",
+                                margin: 0,
+                            }}
+                        >
+                            {project.name}
+                        </h1>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: 8,
+                                marginTop: 8,
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                            }}
+                        >
+                            <Badge
+                                label={project.status}
+                                sc={STATUS_SC[project.status]}
+                            />
+                            <Badge
+                                label={project.priority}
+                                sc={PRIORITY_SC[project.priority]}
+                            />
+                            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                                {project.progress ?? 0}% complete
+                            </span>
+                        </div>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: 16,
+                                marginTop: 10,
+                                flexWrap: "wrap",
+                                fontSize: 12,
+                                color: "#64748b",
+                            }}
+                        >
+                            <span>
+                                Due:{" "}
+                                <strong style={{ color: "#334155" }}>
+                                    {fmtDate(project.deadline)}
+                                </strong>
+                            </span>
+                            <span>
+                                Manager:{" "}
+                                <strong style={{ color: "#334155" }}>
+                                    {projectManager
+                                        ? `${projectManager.name}${projectManager.role_type ? ` (${roleDisplayLabel(projectManager)})` : ""}`
+                                        : "—"}
+                                </strong>
+                            </span>
+                            <span>
+                                Created by:{" "}
+                                <strong style={{ color: "#334155" }}>
+                                    {createdByName ?? "—"}
+                                </strong>
+                            </span>
+                            <span>
+                                Created:{" "}
+                                <strong style={{ color: "#334155" }}>
+                                    {fmtDate(project.created_at)}
+                                </strong>
+                            </span>
+                        </div>
+                    </div>
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: 10,
+                            flexShrink: 0,
+                            flexWrap: "wrap",
+                        }}
+                    >
+                        {/* The Seller side has no tab strip — this button is its Chat
                 tab, so it locks on a draft like the Admin tabs do. Project
                 Chat now includes the project's Client (via a "Visible to
                 client" toggle on each message) — the separate "Chat with
                 Client" conversation this used to route Sellers to is retired
                 (its old data stays intact for history, just no longer
                 linked from anywhere). */}
-            <button
-              onClick={() => !isDraft && router.push(`/projects/${id}/chat`)}
-              disabled={isDraft}
-              title={isDraft ? DRAFT_HINT : undefined}
-              style={{
-                padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
-                color: isDraft ? '#cbd5e1' : '#2563eb', fontSize: 13, fontWeight: 600,
-                cursor: isDraft ? 'not-allowed' : 'pointer',
-              }}>
-              Chat
-            </button>
-            <ProjectLifecycleActions
-              projectId={id}
-              status={project.status}
-              service={userProjectService}
-              canComplete={canCompleteProjects}
-              canClose={canCloseProjects}
-              canReopen={canReopenProjects}
-              canForceClose={canForceCloseProjects}
-              canActivate={canActivateProjects}
-              canRequestReopen={canReopenProjects}
-              reopenRequestedAt={project.reopen_requested_at}
-              reopenRequestReason={project.reopen_request_reason}
-              canSubmitDelivery={canSubmitProjectDelivery}
-              deliveryStatus={project.delivery_status}
-              deliveryFileName={project.delivery_file_name}
-              onUpdated={updated => setProject(updated)}
-            />
-            {canEditProjects && !isProjectLocked && (
-              <button onClick={() => router.push(`/projects/${id}/edit`)} style={{
-                padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff',
-                color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}>
-                Edit Project
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ── Inline Edit Project form ── */}
-        {editingProject && canEditProjects && (
-          <form onSubmit={saveProjectEdit} style={card}>
-            <div style={sectionTitle}>Edit Project</div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-              <div style={{ flex: '1 1 260px' }}>
-                <label style={lbl}>Project Name</label>
-                <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inp} />
-              </div>
-              <div style={{ width: 160 }}>
-                <label style={lbl}>Status</label>
-                <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value as ProjectStatus }))} style={inp}>
-                  {Object.keys(STATUS_SC).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-                </select>
-              </div>
-              <div style={{ width: 140 }}>
-                <label style={lbl}>Priority</label>
-                <select value={editForm.priority} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value as Priority }))} style={inp}>
-                  {Object.keys(PRIORITY_SC).map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div style={{ width: 160 }}>
-                <label style={lbl}>Start Date</label>
-                <input type="date" value={editForm.start_date} onChange={e => setEditForm(f => ({ ...f, start_date: e.target.value }))} style={inp} />
-              </div>
-              <div style={{ width: 160 }}>
-                <label style={lbl}>Due Date</label>
-                <input type="date" value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))} style={inp} />
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>Description</label>
-              <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...inp, resize: 'vertical' }} />
-            </div>
-            {canUploadAttachments && (
-              <div style={{ marginBottom: 16, padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Attachments</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
-                      {attachments.length} file{attachments.length === 1 ? '' : 's'} uploaded
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    {!isSeller && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox" checked={attachmentVisibleToClient}
-                          onChange={e => setAttachmentVisibleToClient(e.target.checked)}
+                        <button
+                            onClick={() =>
+                                !isDraft && router.push(`/projects/${id}/chat`)
+                            }
+                            disabled={isDraft}
+                            title={isDraft ? DRAFT_HINT : undefined}
+                            style={{
+                                padding: "9px 18px",
+                                borderRadius: 8,
+                                border: "1.5px solid #e2e8f0",
+                                background: "#fff",
+                                color: isDraft ? "#cbd5e1" : "#2563eb",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: isDraft ? "not-allowed" : "pointer",
+                            }}
+                        >
+                            Chat
+                        </button>
+                        <ProjectLifecycleActions
+                            projectId={id}
+                            status={project.status}
+                            service={userProjectService}
+                            canComplete={canCompleteProjects}
+                            canClose={canCloseProjects}
+                            canReopen={canReopenProjects}
+                            canForceClose={canForceCloseProjects}
+                            canActivate={canActivateProjects}
+                            canRequestReopen={canReopenProjects}
+                            reopenRequestedAt={project.reopen_requested_at}
+                            reopenRequestReason={project.reopen_request_reason}
+                            canSubmitDelivery={canSubmitProjectDelivery}
+                            deliveryStatus={project.delivery_status}
+                            deliveryFileName={project.delivery_file_name}
+                            onUpdated={(updated) => setProject(updated)}
                         />
-                        Visible to client
-                      </label>
-                    )}
-                    <label
-                      title={isDraft ? DRAFT_HINT : undefined}
-                      style={{
-                        padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
-                        background: uploading || isDraft ? '#f1f5f9' : '#fff', color: '#475569',
-                        fontSize: 12, fontWeight: 500, cursor: uploading || isDraft ? 'not-allowed' : 'pointer',
-                        opacity: isDraft ? 0.6 : 1,
-                      }}>
-                      {uploading ? 'Uploading...' : '+ Add Files'}
-                      <input
-                        type="file" multiple disabled={uploading || isDraft} style={{ display: 'none' }}
-                        accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
-                        onChange={e => { uploadAttachments(e.target.files); e.target.value = ''; }}
-                      />
-                    </label>
-                  </div>
+                        {canEditProjects && !isProjectLocked && (
+                            <button
+                                onClick={() =>
+                                    router.push(`/projects/${id}/edit`)
+                                }
+                                style={{
+                                    padding: "9px 18px",
+                                    borderRadius: 8,
+                                    border: "1.5px solid #e2e8f0",
+                                    background: "#fff",
+                                    color: "#2563eb",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Edit Project
+                            </button>
+                        )}
+                    </div>
                 </div>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="submit" disabled={savingProject} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: savingProject ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: savingProject ? 'not-allowed' : 'pointer' }}>
-                {savingProject ? 'Saving…' : 'Save Changes'}
-              </button>
-              <button type="button" onClick={() => setEditingProject(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
 
-        {/* ── A. Project Overview ── */}
-        <div style={card}>
-          <div style={sectionTitle}>Project Overview</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Status</div><div style={{ marginTop: 6 }}><Badge label={project.status} sc={STATUS_SC[project.status]} /></div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Priority</div><div style={{ marginTop: 6 }}><Badge label={project.priority} sc={PRIORITY_SC[project.priority]} /></div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Progress</div><div style={{ fontSize: 13, color: '#0f172a', marginTop: 6, fontWeight: 600 }}>{project.progress ?? 0}%</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Client</div><div style={{ fontSize: 13, color: '#0f172a', marginTop: 6 }}>{project.client?.name ?? '—'}</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Start Date</div><div style={{ fontSize: 13, color: '#0f172a', marginTop: 6 }}>{fmtDate(project.start_date)}</div></div>
-            <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Due Date</div><div style={{ fontSize: 13, color: '#0f172a', marginTop: 6 }}>{fmtDate(project.deadline)}</div></div>
-          </div>
-          {project.description && (
-            <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #f1f5f9', fontSize: 13, color: '#475569', lineHeight: 1.6 }}>{project.description}</div>
-          )}
-        </div>
+                {/* ── Inline Edit Project form ── */}
+                {editingProject && canEditProjects && (
+                    <form onSubmit={saveProjectEdit} style={card}>
+                        <div style={sectionTitle}>Edit Project</div>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: 12,
+                                flexWrap: "wrap",
+                                marginBottom: 12,
+                            }}
+                        >
+                            <div style={{ flex: "1 1 260px" }}>
+                                <label style={lbl}>Project Name</label>
+                                <input
+                                    value={editForm.name}
+                                    onChange={(e) =>
+                                        setEditForm((f) => ({
+                                            ...f,
+                                            name: e.target.value,
+                                        }))
+                                    }
+                                    style={inp}
+                                />
+                            </div>
+                            <div style={{ width: 160 }}>
+                                <label style={lbl}>Status</label>
+                                <select
+                                    value={editForm.status}
+                                    onChange={(e) =>
+                                        setEditForm((f) => ({
+                                            ...f,
+                                            status: e.target
+                                                .value as ProjectStatus,
+                                        }))
+                                    }
+                                    style={inp}
+                                >
+                                    {Object.keys(STATUS_SC).map((s) => (
+                                        <option key={s} value={s}>
+                                            {s.replace(/_/g, " ")}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div style={{ width: 140 }}>
+                                <label style={lbl}>Priority</label>
+                                <select
+                                    value={editForm.priority}
+                                    onChange={(e) =>
+                                        setEditForm((f) => ({
+                                            ...f,
+                                            priority: e.target
+                                                .value as Priority,
+                                        }))
+                                    }
+                                    style={inp}
+                                >
+                                    {Object.keys(PRIORITY_SC).map((p) => (
+                                        <option key={p} value={p}>
+                                            {p}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div style={{ width: 160 }}>
+                                <label style={lbl}>Start Date</label>
+                                <input
+                                    type="date"
+                                    value={editForm.start_date}
+                                    onChange={(e) =>
+                                        setEditForm((f) => ({
+                                            ...f,
+                                            start_date: e.target.value,
+                                        }))
+                                    }
+                                    style={inp}
+                                />
+                            </div>
+                            <div style={{ width: 160 }}>
+                                <label style={lbl}>Due Date</label>
+                                <input
+                                    type="date"
+                                    value={editForm.deadline}
+                                    onChange={(e) =>
+                                        setEditForm((f) => ({
+                                            ...f,
+                                            deadline: e.target.value,
+                                        }))
+                                    }
+                                    style={inp}
+                                />
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                            <label style={lbl}>Description</label>
+                            <textarea
+                                value={editForm.description}
+                                onChange={(e) =>
+                                    setEditForm((f) => ({
+                                        ...f,
+                                        description: e.target.value,
+                                    }))
+                                }
+                                rows={3}
+                                style={{ ...inp, resize: "vertical" }}
+                            />
+                        </div>
+                        {canUploadAttachments && (
+                            <div
+                                style={{
+                                    marginBottom: 16,
+                                    padding: "12px 14px",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: 8,
+                                    background: "#f8fafc",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        gap: 12,
+                                        flexWrap: "wrap",
+                                    }}
+                                >
+                                    <div>
+                                        <div
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight: 700,
+                                                color: "#1e293b",
+                                            }}
+                                        >
+                                            Attachments
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontSize: 12,
+                                                color: "#64748b",
+                                                marginTop: 3,
+                                            }}
+                                        >
+                                            {attachments.length} file
+                                            {attachments.length === 1
+                                                ? ""
+                                                : "s"}{" "}
+                                            uploaded
+                                        </div>
+                                    </div>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 12,
+                                            flexWrap: "wrap",
+                                        }}
+                                    >
+                                        {!isSeller && (
+                                            <label
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 6,
+                                                    fontSize: 12,
+                                                    color: "#475569",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={
+                                                        attachmentVisibleToClient
+                                                    }
+                                                    onChange={(e) =>
+                                                        setAttachmentVisibleToClient(
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                />
+                                                Visible to client
+                                            </label>
+                                        )}
+                                        <label
+                                            title={
+                                                isDraft ? DRAFT_HINT : undefined
+                                            }
+                                            style={{
+                                                padding: "6px 14px",
+                                                borderRadius: 8,
+                                                border: "1.5px dashed #cbd5e1",
+                                                background:
+                                                    uploading || isDraft
+                                                        ? "#f1f5f9"
+                                                        : "#fff",
+                                                color: "#475569",
+                                                fontSize: 12,
+                                                fontWeight: 500,
+                                                cursor:
+                                                    uploading || isDraft
+                                                        ? "not-allowed"
+                                                        : "pointer",
+                                                opacity: isDraft ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {uploading
+                                                ? "Uploading..."
+                                                : "+ Add Files"}
+                                            <input
+                                                type="file"
+                                                multiple
+                                                disabled={uploading || isDraft}
+                                                style={{ display: "none" }}
+                                                accept={ALLOWED_ATTACHMENT_TYPES.map(
+                                                    (t) => `.${t}`,
+                                                ).join(",")}
+                                                onChange={(e) => {
+                                                    uploadAttachments(
+                                                        e.target.files,
+                                                    );
+                                                    e.target.value = "";
+                                                }}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div style={{ display: "flex", gap: 10 }}>
+                            <button
+                                type="submit"
+                                disabled={savingProject}
+                                style={{
+                                    padding: "9px 20px",
+                                    borderRadius: 8,
+                                    border: "none",
+                                    background: savingProject
+                                        ? "#93c5fd"
+                                        : "#2563eb",
+                                    color: "#fff",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: savingProject
+                                        ? "not-allowed"
+                                        : "pointer",
+                                }}
+                            >
+                                {savingProject ? "Saving…" : "Save Changes"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditingProject(false)}
+                                style={{
+                                    padding: "9px 20px",
+                                    borderRadius: 8,
+                                    border: "1.5px solid #e2e8f0",
+                                    background: "#fff",
+                                    color: "#64748b",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                )}
 
-        {/* ── Invoices & Billing — deposit/milestone/final/change-request
+                {/* ── A. Project Overview ── */}
+                <div style={card}>
+                    <div style={sectionTitle}>Project Overview</div>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                                "repeat(auto-fit, minmax(140px, 1fr))",
+                            gap: 16,
+                        }}
+                    >
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Status
+                            </div>
+                            <div style={{ marginTop: 6 }}>
+                                <Badge
+                                    label={project.status}
+                                    sc={STATUS_SC[project.status]}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Priority
+                            </div>
+                            <div style={{ marginTop: 6 }}>
+                                <Badge
+                                    label={project.priority}
+                                    sc={PRIORITY_SC[project.priority]}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Progress
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    color: "#0f172a",
+                                    marginTop: 6,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {project.progress ?? 0}%
+                            </div>
+                        </div>
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Client
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    color: "#0f172a",
+                                    marginTop: 6,
+                                }}
+                            >
+                                {project.client?.name ?? "—"}
+                            </div>
+                        </div>
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Start Date
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    color: "#0f172a",
+                                    marginTop: 6,
+                                }}
+                            >
+                                {fmtDate(project.start_date)}
+                            </div>
+                        </div>
+                        <div>
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: "#94a3b8",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                Due Date
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    color: "#0f172a",
+                                    marginTop: 6,
+                                }}
+                            >
+                                {fmtDate(project.deadline)}
+                            </div>
+                        </div>
+                    </div>
+                    {project.description && (
+                        <div
+                            style={{
+                                marginTop: 18,
+                                paddingTop: 16,
+                                borderTop: "1px solid #f1f5f9",
+                                fontSize: 13,
+                                color: "#475569",
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            {project.description}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Invoices & Billing — deposit/milestone/final/change-request
              invoices billed under this project, plus a running summary.
              Hidden entirely for anyone without canManageProjectInvoices. ── */}
-        {showInvoicesBilling && (
-          <div style={card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={sectionTitle}>Invoices &amp; Billing</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setShowCreateInvoice(v => !v)} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                  + Create Invoice
-                </button>
-              </div>
-            </div>
+                {showInvoicesBilling && (
+                    <div style={card}>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 12,
+                            }}
+                        >
+                            <div style={sectionTitle}>
+                                Invoices &amp; Billing
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <button
+                                    onClick={() =>
+                                        setShowCreateInvoice((v) => !v)
+                                    }
+                                    style={{
+                                        padding: "7px 14px",
+                                        borderRadius: 7,
+                                        border: "none",
+                                        background:
+                                            "linear-gradient(135deg, #2563eb, #3b82f6)",
+                                        color: "#fff",
+                                        fontSize: 12.5,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    + Create Invoice
+                                </button>
+                            </div>
+                        </div>
 
-            {createdInvoice && (
-              <div style={{ marginBottom: 14, padding: '12px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, color: '#065f46' }}>
-                    ✓ Invoice {createdInvoice.invoiceNumber} created and sent to {createdInvoice.sentTo}.
-                  </span>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <Link href={`/invoices/${createdInvoice.id}`} style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>
-                      View Invoice →
-                    </Link>
-                    <button onClick={() => setCreatedInvoice(null)} style={{ background: 'none', border: 'none', color: '#65a30d', cursor: 'pointer', fontSize: 13 }}>✕</button>
-                  </div>
-                </div>
-                {createdInvoice.paymentUrl && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 11, color: '#166534', fontWeight: 600, marginBottom: 6 }}>Payment Link (share directly with client)</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input readOnly value={createdInvoice.paymentUrl} onFocus={e => e.target.select()} style={{ flex: 1, padding: '8px 10px', border: '1.5px solid #86efac', borderRadius: 7, fontSize: 12, background: '#fff', color: '#374151', outline: 'none' }} />
-                      <button onClick={copyInvoiceLink} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: invoiceLinkCopied ? '#059669' : '#16a34a', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {invoiceLinkCopied ? 'Copied!' : 'Copy Link'}
-                      </button>
+                        {createdInvoice && (
+                            <div
+                                style={{
+                                    marginBottom: 14,
+                                    padding: "12px 14px",
+                                    background: "#ecfdf5",
+                                    border: "1px solid #a7f3d0",
+                                    borderRadius: 8,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        gap: 10,
+                                        flexWrap: "wrap",
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            fontSize: 13,
+                                            color: "#065f46",
+                                        }}
+                                    >
+                                        ✓ Invoice {createdInvoice.invoiceNumber}{" "}
+                                        created and sent to{" "}
+                                        {createdInvoice.sentTo}.
+                                    </span>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: 12,
+                                            alignItems: "center",
+                                        }}
+                                    >
+                                        <Link
+                                            href={`/invoices/${createdInvoice.id}`}
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight: 600,
+                                                color: "#059669",
+                                                textDecoration: "none",
+                                            }}
+                                        >
+                                            View Invoice →
+                                        </Link>
+                                        <button
+                                            onClick={() =>
+                                                setCreatedInvoice(null)
+                                            }
+                                            style={{
+                                                background: "none",
+                                                border: "none",
+                                                color: "#65a30d",
+                                                cursor: "pointer",
+                                                fontSize: 13,
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                                {createdInvoice.paymentUrl && (
+                                    <div style={{ marginTop: 10 }}>
+                                        <div
+                                            style={{
+                                                fontSize: 11,
+                                                color: "#166534",
+                                                fontWeight: 600,
+                                                marginBottom: 6,
+                                            }}
+                                        >
+                                            Payment Link (share directly with
+                                            client)
+                                        </div>
+                                        <div
+                                            style={{ display: "flex", gap: 8 }}
+                                        >
+                                            <input
+                                                readOnly
+                                                value={
+                                                    createdInvoice.paymentUrl
+                                                }
+                                                onFocus={(e) =>
+                                                    e.target.select()
+                                                }
+                                                style={{
+                                                    flex: 1,
+                                                    padding: "8px 10px",
+                                                    border: "1.5px solid #86efac",
+                                                    borderRadius: 7,
+                                                    fontSize: 12,
+                                                    background: "#fff",
+                                                    color: "#374151",
+                                                    outline: "none",
+                                                }}
+                                            />
+                                            <button
+                                                onClick={copyInvoiceLink}
+                                                style={{
+                                                    padding: "8px 14px",
+                                                    borderRadius: 7,
+                                                    border: "none",
+                                                    background:
+                                                        invoiceLinkCopied
+                                                            ? "#059669"
+                                                            : "#16a34a",
+                                                    color: "#fff",
+                                                    fontSize: 12.5,
+                                                    fontWeight: 600,
+                                                    cursor: "pointer",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {invoiceLinkCopied
+                                                    ? "Copied!"
+                                                    : "Copy Link"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {showCreateInvoice && (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    marginBottom: 14,
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                }}
+                            >
+                                <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={newInvAmount}
+                                    onChange={(e) =>
+                                        setNewInvAmount(e.target.value)
+                                    }
+                                    placeholder={`Amount (${projectInvoiceCurrency ?? "USD"})`}
+                                    style={{ ...inp, width: 160 }}
+                                />
+                                <input
+                                    type="date"
+                                    value={newInvDueDate}
+                                    onChange={(e) =>
+                                        setNewInvDueDate(e.target.value)
+                                    }
+                                    placeholder="Due date (optional)"
+                                    style={{ ...inp, width: 160 }}
+                                />
+                                {project.client ? (
+                                    <div
+                                        style={{
+                                            fontSize: 12,
+                                            color: "#64748b",
+                                        }}
+                                    >
+                                        Will be sent to{" "}
+                                        {project.client.email ??
+                                            project.client.name}
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="email"
+                                        value={newInvEmail}
+                                        onChange={(e) =>
+                                            setNewInvEmail(e.target.value)
+                                        }
+                                        placeholder="Recipient email (no client on this project)"
+                                        style={{ ...inp, flex: "1 1 220px" }}
+                                    />
+                                )}
+                                <SubmitButton
+                                    type="button"
+                                    onClick={handleCreateProjectInvoice}
+                                    loading={invoiceBusy}
+                                    loadingText="Creating Invoice…"
+                                    style={{
+                                        padding: "9px 16px",
+                                        borderRadius: 7,
+                                        border: "none",
+                                        background: invoiceBusy
+                                            ? "#93c5fd"
+                                            : "#2563eb",
+                                        color: "#fff",
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Create & Send
+                                </SubmitButton>
+                                {projectInvoiceCurrency && (
+                                    <div
+                                        style={{
+                                            width: "100%",
+                                            fontSize: 11,
+                                            color: "#94a3b8",
+                                        }}
+                                    >
+                                        Matches this project's existing invoice
+                                        currency ({projectInvoiceCurrency}) —
+                                        new invoices for this project always
+                                        inherit it.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {project.billing_summary && (
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                        "repeat(auto-fit, minmax(140px, 1fr))",
+                                    gap: 16,
+                                    marginBottom: 16,
+                                    paddingBottom: 16,
+                                    borderBottom: "1px solid #f1f5f9",
+                                }}
+                            >
+                                <div>
+                                    <div
+                                        style={{
+                                            fontSize: 11,
+                                            color: "#94a3b8",
+                                            fontWeight: 600,
+                                            textTransform: "uppercase",
+                                        }}
+                                    >
+                                        Total Invoiced
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color: "#0f172a",
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        {projectTotalInvoiced.toLocaleString(
+                                            "en-US",
+                                            { minimumFractionDigits: 2 },
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div
+                                        style={{
+                                            fontSize: 11,
+                                            color: "#94a3b8",
+                                            fontWeight: 600,
+                                            textTransform: "uppercase",
+                                        }}
+                                    >
+                                        Total Paid
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color: "#059669",
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        {projectTotalPaid.toLocaleString(
+                                            "en-US",
+                                            { minimumFractionDigits: 2 },
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div
+                                        style={{
+                                            fontSize: 11,
+                                            color: "#94a3b8",
+                                            fontWeight: 600,
+                                            textTransform: "uppercase",
+                                        }}
+                                    >
+                                        Outstanding
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color:
+                                                projectOutstanding > 0
+                                                    ? "#ea580c"
+                                                    : "#059669",
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        {projectOutstanding.toLocaleString(
+                                            "en-US",
+                                            { minimumFractionDigits: 2 },
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {projectInvoices.length === 0 ? (
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    color: "#94a3b8",
+                                    padding: "8px 0",
+                                }}
+                            >
+                                No invoices linked to this project yet.
+                            </div>
+                        ) : (
+                            <table
+                                style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                }}
+                            >
+                                <thead>
+                                    <tr style={{ background: "#f8fafc" }}>
+                                        {[
+                                            "Invoice #",
+                                            "Amount",
+                                            "Status",
+                                            "Due Date",
+                                            "",
+                                        ].map((h) => (
+                                            <th
+                                                key={h}
+                                                style={{
+                                                    padding: "8px 10px",
+                                                    textAlign: "left",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    color: "#94a3b8",
+                                                    textTransform: "uppercase",
+                                                }}
+                                            >
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {projectInvoices.map((inv) => (
+                                        <tr
+                                            key={inv.id}
+                                            style={{
+                                                borderBottom:
+                                                    "1px solid #f8fafc",
+                                            }}
+                                        >
+                                            <td
+                                                style={{
+                                                    padding: "9px 10px",
+                                                    fontSize: 13,
+                                                    fontWeight: 600,
+                                                    color: "#0f172a",
+                                                }}
+                                            >
+                                                {inv.invoice_number}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "9px 10px",
+                                                    fontSize: 13,
+                                                    color: "#475569",
+                                                }}
+                                            >
+                                                {inv.currency}{" "}
+                                                {inv.total_amount.toLocaleString(
+                                                    "en-US",
+                                                    {
+                                                        minimumFractionDigits: 2,
+                                                    },
+                                                )}
+                                            </td>
+                                            <td style={{ padding: "9px 10px" }}>
+                                                <Badge
+                                                    label={inv.status}
+                                                    sc={
+                                                        STATUS_SC[
+                                                            inv.status
+                                                        ] ?? {
+                                                            bg: "#f1f5f9",
+                                                            color: "#64748b",
+                                                        }
+                                                    }
+                                                />
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "9px 10px",
+                                                    fontSize: 13,
+                                                    color: "#64748b",
+                                                }}
+                                            >
+                                                {fmtDate(inv.due_date)}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "9px 10px",
+                                                    display: "flex",
+                                                    gap: 10,
+                                                }}
+                                            >
+                                                <Link
+                                                    href={`/invoices/${inv.id}`}
+                                                    style={{
+                                                        color: "#2563eb",
+                                                        fontSize: 12.5,
+                                                        fontWeight: 600,
+                                                        textDecoration: "none",
+                                                    }}
+                                                >
+                                                    View
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
-                  </div>
                 )}
-              </div>
-            )}
 
-            {showCreateInvoice && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input type="number" min={0} step="0.01" value={newInvAmount} onChange={e => setNewInvAmount(e.target.value)} placeholder={`Amount (${projectInvoiceCurrency ?? 'USD'})`} style={{ ...inp, width: 160 }} />
-                <input type="date" value={newInvDueDate} onChange={e => setNewInvDueDate(e.target.value)} placeholder="Due date (optional)" style={{ ...inp, width: 160 }} />
-                {project.client ? (
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Will be sent to {project.client.email ?? project.client.name}</div>
-                ) : (
-                  <input type="email" value={newInvEmail} onChange={e => setNewInvEmail(e.target.value)} placeholder="Recipient email (no client on this project)" style={{ ...inp, flex: '1 1 220px' }} />
-                )}
-                <SubmitButton type="button" onClick={handleCreateProjectInvoice} loading={invoiceBusy} loadingText="Creating Invoice…" style={{ padding: '9px 16px', borderRadius: 7, border: 'none', background: invoiceBusy ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600 }}>
-                  Create & Send
-                </SubmitButton>
-                {projectInvoiceCurrency && (
-                  <div style={{ width: '100%', fontSize: 11, color: '#94a3b8' }}>
-                    Matches this project's existing invoice currency ({projectInvoiceCurrency}) — new invoices for this project always inherit it.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {project.billing_summary && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Invoiced</div><div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{projectTotalInvoiced.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Total Paid</div><div style={{ fontSize: 15, fontWeight: 700, color: '#059669', marginTop: 4 }}>{projectTotalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
-                <div><div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding</div><div style={{ fontSize: 15, fontWeight: 700, color: projectOutstanding > 0 ? '#ea580c' : '#059669', marginTop: 4 }}>{projectOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></div>
-              </div>
-            )}
-
-            {projectInvoices.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#94a3b8', padding: '8px 0' }}>No invoices linked to this project yet.</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    {['Invoice #', 'Amount', 'Status', 'Due Date', ''].map(h => (
-                      <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {projectInvoices.map(inv => (
-                    <tr key={inv.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <td style={{ padding: '9px 10px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.invoice_number}</td>
-                      <td style={{ padding: '9px 10px', fontSize: 13, color: '#475569' }}>{inv.currency} {inv.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '9px 10px' }}><Badge label={inv.status} sc={STATUS_SC[inv.status] ?? { bg: '#f1f5f9', color: '#64748b' }} /></td>
-                      <td style={{ padding: '9px 10px', fontSize: 13, color: '#64748b' }}>{fmtDate(inv.due_date)}</td>
-                      <td style={{ padding: '9px 10px', display: 'flex', gap: 10 }}>
-                        <Link href={`/invoices/${inv.id}`} style={{ color: '#2563eb', fontSize: 12.5, fontWeight: 600, textDecoration: 'none' }}>View</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* ── C. Tasks Summary / D. My Assigned Tasks — hidden entirely from
+                {/* ── C. Tasks Summary / D. My Assigned Tasks — hidden entirely from
              anyone without real Task visibility (e.g. Seller) ── */}
-        {isInternalCommentStaff && (
-          <>
-            <div style={{ marginBottom: 20 }}>
-              <div style={sectionTitle}>Tasks Summary</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-                <StatCard label="Total" value={String(totalTasks)} color="#2563eb" />
-                <StatCard label="Assigned" value={String(assignedTasksCount)} color="#7c3aed" />
-                <StatCard label="Completed" value={String(completedTasksCount)} color="#059669" />
-                <StatCard label="Pending" value={String(pendingTasksCount)} color="#d97706" />
-                <StatCard label="Overdue" value={String(overdueTasksCount)} color="#dc2626" />
-              </div>
-            </div>
+                {isInternalCommentStaff && (
+                    <>
+                        <div style={{ marginBottom: 20 }}>
+                            <div style={sectionTitle}>Tasks Summary</div>
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                        "repeat(auto-fit, minmax(140px, 1fr))",
+                                    gap: 12,
+                                }}
+                            >
+                                <StatCard
+                                    label="Total"
+                                    value={String(totalTasks)}
+                                    color="#2563eb"
+                                />
+                                <StatCard
+                                    label="Assigned"
+                                    value={String(assignedTasksCount)}
+                                    color="#7c3aed"
+                                />
+                                <StatCard
+                                    label="Completed"
+                                    value={String(completedTasksCount)}
+                                    color="#059669"
+                                />
+                                <StatCard
+                                    label="Pending"
+                                    value={String(pendingTasksCount)}
+                                    color="#d97706"
+                                />
+                                <StatCard
+                                    label="Overdue"
+                                    value={String(overdueTasksCount)}
+                                    color="#dc2626"
+                                />
+                            </div>
+                        </div>
 
-            <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>My Assigned Tasks ({myTasks.length})</div>
-              {myTasks.length === 0 ? (
-                <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No tasks assigned to you yet.</div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      {['Title', 'Status', 'Priority', 'Due', 'Type', ''].map(h => (
-                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myTasks.map(t => (
-                      <tr key={t.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                        <td style={{ padding: '11px 16px', fontSize: 13, color: '#0f172a', fontWeight: 600 }}>
-                          {t.task_number && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#2563eb', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 5px', display: 'inline-block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}>{t.task_number}</div>}
-                          {t.title}
-                        </td>
-                        <td style={{ padding: '11px 16px' }}>
-                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)} disabled={isProjectLocked}
-                            style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
-                            <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                            {getAllowedNextTaskStatuses(t.status, { isAssignee: true, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
-                              <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td style={{ padding: '11px 16px' }}><Badge label={t.priority} sc={PRIORITY_SC[t.priority]} /></td>
-                        <td style={{ padding: '11px 16px', fontSize: 12, color: isOverdue(t) ? '#dc2626' : '#64748b', fontWeight: isOverdue(t) ? 700 : 400 }}>{fmtDate(t.due_date)}</td>
-                        <td style={{ padding: '11px 16px' }}>{t.task_type && <Badge label={TASK_TYPE_LABEL[t.task_type] ?? t.task_type} />}</td>
-                        <td style={{ padding: '11px 16px' }}>
-                          <button onClick={() => router.push(`/projects/${id}/tasks/${t.id}`)} style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #e0e7ff', background: '#eef2ff', color: '#4f46e5', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>View</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </>
-        )}
+                        <div
+                            style={{ ...card, padding: 0, overflow: "hidden" }}
+                        >
+                            <div
+                                style={{
+                                    padding: "14px 20px",
+                                    borderBottom: "1px solid #f1f5f9",
+                                    fontWeight: 700,
+                                    color: "#0f172a",
+                                    fontSize: 14,
+                                }}
+                            >
+                                My Assigned Tasks ({myTasks.length})
+                            </div>
+                            {myTasks.length === 0 ? (
+                                <div
+                                    style={{
+                                        padding: 32,
+                                        textAlign: "center",
+                                        color: "#94a3b8",
+                                        fontSize: 13,
+                                    }}
+                                >
+                                    No tasks assigned to you yet.
+                                </div>
+                            ) : (
+                                <table
+                                    style={{
+                                        width: "100%",
+                                        borderCollapse: "collapse",
+                                    }}
+                                >
+                                    <thead>
+                                        <tr style={{ background: "#f8fafc" }}>
+                                            {[
+                                                "Title",
+                                                "Status",
+                                                "Priority",
+                                                "Due",
+                                                "Type",
+                                                "",
+                                            ].map((h) => (
+                                                <th
+                                                    key={h}
+                                                    style={{
+                                                        padding: "10px 16px",
+                                                        textAlign: "left",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        color: "#94a3b8",
+                                                        textTransform:
+                                                            "uppercase",
+                                                    }}
+                                                >
+                                                    {h}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {myTasks.map((t) => (
+                                            <tr
+                                                key={t.id}
+                                                style={{
+                                                    borderBottom:
+                                                        "1px solid #f8fafc",
+                                                }}
+                                            >
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                        fontSize: 13,
+                                                        color: "#0f172a",
+                                                        fontWeight: 600,
+                                                    }}
+                                                >
+                                                    {t.task_number && (
+                                                        <div
+                                                            style={{
+                                                                fontSize: 10.5,
+                                                                fontWeight: 700,
+                                                                color: "#2563eb",
+                                                                background:
+                                                                    "#eff6ff",
+                                                                border: "1px solid #dbeafe",
+                                                                borderRadius: 4,
+                                                                padding:
+                                                                    "1px 5px",
+                                                                display:
+                                                                    "inline-block",
+                                                                fontFamily:
+                                                                    "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                                                            }}
+                                                        >
+                                                            {t.task_number}
+                                                        </div>
+                                                    )}
+                                                    {t.title}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                    }}
+                                                >
+                                                    <select
+                                                        value={t.status}
+                                                        onChange={(e) =>
+                                                            updateTaskStatus(
+                                                                t,
+                                                                e.target
+                                                                    .value as TaskStatus,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isProjectLocked
+                                                        }
+                                                        style={{
+                                                            padding: "5px 10px",
+                                                            border: "1.5px solid #e2e8f0",
+                                                            borderRadius: 7,
+                                                            fontSize: 12,
+                                                            outline: "none",
+                                                            background:
+                                                                "#fafafa",
+                                                        }}
+                                                    >
+                                                        <option
+                                                            value={t.status}
+                                                        >
+                                                            {TASK_STATUS_LABELS[
+                                                                t.status
+                                                            ] ??
+                                                                t.status.replace(
+                                                                    /_/g,
+                                                                    " ",
+                                                                )}
+                                                        </option>
+                                                        {getAllowedNextTaskStatuses(
+                                                            t.status,
+                                                            {
+                                                                isAssignee: true,
+                                                                isPm: isProjectPm,
+                                                                isAdmin: false,
+                                                                isQa,
+                                                                canOverrideTaskStatus,
+                                                            },
+                                                        ).map((s) => (
+                                                            <option
+                                                                key={s}
+                                                                value={s}
+                                                            >
+                                                                {TASK_STATUS_LABELS[
+                                                                    s
+                                                                ] ??
+                                                                    s.replace(
+                                                                        /_/g,
+                                                                        " ",
+                                                                    )}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                    }}
+                                                >
+                                                    <Badge
+                                                        label={t.priority}
+                                                        sc={
+                                                            PRIORITY_SC[
+                                                                t.priority
+                                                            ]
+                                                        }
+                                                    />
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                        fontSize: 12,
+                                                        color: isOverdue(t)
+                                                            ? "#dc2626"
+                                                            : "#64748b",
+                                                        fontWeight: isOverdue(t)
+                                                            ? 700
+                                                            : 400,
+                                                    }}
+                                                >
+                                                    {fmtDate(t.due_date)}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                    }}
+                                                >
+                                                    {t.task_type && (
+                                                        <Badge
+                                                            label={
+                                                                TASK_TYPE_LABEL[
+                                                                    t.task_type
+                                                                ] ?? t.task_type
+                                                            }
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "11px 16px",
+                                                    }}
+                                                >
+                                                    <button
+                                                        onClick={() =>
+                                                            router.push(
+                                                                `/projects/${id}/tasks/${t.id}`,
+                                                            )
+                                                        }
+                                                        style={{
+                                                            padding: "5px 12px",
+                                                            borderRadius: 7,
+                                                            border: "1.5px solid #e0e7ff",
+                                                            background:
+                                                                "#eef2ff",
+                                                            color: "#4f46e5",
+                                                            fontSize: 12,
+                                                            fontWeight: 500,
+                                                            cursor: "pointer",
+                                                        }}
+                                                    >
+                                                        View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </>
+                )}
 
-        {/* ── Tasks (full list + create) — hidden entirely from anyone
+                {/* ── Tasks (full list + create) — hidden entirely from anyone
              without real Task visibility (e.g. Seller) ── */}
-        {isInternalCommentStaff && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>All Tasks ({tasks.length})</span>
-            {canCreateAnyTask && project.status !== 'completed' && !isProjectLocked && (
-              <button
-                onClick={() => !isDraft && router.push(`/projects/${id}/tasks/create`)}
-                disabled={isDraft}
-                title={isDraft ? DRAFT_HINT : undefined}
-                style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: isDraft ? '#cbd5e1' : '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: isDraft ? 'not-allowed' : 'pointer' }}>
-                {canCreateTasks ? '+ Create Task' : '+ Submit Request'}
-              </button>
-            )}
-          </div>
+                {isInternalCommentStaff && (
+                    <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                        <div
+                            style={{
+                                padding: "14px 20px",
+                                borderBottom: "1px solid #f1f5f9",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontWeight: 700,
+                                    color: "#0f172a",
+                                    fontSize: 14,
+                                }}
+                            >
+                                All Tasks ({tasks.length})
+                            </span>
+                            {canCreateAnyTask &&
+                                project.status !== "completed" &&
+                                !isProjectLocked && (
+                                    <button
+                                        onClick={() =>
+                                            !isDraft &&
+                                            router.push(
+                                                `/projects/${id}/tasks/create`,
+                                            )
+                                        }
+                                        disabled={isDraft}
+                                        title={isDraft ? DRAFT_HINT : undefined}
+                                        style={{
+                                            padding: "7px 16px",
+                                            borderRadius: 8,
+                                            border: "none",
+                                            background: isDraft
+                                                ? "#cbd5e1"
+                                                : "#2563eb",
+                                            color: "#fff",
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            cursor: isDraft
+                                                ? "not-allowed"
+                                                : "pointer",
+                                        }}
+                                    >
+                                        {canCreateTasks
+                                            ? "+ Create Task"
+                                            : "+ Submit Request"}
+                                    </button>
+                                )}
+                        </div>
 
-          {tasks.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No tasks yet.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  {['Title', 'Assigned To', 'Status', 'Due', ''].map(h => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map(t => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ padding: '11px 16px' }}>
-                      <button onClick={() => router.push(`/projects/${id}/tasks/${t.id}`)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
-                        {t.task_number && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#2563eb', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 5px', display: 'inline-block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}>{t.task_number}</div>}
-                        <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600 }}>{t.title}</div>
-                      </button>
-                      {t.task_type && t.task_type !== 'general' && (
-                        <div style={{ marginTop: 3 }}><Badge label={TASK_TYPE_LABEL[t.task_type] ?? t.task_type} /></div>
-                      )}
-                    </td>
-                    <td style={{ padding: '11px 16px', fontSize: 12, color: '#64748b' }}>
-                      {(() => {
-                        const isSelfTask = assignedToId(t) === me?.id;
-                        if (!canEditTasks && !canAssignTasks && !isSelfTask) {
-                          return asRelation(t.assigned_to)?.name ?? '—';
-                        }
-                        const currentAssigneeId = asRelation(t.assigned_to)?.id ?? t.assigned_to;
-                        return (
-                          <select value={currentAssigneeId != null ? String(currentAssigneeId) : ''} onChange={e => updateTaskAssignee(t, e.target.value)} disabled={isProjectLocked}
-                            style={{ padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
-                            <option value="">Unassigned</option>
-                            {assignableUsers.map(u => (
-                              <option key={u.id} value={u.id}>{u.name}{u.role_type ? ` (${roleDisplayLabel(u)})` : ''}</option>
-                            ))}
-                            {/* Keep a task's existing assignee showing correctly
+                        {tasks.length === 0 ? (
+                            <div
+                                style={{
+                                    padding: 32,
+                                    textAlign: "center",
+                                    color: "#94a3b8",
+                                    fontSize: 13,
+                                }}
+                            >
+                                No tasks yet.
+                            </div>
+                        ) : (
+                            <table
+                                style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                }}
+                            >
+                                <thead>
+                                    <tr style={{ background: "#f8fafc" }}>
+                                        {[
+                                            "Title",
+                                            "Assigned To",
+                                            "Status",
+                                            "Due",
+                                            "",
+                                        ].map((h) => (
+                                            <th
+                                                key={h}
+                                                style={{
+                                                    padding: "10px 16px",
+                                                    textAlign: "left",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    color: "#94a3b8",
+                                                    textTransform: "uppercase",
+                                                }}
+                                            >
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {tasks.map((t) => (
+                                        <tr
+                                            key={t.id}
+                                            style={{
+                                                borderBottom:
+                                                    "1px solid #f8fafc",
+                                            }}
+                                        >
+                                            <td
+                                                style={{ padding: "11px 16px" }}
+                                            >
+                                                <button
+                                                    onClick={() =>
+                                                        router.push(
+                                                            `/projects/${id}/tasks/${t.id}`,
+                                                        )
+                                                    }
+                                                    style={{
+                                                        background: "none",
+                                                        border: "none",
+                                                        padding: 0,
+                                                        cursor: "pointer",
+                                                        textAlign: "left",
+                                                    }}
+                                                >
+                                                    {t.task_number && (
+                                                        <div
+                                                            style={{
+                                                                fontSize: 10.5,
+                                                                fontWeight: 700,
+                                                                color: "#2563eb",
+                                                                background:
+                                                                    "#eff6ff",
+                                                                border: "1px solid #dbeafe",
+                                                                borderRadius: 4,
+                                                                padding:
+                                                                    "1px 5px",
+                                                                display:
+                                                                    "inline-block",
+                                                                fontFamily:
+                                                                    "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                                                            }}
+                                                        >
+                                                            {t.task_number}
+                                                        </div>
+                                                    )}
+                                                    <div
+                                                        style={{
+                                                            fontSize: 13,
+                                                            color: "#0f172a",
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        {t.title}
+                                                    </div>
+                                                </button>
+                                                {t.task_type &&
+                                                    t.task_type !==
+                                                        "general" && (
+                                                        <div
+                                                            style={{
+                                                                marginTop: 3,
+                                                            }}
+                                                        >
+                                                            <Badge
+                                                                label={
+                                                                    TASK_TYPE_LABEL[
+                                                                        t
+                                                                            .task_type
+                                                                    ] ??
+                                                                    t.task_type
+                                                                }
+                                                            />
+                                                        </div>
+                                                    )}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "11px 16px",
+                                                    fontSize: 12,
+                                                    color: "#64748b",
+                                                }}
+                                            >
+                                                {(() => {
+                                                    const isSelfTask =
+                                                        assignedToId(t) ===
+                                                        me?.id;
+                                                    if (
+                                                        !canEditTasks &&
+                                                        !canAssignTasks &&
+                                                        !isSelfTask
+                                                    ) {
+                                                        return (
+                                                            asRelation(
+                                                                t.assigned_to,
+                                                            )?.name ?? "—"
+                                                        );
+                                                    }
+                                                    const currentAssigneeId =
+                                                        asRelation(
+                                                            t.assigned_to,
+                                                        )?.id ?? t.assigned_to;
+                                                    return (
+                                                        <select
+                                                            value={
+                                                                currentAssigneeId !=
+                                                                null
+                                                                    ? String(
+                                                                          currentAssigneeId,
+                                                                      )
+                                                                    : ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                updateTaskAssignee(
+                                                                    t,
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                isProjectLocked
+                                                            }
+                                                            style={{
+                                                                padding:
+                                                                    "5px 8px",
+                                                                border: "1.5px solid #e2e8f0",
+                                                                borderRadius: 7,
+                                                                fontSize: 12,
+                                                                outline: "none",
+                                                                background:
+                                                                    "#fafafa",
+                                                            }}
+                                                        >
+                                                            <option value="">
+                                                                Unassigned
+                                                            </option>
+                                                            {assignableUsers.map(
+                                                                (u) => (
+                                                                    <option
+                                                                        key={
+                                                                            u.id
+                                                                        }
+                                                                        value={
+                                                                            u.id
+                                                                        }
+                                                                    >
+                                                                        {u.name}
+                                                                        {u.role_type
+                                                                            ? ` (${roleDisplayLabel(u)})`
+                                                                            : ""}
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                            {/* Keep a task's existing assignee showing correctly
                                 even if their role is no longer eligible here
                                 (e.g. a Project Manager assigned before that role
                                 was excluded from this list) — a single fallback
                                 entry so the select isn't blank, not a normal
                                 re-pickable choice. */}
-                            {currentAssigneeId != null && !assignableUsers.some(u => u.id === currentAssigneeId) && (
-                              <option value={String(currentAssigneeId)}>{asRelation(t.assigned_to)?.name ?? `User #${currentAssigneeId}`}</option>
-                            )}
-                          </select>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ padding: '11px 16px' }}><Badge label={t.status} sc={TASK_SC[t.status]} /></td>
-                    <td style={{ padding: '11px 16px', fontSize: 12, color: '#64748b' }}>{fmtDate(t.due_date)}</td>
-                    <td style={{ padding: '11px 16px' }}>
-                      {(() => {
-                        const isSelfTask = assignedToId(t) === me?.id;
-                        if (!canEditTasks && !isSelfTask && !isQa && !canOverrideTaskStatus) return null;
-                        return (
-                          <select value={t.status} onChange={e => updateTaskStatus(t, e.target.value as TaskStatus)} disabled={isProjectLocked}
-                            style={{ padding: '5px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fafafa' }}>
-                            <option value={t.status}>{TASK_STATUS_LABELS[t.status] ?? t.status.replace(/_/g, ' ')}</option>
-                            {getAllowedNextTaskStatuses(t.status, { isAssignee: isSelfTask, isPm: isProjectPm, isAdmin: false, isQa, canOverrideTaskStatus }).map(s => (
-                              <option key={s} value={s}>{TASK_STATUS_LABELS[s] ?? s.replace(/_/g, ' ')}</option>
-                            ))}
-                          </select>
-                        );
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        )}
+                                                            {currentAssigneeId !=
+                                                                null &&
+                                                                !assignableUsers.some(
+                                                                    (u) =>
+                                                                        u.id ===
+                                                                        currentAssigneeId,
+                                                                ) && (
+                                                                    <option
+                                                                        value={String(
+                                                                            currentAssigneeId,
+                                                                        )}
+                                                                    >
+                                                                        {asRelation(
+                                                                            t.assigned_to,
+                                                                        )
+                                                                            ?.name ??
+                                                                            `User #${currentAssigneeId}`}
+                                                                    </option>
+                                                                )}
+                                                        </select>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td
+                                                style={{ padding: "11px 16px" }}
+                                            >
+                                                <Badge
+                                                    label={t.status}
+                                                    sc={TASK_SC[t.status]}
+                                                />
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "11px 16px",
+                                                    fontSize: 12,
+                                                    color: "#64748b",
+                                                }}
+                                            >
+                                                {fmtDate(t.due_date)}
+                                            </td>
+                                            <td
+                                                style={{ padding: "11px 16px" }}
+                                            >
+                                                {(() => {
+                                                    const isSelfTask =
+                                                        assignedToId(t) ===
+                                                        me?.id;
+                                                    if (
+                                                        !canEditTasks &&
+                                                        !isSelfTask &&
+                                                        !isQa &&
+                                                        !canOverrideTaskStatus
+                                                    )
+                                                        return null;
+                                                    return (
+                                                        <select
+                                                            value={t.status}
+                                                            onChange={(e) =>
+                                                                updateTaskStatus(
+                                                                    t,
+                                                                    e.target
+                                                                        .value as TaskStatus,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                isProjectLocked
+                                                            }
+                                                            style={{
+                                                                padding:
+                                                                    "5px 10px",
+                                                                border: "1.5px solid #e2e8f0",
+                                                                borderRadius: 7,
+                                                                fontSize: 12,
+                                                                outline: "none",
+                                                                background:
+                                                                    "#fafafa",
+                                                            }}
+                                                        >
+                                                            <option
+                                                                value={t.status}
+                                                            >
+                                                                {TASK_STATUS_LABELS[
+                                                                    t.status
+                                                                ] ??
+                                                                    t.status.replace(
+                                                                        /_/g,
+                                                                        " ",
+                                                                    )}
+                                                            </option>
+                                                            {getAllowedNextTaskStatuses(
+                                                                t.status,
+                                                                {
+                                                                    isAssignee:
+                                                                        isSelfTask,
+                                                                    isPm: isProjectPm,
+                                                                    isAdmin: false,
+                                                                    isQa,
+                                                                    canOverrideTaskStatus,
+                                                                },
+                                                            ).map((s) => (
+                                                                <option
+                                                                    key={s}
+                                                                    value={s}
+                                                                >
+                                                                    {TASK_STATUS_LABELS[
+                                                                        s
+                                                                    ] ??
+                                                                        s.replace(
+                                                                            /_/g,
+                                                                            " ",
+                                                                        )}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    );
+                                                })()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
 
-        {/* ── B. Assigned People ── */}
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>Assigned People ({team.length})</span>
-            {canAssignTeamResources && project.status !== 'closed' && (
-              <Link href={`/projects/team?project=${id}`} style={{ fontSize: 12, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>Manage Team →</Link>
-            )}
-          </div>
-          {team.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No team members assigned yet.</div>
-          ) : (
-            <div style={{ padding: '14px 20px', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {team.map(m => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#f8fafc', borderRadius: 20, border: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{m.user?.name ?? '—'}</span>
-                  {/* A team member's actual job (role_type, e.g. "Seller") is more
+                {/* ── B. Assigned People ── */}
+                <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                    <div
+                        style={{
+                            padding: "14px 20px",
+                            borderBottom: "1px solid #f1f5f9",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontWeight: 700,
+                                color: "#0f172a",
+                                fontSize: 14,
+                            }}
+                        >
+                            Assigned People ({team.length})
+                        </span>
+                        {canAssignTeamResources &&
+                            project.status !== "closed" && (
+                                <Link
+                                    href={`/projects/team?project=${id}`}
+                                    style={{
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: "#2563eb",
+                                        textDecoration: "none",
+                                    }}
+                                >
+                                    Manage Team →
+                                </Link>
+                            )}
+                    </div>
+                    {team.length === 0 ? (
+                        <div
+                            style={{
+                                padding: 32,
+                                textAlign: "center",
+                                color: "#94a3b8",
+                                fontSize: 13,
+                            }}
+                        >
+                            No team members assigned yet.
+                        </div>
+                    ) : (
+                        <div
+                            style={{
+                                padding: "14px 20px",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 10,
+                            }}
+                        >
+                            {team.map((m) => (
+                                <div
+                                    key={m.id}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "8px 14px",
+                                        background: "#f8fafc",
+                                        borderRadius: 20,
+                                        border: "1px solid #f1f5f9",
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            color: "#0f172a",
+                                        }}
+                                    >
+                                        {m.user?.name ?? "—"}
+                                    </span>
+                                    {/* A team member's actual job (role_type, e.g. "Seller") is more
                       useful here than the generic 4-value project role_in_project —
                       fall back to the latter only if the user has no role_type set,
                       same pattern as the Admin Team page. */}
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                    {(m.user?.role_type && ROLE_LABELS[m.user.role_type]) || TEAM_ROLE_LABEL[m.role_in_project] || m.role_in_project}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── F. Attachments ── */}
-        {canViewAttachments && (
-          <div style={card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: 0 }}>Project Attachments ({attachments.length})</h3>
-              {canUploadAttachments && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {!isSeller && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox" checked={attachmentVisibleToClient}
-                        onChange={e => setAttachmentVisibleToClient(e.target.checked)}
-                      />
-                      Visible to client
-                    </label>
-                  )}
-                  <label
-                    title={isDraft ? DRAFT_HINT : undefined}
-                    style={{
-                      padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
-                      background: uploading || isDraft ? '#f1f5f9' : '#f8fafc', color: '#475569',
-                      fontSize: 12, fontWeight: 500, cursor: uploading || isDraft ? 'not-allowed' : 'pointer',
-                      opacity: isDraft ? 0.6 : 1,
-                    }}>
-                    {uploading ? 'Uploading…' : '+ Add Files'}
-                    <input
-                      type="file" multiple disabled={uploading || isDraft} style={{ display: 'none' }}
-                      accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
-                      onChange={e => { uploadAttachments(e.target.files); e.target.value = ''; }}
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-            {attachments.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#94a3b8' }}>No attachments available.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {attachments.map(a => (
-                  <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{a.original_name}</span>
-                        {a.is_visible_to_client && (
-                          <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontWeight: 600 }}>
-                            Visible to client
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                        {a.file_type ?? 'file'} · {fmtFileSize(a.file_size)} · {a.uploaded_by_admin?.name ?? a.uploaded_by_user?.name ?? '—'} · {fmtDate(a.created_at)}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      {canDownloadAttachments && (
-                        <button onClick={() => downloadAttachment(a)} style={{
-                          padding: '4px 12px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
-                          background: '#2563eb', color: '#fff', border: 'none',
-                        }}>Download</button>
-                      )}
-                      {canDeleteAttachments && (
-                        <button onClick={() => deleteAttachment(a)} style={{
-                          padding: '4px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                          background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6,
-                        }}>Delete</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── G. Comments / Activity — chat-style conversation ── */}
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>Comments &amp; Activity ({comments.length})</div>
-
-          {/* Message thread — oldest at top, newest at bottom, like a chat */}
-          <div style={{ maxHeight: 480, overflowY: 'auto', padding: '16px 20px', background: '#f7f8fa', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {comments.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No activity yet.</div>
-            ) : (
-              (() => {
-                const commentById = new Map(comments.map(cm => [cm.id, cm]));
-                return buildThreadOrder(comments).map(({ comment: c, depth }) => {
-                const isMine = c.author_user?.id === me?.id;
-                const senderName = c.author_user?.name ?? c.author_admin?.name ?? '—';
-                const senderRole = c.author_admin ? 'Company Admin' : (c.author_user?.role_type ? ROLE_LABELS[c.author_user.role_type] ?? c.author_user.role_type : null);
-                // Only rendered when the parent is actually in this viewer's
-                // own visible set — if it's an internal comment they can't
-                // see, the reply just shows as a standalone message instead
-                // of leaking who/what it was replying to.
-                const parentComment = c.parent_comment_id ? commentById.get(c.parent_comment_id) : null;
-                const parentSenderName = parentComment?.author_user?.name ?? parentComment?.author_admin?.name ?? '—';
-                // Grouped replies nest under their parent (capped at 3 visual
-                // levels so a very deep thread doesn't run off the page) with
-                // a thin connecting rail on the left, like a Slack thread.
-                const indent = Math.min(depth, 3) * 22;
-                return (
-                  <div key={c.id} style={{
-                    display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', gap: 8,
-                    marginLeft: indent, paddingLeft: depth > 0 ? 10 : 0,
-                    borderLeft: depth > 0 ? '2px solid #e2e8f0' : 'none',
-                  }}>
-                    {!isMine && (
-                      <div style={{
-                        width: 26, height: 26, borderRadius: '50%', background: '#e0e7ff', color: '#4338ca',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
-                        flexShrink: 0, marginTop: 16,
-                      }}>{senderName.charAt(0).toUpperCase()}</div>
-                    )}
-                    <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
-                      {!isMine && (
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', marginBottom: 3, marginLeft: 4 }}>
-                          {senderName}{senderRole && <span style={{ fontWeight: 500, color: '#94a3b8' }}> · {senderRole}</span>}
+                                    <span
+                                        style={{
+                                            fontSize: 11,
+                                            color: "#94a3b8",
+                                        }}
+                                    >
+                                        {(m.user?.role_type &&
+                                            ROLE_LABELS[m.user.role_type]) ||
+                                            TEAM_ROLE_LABEL[
+                                                m.role_in_project
+                                            ] ||
+                                            m.role_in_project}
+                                    </span>
+                                </div>
+                            ))}
                         </div>
-                      )}
-                      <div style={{
-                        padding: '9px 13px',
-                        borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                        background: isMine ? '#2563eb' : '#fff',
-                        color: isMine ? '#fff' : '#1e293b',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-                        border: isMine ? 'none' : '1px solid #f1f5f9',
-                      }}>
-                        {parentComment && (
-                          <div style={{
-                            borderLeft: `3px solid ${isMine ? 'rgba(255,255,255,0.5)' : '#cbd5e1'}`,
-                            paddingLeft: 8, marginBottom: 6, borderRadius: 4,
-                            background: isMine ? 'rgba(255,255,255,0.12)' : '#f8fafc',
-                            padding: '4px 8px',
-                          }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: isMine ? '#dbeafe' : '#475569' }}>{parentSenderName}</div>
-                            <div style={{
-                              fontSize: 11.5, color: isMine ? 'rgba(255,255,255,0.85)' : '#64748b',
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220,
-                            }}>{parentComment.body}</div>
-                          </div>
+                    )}
+                </div>
+
+                {/* ── F. Attachments ── */}
+                {canViewAttachments && (
+                    <div style={card}>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 14,
+                            }}
+                        >
+                            <h3
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "#1e293b",
+                                    margin: 0,
+                                }}
+                            >
+                                Project Attachments ({attachments.length})
+                            </h3>
+                            {canUploadAttachments && (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 12,
+                                    }}
+                                >
+                                    {!isSeller && (
+                                        <label
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 6,
+                                                fontSize: 12,
+                                                color: "#475569",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    attachmentVisibleToClient
+                                                }
+                                                onChange={(e) =>
+                                                    setAttachmentVisibleToClient(
+                                                        e.target.checked,
+                                                    )
+                                                }
+                                            />
+                                            Visible to client
+                                        </label>
+                                    )}
+                                    <label
+                                        title={isDraft ? DRAFT_HINT : undefined}
+                                        style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 8,
+                                            border: "1.5px dashed #cbd5e1",
+                                            background:
+                                                uploading || isDraft
+                                                    ? "#f1f5f9"
+                                                    : "#f8fafc",
+                                            color: "#475569",
+                                            fontSize: 12,
+                                            fontWeight: 500,
+                                            cursor:
+                                                uploading || isDraft
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            opacity: isDraft ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {uploading
+                                            ? "Uploading…"
+                                            : "+ Add Files"}
+                                        <input
+                                            type="file"
+                                            multiple
+                                            disabled={uploading || isDraft}
+                                            style={{ display: "none" }}
+                                            accept={ALLOWED_ATTACHMENT_TYPES.map(
+                                                (t) => `.${t}`,
+                                            ).join(",")}
+                                            onChange={(e) => {
+                                                uploadAttachments(
+                                                    e.target.files,
+                                                );
+                                                e.target.value = "";
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+                        {attachments.length === 0 ? (
+                            <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                                No attachments available.
+                            </div>
+                        ) : (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 8,
+                                }}
+                            >
+                                {attachments.map((a) => (
+                                    <div
+                                        key={a.id}
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            padding: "8px 0",
+                                            borderBottom: "1px solid #f8fafc",
+                                        }}
+                                    >
+                                        <div>
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 8,
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        fontSize: 13,
+                                                        fontWeight: 500,
+                                                        color: "#1e293b",
+                                                    }}
+                                                >
+                                                    {a.original_name}
+                                                </span>
+                                                {a.is_visible_to_client && (
+                                                    <span
+                                                        style={{
+                                                            fontSize: 10,
+                                                            padding: "1px 8px",
+                                                            borderRadius: 20,
+                                                            background:
+                                                                "#ecfdf5",
+                                                            color: "#059669",
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        Visible to client
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#94a3b8",
+                                                }}
+                                            >
+                                                {a.file_type ?? "file"} ·{" "}
+                                                {fmtFileSize(a.file_size)} ·{" "}
+                                                {a.uploaded_by_admin?.name ??
+                                                    a.uploaded_by_user?.name ??
+                                                    "—"}{" "}
+                                                · {fmtDate(a.created_at)}
+                                            </div>
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                gap: 6,
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            {canDownloadAttachments && (
+                                                <button
+                                                    onClick={() =>
+                                                        downloadAttachment(a)
+                                                    }
+                                                    style={{
+                                                        padding: "4px 12px",
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        borderRadius: 6,
+                                                        cursor: "pointer",
+                                                        background: "#2563eb",
+                                                        color: "#fff",
+                                                        border: "none",
+                                                    }}
+                                                >
+                                                    Download
+                                                </button>
+                                            )}
+                                            {canDeleteAttachments && (
+                                                <button
+                                                    onClick={() =>
+                                                        deleteAttachment(a)
+                                                    }
+                                                    style={{
+                                                        padding: "4px 10px",
+                                                        fontSize: 11,
+                                                        fontWeight: 500,
+                                                        cursor: "pointer",
+                                                        background: "#fff",
+                                                        color: "#dc2626",
+                                                        border: "1px solid #fecaca",
+                                                        borderRadius: 6,
+                                                    }}
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         )}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4 }}>
-                          {isInternalCommentStaff && c.visibility === 'client' && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: isMine ? '#dbeafe' : '#0891b2', background: isMine ? 'rgba(255,255,255,0.15)' : '#ecfeff', padding: '1px 6px', borderRadius: 8 }}>client-visible</span>
-                          )}
-                          {/* Only ever reached for a Seller when the backend let this
+                    </div>
+                )}
+
+                {/* ── G. Comments / Activity — chat-style conversation ── */}
+                <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                    <div
+                        style={{
+                            padding: "14px 20px",
+                            borderBottom: "1px solid #f1f5f9",
+                            fontWeight: 700,
+                            color: "#0f172a",
+                            fontSize: 14,
+                        }}
+                    >
+                        Comments &amp; Activity ({comments.length})
+                    </div>
+
+                    {/* Message thread — oldest at top, newest at bottom, like a chat */}
+                    <div
+                        style={{
+                            maxHeight: 480,
+                            overflowY: "auto",
+                            padding: "16px 20px",
+                            background: "#f7f8fa",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 14,
+                        }}
+                    >
+                        {comments.length === 0 ? (
+                            <div
+                                style={{
+                                    padding: 32,
+                                    textAlign: "center",
+                                    color: "#94a3b8",
+                                    fontSize: 13,
+                                }}
+                            >
+                                No activity yet.
+                            </div>
+                        ) : (
+                            (() => {
+                                const commentById = new Map(
+                                    comments.map((cm) => [cm.id, cm]),
+                                );
+                                return buildThreadOrder(comments).map(
+                                    ({ comment: c, depth }) => {
+                                        const isMine =
+                                            c.author_user?.id === me?.id;
+                                        const senderName =
+                                            c.author_user?.name ??
+                                            c.author_admin?.name ??
+                                            "—";
+                                        const senderRole = c.author_admin
+                                            ? "Company Admin"
+                                            : c.author_user?.role_type
+                                              ? (ROLE_LABELS[
+                                                    c.author_user.role_type
+                                                ] ?? c.author_user.role_type)
+                                              : null;
+                                        // Only rendered when the parent is actually in this viewer's
+                                        // own visible set — if it's an internal comment they can't
+                                        // see, the reply just shows as a standalone message instead
+                                        // of leaking who/what it was replying to.
+                                        const parentComment =
+                                            c.parent_comment_id
+                                                ? commentById.get(
+                                                      c.parent_comment_id,
+                                                  )
+                                                : null;
+                                        const parentSenderName =
+                                            parentComment?.author_user?.name ??
+                                            parentComment?.author_admin?.name ??
+                                            "—";
+                                        // Grouped replies nest under their parent (capped at 3 visual
+                                        // levels so a very deep thread doesn't run off the page) with
+                                        // a thin connecting rail on the left, like a Slack thread.
+                                        const indent = Math.min(depth, 3) * 22;
+                                        return (
+                                            <div
+                                                key={c.id}
+                                                style={{
+                                                    display: "flex",
+                                                    justifyContent: isMine
+                                                        ? "flex-end"
+                                                        : "flex-start",
+                                                    gap: 8,
+                                                    marginLeft: indent,
+                                                    paddingLeft:
+                                                        depth > 0 ? 10 : 0,
+                                                    borderLeft:
+                                                        depth > 0
+                                                            ? "2px solid #e2e8f0"
+                                                            : "none",
+                                                }}
+                                            >
+                                                {!isMine && (
+                                                    <div
+                                                        style={{
+                                                            width: 26,
+                                                            height: 26,
+                                                            borderRadius: "50%",
+                                                            background:
+                                                                "#e0e7ff",
+                                                            color: "#4338ca",
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            justifyContent:
+                                                                "center",
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            flexShrink: 0,
+                                                            marginTop: 16,
+                                                        }}
+                                                    >
+                                                        {senderName
+                                                            .charAt(0)
+                                                            .toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <div
+                                                    style={{
+                                                        maxWidth: "72%",
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        alignItems: isMine
+                                                            ? "flex-end"
+                                                            : "flex-start",
+                                                    }}
+                                                >
+                                                    {!isMine && (
+                                                        <div
+                                                            style={{
+                                                                fontSize: 11.5,
+                                                                fontWeight: 700,
+                                                                color: "#475569",
+                                                                marginBottom: 3,
+                                                                marginLeft: 4,
+                                                            }}
+                                                        >
+                                                            {senderName}
+                                                            {senderRole && (
+                                                                <span
+                                                                    style={{
+                                                                        fontWeight: 500,
+                                                                        color: "#94a3b8",
+                                                                    }}
+                                                                >
+                                                                    {" "}
+                                                                    ·{" "}
+                                                                    {senderRole}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <div
+                                                        style={{
+                                                            padding: "9px 13px",
+                                                            borderRadius: isMine
+                                                                ? "14px 14px 4px 14px"
+                                                                : "14px 14px 14px 4px",
+                                                            background: isMine
+                                                                ? "#2563eb"
+                                                                : "#fff",
+                                                            color: isMine
+                                                                ? "#fff"
+                                                                : "#1e293b",
+                                                            boxShadow:
+                                                                "0 1px 2px rgba(0,0,0,0.06)",
+                                                            border: isMine
+                                                                ? "none"
+                                                                : "1px solid #f1f5f9",
+                                                        }}
+                                                    >
+                                                        {parentComment && (
+                                                            <div
+                                                                style={{
+                                                                    borderLeft: `3px solid ${isMine ? "rgba(255,255,255,0.5)" : "#cbd5e1"}`,
+                                                                    paddingLeft: 8,
+                                                                    marginBottom: 6,
+                                                                    borderRadius: 4,
+                                                                    background:
+                                                                        isMine
+                                                                            ? "rgba(255,255,255,0.12)"
+                                                                            : "#f8fafc",
+                                                                    padding:
+                                                                        "4px 8px",
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    style={{
+                                                                        fontSize: 11,
+                                                                        fontWeight: 700,
+                                                                        color: isMine
+                                                                            ? "#dbeafe"
+                                                                            : "#475569",
+                                                                    }}
+                                                                >
+                                                                    {
+                                                                        parentSenderName
+                                                                    }
+                                                                </div>
+                                                                <div
+                                                                    style={{
+                                                                        fontSize: 11.5,
+                                                                        color: isMine
+                                                                            ? "rgba(255,255,255,0.85)"
+                                                                            : "#64748b",
+                                                                        whiteSpace:
+                                                                            "nowrap",
+                                                                        overflow:
+                                                                            "hidden",
+                                                                        textOverflow:
+                                                                            "ellipsis",
+                                                                        maxWidth: 220,
+                                                                    }}
+                                                                >
+                                                                    {
+                                                                        parentComment.body
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                flexWrap:
+                                                                    "wrap",
+                                                                gap: 5,
+                                                                marginBottom: 4,
+                                                            }}
+                                                        >
+                                                            {isInternalCommentStaff &&
+                                                                c.visibility ===
+                                                                    "client" && (
+                                                                    <span
+                                                                        style={{
+                                                                            fontSize: 10,
+                                                                            fontWeight: 600,
+                                                                            color: isMine
+                                                                                ? "#dbeafe"
+                                                                                : "#0891b2",
+                                                                            background:
+                                                                                isMine
+                                                                                    ? "rgba(255,255,255,0.15)"
+                                                                                    : "#ecfeff",
+                                                                            padding:
+                                                                                "1px 6px",
+                                                                            borderRadius: 8,
+                                                                        }}
+                                                                    >
+                                                                        client-visible
+                                                                    </span>
+                                                                )}
+                                                            {/* Only ever reached for a Seller when the backend let this
                               one internal comment through because they're tagged in
                               it (see Api\User\ProjectCommentController::index()) —
                               without this label it would look like an internal
                               comment leaked in for no reason. */}
-                          {!isInternalCommentStaff && c.visibility === 'internal' && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: isMine ? '#ede9fe' : '#7c3aed', background: isMine ? 'rgba(255,255,255,0.15)' : '#f5f3ff', padding: '1px 6px', borderRadius: 8 }}>you were mentioned</span>
-                          )}
-                          {/* A Seller's reply to that tagged comment — visible only to
+                                                            {!isInternalCommentStaff &&
+                                                                c.visibility ===
+                                                                    "internal" && (
+                                                                    <span
+                                                                        style={{
+                                                                            fontSize: 10,
+                                                                            fontWeight: 600,
+                                                                            color: isMine
+                                                                                ? "#ede9fe"
+                                                                                : "#7c3aed",
+                                                                            background:
+                                                                                isMine
+                                                                                    ? "rgba(255,255,255,0.15)"
+                                                                                    : "#f5f3ff",
+                                                                            padding:
+                                                                                "1px 6px",
+                                                                            borderRadius: 8,
+                                                                        }}
+                                                                    >
+                                                                        you were
+                                                                        mentioned
+                                                                    </span>
+                                                                )}
+                                                            {/* A Seller's reply to that tagged comment — visible only to
                               Company Admin/PM and the Seller who wrote it, never the
                               rest of the internal team (see index()'s seller_reply
                               exclusion) — labeled so it's clear this isn't a normal
                               internal or client-facing comment. */}
-                          {c.visibility === 'seller_reply' && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: isMine ? '#fde68a' : '#b45309', background: isMine ? 'rgba(255,255,255,0.15)' : '#fffbeb', padding: '1px 6px', borderRadius: 8 }}>private reply · Admin/PM only</span>
-                          )}
-                        </div>
-                        {editingCommentId === c.id ? (
-                          <div>
-                            <input value={editCommentBody} onChange={e => setEditCommentBody(e.target.value)} style={{ ...inp, fontSize: 13, marginBottom: 6, color: '#0f172a' }} autoFocus />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => saveEditComment(c.id)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                              <button onClick={cancelEditComment} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11.5, cursor: 'pointer' }}>Cancel</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                                                            {c.visibility ===
+                                                                "seller_reply" && (
+                                                                <span
+                                                                    style={{
+                                                                        fontSize: 10,
+                                                                        fontWeight: 600,
+                                                                        color: isMine
+                                                                            ? "#fde68a"
+                                                                            : "#b45309",
+                                                                        background:
+                                                                            isMine
+                                                                                ? "rgba(255,255,255,0.15)"
+                                                                                : "#fffbeb",
+                                                                        padding:
+                                                                            "1px 6px",
+                                                                        borderRadius: 8,
+                                                                    }}
+                                                                >
+                                                                    private
+                                                                    reply ·
+                                                                    Admin/PM
+                                                                    only
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {editingCommentId ===
+                                                        c.id ? (
+                                                            <div>
+                                                                <input
+                                                                    value={
+                                                                        editCommentBody
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        setEditCommentBody(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    style={{
+                                                                        ...inp,
+                                                                        fontSize: 13,
+                                                                        marginBottom: 6,
+                                                                        color: "#0f172a",
+                                                                    }}
+                                                                    autoFocus
+                                                                />
+                                                                <div
+                                                                    style={{
+                                                                        display:
+                                                                            "flex",
+                                                                        gap: 8,
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            saveEditComment(
+                                                                                c.id,
+                                                                            )
+                                                                        }
+                                                                        style={{
+                                                                            padding:
+                                                                                "4px 10px",
+                                                                            borderRadius: 6,
+                                                                            border: "none",
+                                                                            background:
+                                                                                "#059669",
+                                                                            color: "#fff",
+                                                                            fontSize: 11.5,
+                                                                            fontWeight: 600,
+                                                                            cursor: "pointer",
+                                                                        }}
+                                                                    >
+                                                                        Save
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={
+                                                                            cancelEditComment
+                                                                        }
+                                                                        style={{
+                                                                            padding:
+                                                                                "4px 10px",
+                                                                            borderRadius: 6,
+                                                                            border: "1px solid #e2e8f0",
+                                                                            background:
+                                                                                "#fff",
+                                                                            color: "#64748b",
+                                                                            fontSize: 11.5,
+                                                                            cursor: "pointer",
+                                                                        }}
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div
+                                                                style={{
+                                                                    fontSize: 13.5,
+                                                                    lineHeight: 1.5,
+                                                                    whiteSpace:
+                                                                        "pre-wrap",
+                                                                }}
+                                                            >
+                                                                {c.body}
+                                                            </div>
+                                                        )}
+                                                        {c.attachments &&
+                                                            c.attachments
+                                                                .length > 0 && (
+                                                                <div
+                                                                    style={{
+                                                                        display:
+                                                                            "flex",
+                                                                        flexDirection:
+                                                                            "column",
+                                                                        gap: 4,
+                                                                        marginTop: 6,
+                                                                    }}
+                                                                >
+                                                                    {c.attachments.map(
+                                                                        (a) => (
+                                                                            <button
+                                                                                key={
+                                                                                    a.id
+                                                                                }
+                                                                                onClick={() =>
+                                                                                    downloadCommentAttachment(
+                                                                                        c.id,
+                                                                                        a,
+                                                                                    )
+                                                                                }
+                                                                                style={{
+                                                                                    display:
+                                                                                        "inline-flex",
+                                                                                    alignItems:
+                                                                                        "center",
+                                                                                    gap: 5,
+                                                                                    padding:
+                                                                                        "4px 10px",
+                                                                                    borderRadius: 6,
+                                                                                    border: `1px solid ${isMine ? "rgba(255,255,255,0.3)" : "#e2e8f0"}`,
+                                                                                    background:
+                                                                                        isMine
+                                                                                            ? "rgba(255,255,255,0.1)"
+                                                                                            : "#f8fafc",
+                                                                                    color: isMine
+                                                                                        ? "#fff"
+                                                                                        : "#2563eb",
+                                                                                    fontSize: 12,
+                                                                                    cursor: "pointer",
+                                                                                    width: "fit-content",
+                                                                                }}
+                                                                            >
+                                                                                📎{" "}
+                                                                                {
+                                                                                    a.original_name
+                                                                                }
+                                                                            </button>
+                                                                        ),
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            gap: 8,
+                                                            marginTop: 3,
+                                                            marginLeft: isMine
+                                                                ? 0
+                                                                : 4,
+                                                            marginRight: isMine
+                                                                ? 4
+                                                                : 0,
+                                                        }}
+                                                    >
+                                                        <span
+                                                            style={{
+                                                                fontSize: 10.5,
+                                                                color: "#94a3b8",
+                                                            }}
+                                                        >
+                                                            {fmtDate(
+                                                                c.created_at,
+                                                            )}
+                                                            {c.updated_at &&
+                                                                c.updated_at !==
+                                                                    c.created_at &&
+                                                                " (edited)"}
+                                                        </span>
+                                                        <button
+                                                            onClick={() =>
+                                                                toggleCommentLike(
+                                                                    c,
+                                                                )
+                                                            }
+                                                            title={
+                                                                c.liked_by &&
+                                                                c.liked_by
+                                                                    .length > 0
+                                                                    ? c.liked_by.join(
+                                                                          ", ",
+                                                                      )
+                                                                    : "Like"
+                                                            }
+                                                            style={{
+                                                                display: "flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                gap: 3,
+                                                                padding:
+                                                                    "2px 7px",
+                                                                borderRadius: 10,
+                                                                background:
+                                                                    c.liked_by_me
+                                                                        ? "#2563eb"
+                                                                        : "#fff",
+                                                                border: `1px solid ${c.liked_by_me ? "#2563eb" : "#e2e8f0"}`,
+                                                                color: c.liked_by_me
+                                                                    ? "#fff"
+                                                                    : "#94a3b8",
+                                                                cursor: "pointer",
+                                                                fontSize: 10.5,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            <ThumbIcon
+                                                                filled={
+                                                                    c.liked_by_me
+                                                                }
+                                                            />
+                                                            {!!c.likes_count &&
+                                                                c.likes_count >
+                                                                    0 && (
+                                                                    <span>
+                                                                        {
+                                                                            c.likes_count
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                        </button>
+                                                        {replyingToCommentId !==
+                                                            c.id && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    startReply(
+                                                                        c.id,
+                                                                    )
+                                                                }
+                                                                title="Reply"
+                                                                style={{
+                                                                    background:
+                                                                        "none",
+                                                                    border: "none",
+                                                                    color: "#7c3aed",
+                                                                    cursor: "pointer",
+                                                                    fontSize: 10.5,
+                                                                    fontWeight: 600,
+                                                                    padding: 0,
+                                                                }}
+                                                            >
+                                                                Reply
+                                                            </button>
+                                                        )}
+                                                        {isMine &&
+                                                            editingCommentId !==
+                                                                c.id && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        startEditComment(
+                                                                            c,
+                                                                        )
+                                                                    }
+                                                                    title="Edit comment"
+                                                                    style={{
+                                                                        background:
+                                                                            "none",
+                                                                        border: "none",
+                                                                        color: "#94a3b8",
+                                                                        cursor: "pointer",
+                                                                        fontSize: 10.5,
+                                                                        fontWeight: 600,
+                                                                        padding: 0,
+                                                                    }}
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            )}
+                                                        {canDeleteComment(
+                                                            c,
+                                                        ) && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    deleteComment(
+                                                                        c.id,
+                                                                    )
+                                                                }
+                                                                title="Delete comment"
+                                                                style={{
+                                                                    background:
+                                                                        "none",
+                                                                    border: "none",
+                                                                    color: "#dc2626",
+                                                                    cursor: "pointer",
+                                                                    fontSize: 10.5,
+                                                                    fontWeight: 600,
+                                                                    padding: 0,
+                                                                }}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {replyingToCommentId ===
+                                                        c.id && (
+                                                        <div
+                                                            style={{
+                                                                marginTop: 6,
+                                                                padding: 8,
+                                                                background:
+                                                                    "#fff",
+                                                                borderRadius: 10,
+                                                                border: "1px solid #e2e8f0",
+                                                                width: 320,
+                                                                maxWidth:
+                                                                    "100%",
+                                                            }}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    display:
+                                                                        "flex",
+                                                                    gap: 6,
+                                                                    alignItems:
+                                                                        "center",
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    style={{
+                                                                        position:
+                                                                            "relative",
+                                                                        flex: 1,
+                                                                        minWidth: 0,
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        value={
+                                                                            replyBody
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleReplyBodyChange(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
+                                                                        onKeyDown={(
+                                                                            e,
+                                                                        ) => {
+                                                                            if (
+                                                                                e.key ===
+                                                                                    "Enter" &&
+                                                                                !postingReply
+                                                                            ) {
+                                                                                e.preventDefault();
+                                                                                sendReply(
+                                                                                    c.id,
+                                                                                );
+                                                                            }
+                                                                        }}
+                                                                        placeholder={
+                                                                            c.visibility ===
+                                                                                "seller_reply" ||
+                                                                            (!isInternalCommentStaff &&
+                                                                                c.visibility ===
+                                                                                    "internal")
+                                                                                ? "Reply privately to Admin/PM…"
+                                                                                : "Reply…"
+                                                                        }
+                                                                        style={{
+                                                                            ...inp,
+                                                                            fontSize: 13,
+                                                                        }}
+                                                                        autoFocus
+                                                                    />
+                                                                    {replyMentionQuery !==
+                                                                        null &&
+                                                                        mentionCandidates.filter(
+                                                                            (
+                                                                                u,
+                                                                            ) =>
+                                                                                u.name
+                                                                                    .toLowerCase()
+                                                                                    .includes(
+                                                                                        replyMentionQuery,
+                                                                                    ),
+                                                                        )
+                                                                            .length >
+                                                                            0 && (
+                                                                            <div
+                                                                                style={{
+                                                                                    position:
+                                                                                        "absolute",
+                                                                                    bottom: "100%",
+                                                                                    left: 0,
+                                                                                    right: 0,
+                                                                                    marginBottom: 4,
+                                                                                    background:
+                                                                                        "#fff",
+                                                                                    border: "1px solid #e2e8f0",
+                                                                                    borderRadius: 8,
+                                                                                    boxShadow:
+                                                                                        "0 -4px 16px rgba(0,0,0,0.08)",
+                                                                                    zIndex: 20,
+                                                                                    maxHeight: 160,
+                                                                                    overflowY:
+                                                                                        "auto",
+                                                                                }}
+                                                                            >
+                                                                                {mentionCandidates
+                                                                                    .filter(
+                                                                                        (
+                                                                                            u,
+                                                                                        ) =>
+                                                                                            u.name
+                                                                                                .toLowerCase()
+                                                                                                .includes(
+                                                                                                    replyMentionQuery,
+                                                                                                ),
+                                                                                    )
+                                                                                    .map(
+                                                                                        (
+                                                                                            u,
+                                                                                        ) => (
+                                                                                            <div
+                                                                                                key={
+                                                                                                    u.user_id
+                                                                                                }
+                                                                                                onClick={() =>
+                                                                                                    pickReplyMention(
+                                                                                                        u,
+                                                                                                    )
+                                                                                                }
+                                                                                                style={{
+                                                                                                    padding:
+                                                                                                        "7px 12px",
+                                                                                                    fontSize: 12.5,
+                                                                                                    color: "#334155",
+                                                                                                    cursor: "pointer",
+                                                                                                }}
+                                                                                                onMouseEnter={(
+                                                                                                    e,
+                                                                                                ) => {
+                                                                                                    e.currentTarget.style.background =
+                                                                                                        "#f8fafc";
+                                                                                                }}
+                                                                                                onMouseLeave={(
+                                                                                                    e,
+                                                                                                ) => {
+                                                                                                    e.currentTarget.style.background =
+                                                                                                        "transparent";
+                                                                                                }}
+                                                                                            >
+                                                                                                @
+                                                                                                {
+                                                                                                    u.name
+                                                                                                }
+                                                                                            </div>
+                                                                                        ),
+                                                                                    )}
+                                                                            </div>
+                                                                        )}
+                                                                </div>
+                                                                <button
+                                                                    onClick={() =>
+                                                                        sendReply(
+                                                                            c.id,
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        postingReply
+                                                                    }
+                                                                    style={{
+                                                                        flexShrink: 0,
+                                                                        padding:
+                                                                            "9px 10px",
+                                                                        borderRadius: 6,
+                                                                        border: "none",
+                                                                        background:
+                                                                            "#7c3aed",
+                                                                        color: "#fff",
+                                                                        fontSize: 11.5,
+                                                                        fontWeight: 600,
+                                                                        cursor: postingReply
+                                                                            ? "not-allowed"
+                                                                            : "pointer",
+                                                                    }}
+                                                                >
+                                                                    {postingReply
+                                                                        ? "…"
+                                                                        : "Send"}
+                                                                </button>
+                                                                <button
+                                                                    onClick={
+                                                                        cancelReply
+                                                                    }
+                                                                    style={{
+                                                                        flexShrink: 0,
+                                                                        padding:
+                                                                            "9px 10px",
+                                                                        borderRadius: 6,
+                                                                        border: "1px solid #e2e8f0",
+                                                                        background:
+                                                                            "#fff",
+                                                                        color: "#64748b",
+                                                                        fontSize: 11.5,
+                                                                        cursor: "pointer",
+                                                                    }}
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    },
+                                );
+                            })()
                         )}
-                        {c.attachments && c.attachments.length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-                            {c.attachments.map(a => (
-                              <button key={a.id} onClick={() => downloadCommentAttachment(c.id, a)} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                                borderRadius: 6, border: `1px solid ${isMine ? 'rgba(255,255,255,0.3)' : '#e2e8f0'}`,
-                                background: isMine ? 'rgba(255,255,255,0.1)' : '#f8fafc', color: isMine ? '#fff' : '#2563eb',
-                                fontSize: 12, cursor: 'pointer', width: 'fit-content',
-                              }}>📎 {a.original_name}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
-                        <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
-                          {fmtDate(c.created_at)}{c.updated_at && c.updated_at !== c.created_at && ' (edited)'}
-                        </span>
-                        <button
-                          onClick={() => toggleCommentLike(c)}
-                          title={c.liked_by && c.liked_by.length > 0 ? c.liked_by.join(', ') : 'Like'}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 10,
-                            background: c.liked_by_me ? '#2563eb' : '#fff', border: `1px solid ${c.liked_by_me ? '#2563eb' : '#e2e8f0'}`,
-                            color: c.liked_by_me ? '#fff' : '#94a3b8', cursor: 'pointer', fontSize: 10.5, fontWeight: 600,
-                          }}
-                        >
-                          <ThumbIcon filled={c.liked_by_me} />
-                          {!!c.likes_count && c.likes_count > 0 && <span>{c.likes_count}</span>}
-                        </button>
-                        {replyingToCommentId !== c.id && (
-                          <button onClick={() => startReply(c.id)} title="Reply" style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 10.5, fontWeight: 600, padding: 0 }}>Reply</button>
-                        )}
-                        {isMine && editingCommentId !== c.id && (
-                          <button onClick={() => startEditComment(c)} title="Edit comment" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 10.5, fontWeight: 600, padding: 0 }}>Edit</button>
-                        )}
-                        {canDeleteComment(c) && (
-                          <button onClick={() => deleteComment(c.id)} title="Delete comment" style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 10.5, fontWeight: 600, padding: 0 }}>Delete</button>
-                        )}
-                      </div>
-                      {replyingToCommentId === c.id && (
-                        <div style={{ marginTop: 6, padding: 8, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', width: 320, maxWidth: '100%' }}>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                              <input
-                                value={replyBody}
-                                onChange={e => handleReplyBodyChange(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter' && !postingReply) { e.preventDefault(); sendReply(c.id); } }}
-                                placeholder={c.visibility === 'seller_reply' || (!isInternalCommentStaff && c.visibility === 'internal') ? 'Reply privately to Admin/PM…' : 'Reply…'}
-                                style={{ ...inp, fontSize: 13 }}
-                                autoFocus
-                              />
-                              {replyMentionQuery !== null && mentionCandidates.filter(u => u.name.toLowerCase().includes(replyMentionQuery)).length > 0 && (
-                                <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', zIndex: 20, maxHeight: 160, overflowY: 'auto' }}>
-                                  {mentionCandidates.filter(u => u.name.toLowerCase().includes(replyMentionQuery)).map(u => (
-                                    <div key={u.user_id} onClick={() => pickReplyMention(u)} style={{ padding: '7px 12px', fontSize: 12.5, color: '#334155', cursor: 'pointer' }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                                      @{u.name}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <button onClick={() => sendReply(c.id)} disabled={postingReply} style={{ flexShrink: 0, padding: '9px 10px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: postingReply ? 'not-allowed' : 'pointer' }}>
-                              {postingReply ? '…' : 'Send'}
-                            </button>
-                            <button onClick={cancelReply} style={{ flexShrink: 0, padding: '9px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11.5, cursor: 'pointer' }}>Cancel</button>
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                );
-                });
-              })()
-            )}
-          </div>
 
-          {/* Composer — pinned below the thread, like a chat input bar */}
-          <form onSubmit={addComment} style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
-            {isDraft && <DraftNotice status={project.status} style={{ marginBottom: 10 }} />}
-            <div style={{ display: 'flex', gap: 10, position: 'relative' }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <input value={commentBody} onChange={e => handleCommentBodyChange(e.target.value)} disabled={isDraft} title={isDraft ? DRAFT_HINT : undefined} placeholder={isDraft ? 'Comments open up once the project is activated' : 'Add a comment… (@ to mention)'} style={{ ...inp, borderRadius: 20, background: isDraft ? '#f8fafc' : '#fff' }} />
-                {mentionQuery !== null && (mentionCandidates.filter(u => u.name.toLowerCase().includes(mentionQuery)).length > 0 || (mentionCandidates.length > 0 && 'all'.startsWith(mentionQuery))) && (
-                  <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', zIndex: 20, maxHeight: 200, overflowY: 'auto' }}>
-                    {mentionCandidates.length > 0 && 'all'.startsWith(mentionQuery) && (
-                      <div onClick={pickAllMentions} style={{ padding: '7px 12px', fontSize: 12.5, fontWeight: 700, color: '#2563eb', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                        @all — tag everyone ({mentionCandidates.length})
-                      </div>
-                    )}
-                    {mentionCandidates.filter(u => u.name.toLowerCase().includes(mentionQuery)).map(u => (
-                      <div key={u.user_id} onClick={() => pickMention(u)} style={{ padding: '7px 12px', fontSize: 12.5, color: '#334155', cursor: 'pointer' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                        @{u.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <label style={{ padding: '9px 12px', borderRadius: '50%', border: '1px solid #e2e8f0', background: isDraft ? '#f8fafc' : '#fff', cursor: isDraft ? 'not-allowed' : 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', opacity: isDraft ? 0.5 : 1 }} title={isDraft ? DRAFT_HINT : 'Attach a file'}>
-                📎
-                <input type="file" style={{ display: 'none' }} disabled={isDraft} accept={ALLOWED_ATTACHMENT_TYPES.map(t => `.${t}`).join(',')}
-                  onChange={e => { setCommentFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
-              </label>
-              <button type="submit" disabled={postingComment || isDraft} title={isDraft ? DRAFT_HINT : undefined} style={{ padding: '9px 20px', borderRadius: 20, border: 'none', background: isDraft ? '#cbd5e1' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: isDraft ? 'not-allowed' : (postingComment ? 'wait' : 'pointer'), opacity: postingComment ? 0.7 : 1 }}>
-                {postingComment ? 'Posting…' : 'Send'}
-              </button>
+                    {/* Composer — pinned below the thread, like a chat input bar */}
+                    <form
+                        onSubmit={addComment}
+                        style={{
+                            padding: "12px 20px",
+                            borderTop: "1px solid #f1f5f9",
+                            background: "#fff",
+                        }}
+                    >
+                        {isDraft && (
+                            <DraftNotice
+                                status={project.status}
+                                style={{ marginBottom: 10 }}
+                            />
+                        )}
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: 10,
+                                position: "relative",
+                            }}
+                        >
+                            <div style={{ flex: 1, position: "relative" }}>
+                                <input
+                                    value={commentBody}
+                                    onChange={(e) =>
+                                        handleCommentBodyChange(e.target.value)
+                                    }
+                                    disabled={isDraft}
+                                    title={isDraft ? DRAFT_HINT : undefined}
+                                    placeholder={
+                                        isDraft
+                                            ? "Comments open up once the project is activated"
+                                            : "Add a comment… (@ to mention)"
+                                    }
+                                    style={{
+                                        ...inp,
+                                        borderRadius: 20,
+                                        background: isDraft
+                                            ? "#f8fafc"
+                                            : "#fff",
+                                    }}
+                                />
+                                {mentionQuery !== null &&
+                                    (mentionCandidates.filter((u) =>
+                                        u.name
+                                            .toLowerCase()
+                                            .includes(mentionQuery),
+                                    ).length > 0 ||
+                                        (mentionCandidates.length > 0 &&
+                                            "all".startsWith(
+                                                mentionQuery,
+                                            ))) && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                bottom: "100%",
+                                                left: 0,
+                                                right: 0,
+                                                marginBottom: 4,
+                                                background: "#fff",
+                                                border: "1px solid #e2e8f0",
+                                                borderRadius: 8,
+                                                boxShadow:
+                                                    "0 -4px 16px rgba(0,0,0,0.08)",
+                                                zIndex: 20,
+                                                maxHeight: 200,
+                                                overflowY: "auto",
+                                            }}
+                                        >
+                                            {mentionCandidates.length > 0 &&
+                                                "all".startsWith(
+                                                    mentionQuery,
+                                                ) && (
+                                                    <div
+                                                        onClick={
+                                                            pickAllMentions
+                                                        }
+                                                        style={{
+                                                            padding: "7px 12px",
+                                                            fontSize: 12.5,
+                                                            fontWeight: 700,
+                                                            color: "#2563eb",
+                                                            cursor: "pointer",
+                                                            borderBottom:
+                                                                "1px solid #f1f5f9",
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background =
+                                                                "#f8fafc";
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background =
+                                                                "transparent";
+                                                        }}
+                                                    >
+                                                        @all — tag everyone (
+                                                        {
+                                                            mentionCandidates.length
+                                                        }
+                                                        )
+                                                    </div>
+                                                )}
+                                            {mentionCandidates
+                                                .filter((u) =>
+                                                    u.name
+                                                        .toLowerCase()
+                                                        .includes(mentionQuery),
+                                                )
+                                                .map((u) => (
+                                                    <div
+                                                        key={u.user_id}
+                                                        onClick={() =>
+                                                            pickMention(u)
+                                                        }
+                                                        style={{
+                                                            padding: "7px 12px",
+                                                            fontSize: 12.5,
+                                                            color: "#334155",
+                                                            cursor: "pointer",
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background =
+                                                                "#f8fafc";
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background =
+                                                                "transparent";
+                                                        }}
+                                                    >
+                                                        @{u.name}
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+                            </div>
+                            <label
+                                style={{
+                                    padding: "9px 12px",
+                                    borderRadius: "50%",
+                                    border: "1px solid #e2e8f0",
+                                    background: isDraft ? "#f8fafc" : "#fff",
+                                    cursor: isDraft ? "not-allowed" : "pointer",
+                                    fontSize: 15,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    opacity: isDraft ? 0.5 : 1,
+                                }}
+                                title={isDraft ? DRAFT_HINT : "Attach a file"}
+                            >
+                                📎
+                                <input
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    disabled={isDraft}
+                                    accept={ALLOWED_ATTACHMENT_TYPES.map(
+                                        (t) => `.${t}`,
+                                    ).join(",")}
+                                    onChange={(e) => {
+                                        setCommentFile(
+                                            e.target.files?.[0] ?? null,
+                                        );
+                                        e.target.value = "";
+                                    }}
+                                />
+                            </label>
+                            <button
+                                type="submit"
+                                disabled={postingComment || isDraft}
+                                title={isDraft ? DRAFT_HINT : undefined}
+                                style={{
+                                    padding: "9px 20px",
+                                    borderRadius: 20,
+                                    border: "none",
+                                    background: isDraft ? "#cbd5e1" : "#2563eb",
+                                    color: "#fff",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: isDraft
+                                        ? "not-allowed"
+                                        : postingComment
+                                          ? "wait"
+                                          : "pointer",
+                                    opacity: postingComment ? 0.7 : 1,
+                                }}
+                            >
+                                {postingComment ? "Posting…" : "Send"}
+                            </button>
+                        </div>
+                        {commentFile && (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginTop: 8,
+                                    fontSize: 12,
+                                    color: "#334155",
+                                }}
+                            >
+                                <span>
+                                    📎 {commentFile.name}{" "}
+                                    <span style={{ color: "#94a3b8" }}>
+                                        ({fmtFileSize(commentFile.size)})
+                                    </span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentFile(null)}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        color: "#dc2626",
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        )}
+                    </form>
+                </div>
             </div>
-            {commentFile && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 12, color: '#334155' }}>
-                <span>📎 {commentFile.name} <span style={{ color: '#94a3b8' }}>({fmtFileSize(commentFile.size)})</span></span>
-                <button type="button" onClick={() => setCommentFile(null)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
-              </div>
-            )}
-          </form>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
+        </DashboardLayout>
+    );
 }
