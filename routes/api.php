@@ -687,35 +687,40 @@ Route::prefix('user')->group(function () {
         // and CheckCompanyModule only supports gating on a single module key.
         // Enforcement here is by permission (canViewClients/canCreateClients/
         // canEditClients) rather than module purchase, to avoid 403-ing a
-        // Sales-only company's legitimate "Basic Clients" access.
-        Route::get('clients',                            [UserClientController::class,  'index']);
-        Route::post('clients',                           [UserClientController::class,  'store']);
-        Route::get('clients/{id}',                       [UserClientController::class,  'show']);
-        Route::put('clients/{id}',                       [UserClientController::class,  'update']);
-        Route::delete('clients/{id}',                    [UserClientController::class,  'destroy']);
-        Route::put('clients/{id}/permissions',           [UserClientController::class,  'updatePermissions']);
-        Route::post('clients/{id}/enable-portal',        [UserClientController::class,  'enablePortal']);
-        Route::post('clients/{id}/disable-portal',       [UserClientController::class,  'disablePortal']);
-        // Sales Chat for clients — same ungated rationale as the routes above.
-        Route::get('clients/{id}/chat',                  [UserSalesChatController::class, 'clientMessages']);
-        Route::post('clients/{id}/chat',                 [UserSalesChatController::class, 'sendClientMessage']);
-        Route::get('clients/{id}/chat/{messageId}/attachment', [UserSalesChatController::class, 'downloadClientAttachment']);
+        // Sales-only company's legitimate "Basic Clients" access. Still needs
+        // `active.company` though — permission checks alone don't catch a
+        // user whose company assignments are all suspended (their
+        // UserCompanyPermission rows survive suspension).
+        Route::middleware('active.company')->group(function () {
+            Route::get('clients',                            [UserClientController::class,  'index']);
+            Route::post('clients',                           [UserClientController::class,  'store']);
+            Route::get('clients/{id}',                       [UserClientController::class,  'show']);
+            Route::put('clients/{id}',                       [UserClientController::class,  'update']);
+            Route::delete('clients/{id}',                    [UserClientController::class,  'destroy']);
+            Route::put('clients/{id}/permissions',           [UserClientController::class,  'updatePermissions']);
+            Route::post('clients/{id}/enable-portal',        [UserClientController::class,  'enablePortal']);
+            Route::post('clients/{id}/disable-portal',       [UserClientController::class,  'disablePortal']);
+            // Sales Chat for clients — same ungated rationale as the routes above.
+            Route::get('clients/{id}/chat',                  [UserSalesChatController::class, 'clientMessages']);
+            Route::post('clients/{id}/chat',                 [UserSalesChatController::class, 'sendClientMessage']);
+            Route::get('clients/{id}/chat/{messageId}/attachment', [UserSalesChatController::class, 'downloadClientAttachment']);
 
-        // "Client Messages" — the client's own restricted Direct Chat (see
-        // Api\Client\ChatController) — only shows threads this Seller/Finance
-        // user is actually a participant of. start() additionally lets this
-        // staff member INITIATE a chat with a client they're linked to
-        // (account manager, or sent an invoice), not just reply to one the
-        // client already started.
-        Route::get('clients/{id}/direct-chat',                     [\App\Http\Controllers\Api\User\ClientChatController::class, 'index']);
-        Route::post('clients/{id}/direct-chat/start',              [\App\Http\Controllers\Api\User\ClientChatController::class, 'startChat']);
-        Route::get('clients/{id}/direct-chat/{threadId}/messages', [\App\Http\Controllers\Api\User\ClientChatController::class, 'messages']);
-        Route::post('clients/{id}/direct-chat/{threadId}/reply',   [\App\Http\Controllers\Api\User\ClientChatController::class, 'reply']);
-        // Loops a Project Manager into an existing chat (Seller-initiated —
-        // "have the PM contact this client too") and lets specific replies
-        // stay hidden from that PM (see reply()'s hidden_from_user_ids).
-        Route::post('clients/{id}/direct-chat/{threadId}/participants',            [\App\Http\Controllers\Api\User\ClientChatController::class, 'addParticipant']);
-        Route::delete('clients/{id}/direct-chat/{threadId}/participants/{userId}', [\App\Http\Controllers\Api\User\ClientChatController::class, 'removeParticipant']);
+            // "Client Messages" — the client's own restricted Direct Chat (see
+            // Api\Client\ChatController) — only shows threads this Seller/Finance
+            // user is actually a participant of. start() additionally lets this
+            // staff member INITIATE a chat with a client they're linked to
+            // (account manager, or sent an invoice), not just reply to one the
+            // client already started.
+            Route::get('clients/{id}/direct-chat',                     [\App\Http\Controllers\Api\User\ClientChatController::class, 'index']);
+            Route::post('clients/{id}/direct-chat/start',              [\App\Http\Controllers\Api\User\ClientChatController::class, 'startChat']);
+            Route::get('clients/{id}/direct-chat/{threadId}/messages', [\App\Http\Controllers\Api\User\ClientChatController::class, 'messages']);
+            Route::post('clients/{id}/direct-chat/{threadId}/reply',   [\App\Http\Controllers\Api\User\ClientChatController::class, 'reply']);
+            // Loops a Project Manager into an existing chat (Seller-initiated —
+            // "have the PM contact this client too") and lets specific replies
+            // stay hidden from that PM (see reply()'s hidden_from_user_ids).
+            Route::post('clients/{id}/direct-chat/{threadId}/participants',            [\App\Http\Controllers\Api\User\ClientChatController::class, 'addParticipant']);
+            Route::delete('clients/{id}/direct-chat/{threadId}/participants/{userId}', [\App\Http\Controllers\Api\User\ClientChatController::class, 'removeParticipant']);
+        });
 
         // Client Support Tickets — enforced by canViewClientSupport/
         // canManageClientSupport inside the controller (same ungated-route
@@ -728,8 +733,13 @@ Route::prefix('user')->group(function () {
         ('support/{id}/status',               [UserSupportController::class, 'updateStatus']);
 
         // Staff-side "add a user" — gated per-module on canAddUsers, scoped to
-        // the acting staff member's own company and their own permission ceiling.
-        Route::post('users',                             [UserManagementController::class, 'store']);
+        // the acting staff member's own company and their own permission
+        // ceiling. `active.company` on top for the same reason as the Client
+        // routes above: canAddUsers is keyed off company_id, which survives
+        // a suspended assignment.
+        Route::middleware('active.company')->group(function () {
+            Route::post('users', [UserManagementController::class, 'store']);
+        });
 
         // Sales — sub-user leads & follow-ups — requires leads module, matching
         // the Admin side's own `module:leads` gate.

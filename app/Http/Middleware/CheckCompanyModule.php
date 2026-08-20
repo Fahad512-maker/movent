@@ -5,8 +5,8 @@ namespace App\Http\Middleware;
 use App\Helpers\ApiResponse;
 use App\Models\CompanyAdmin;
 use App\Models\CompanyModule;
-use App\Models\CompanyUserAssignment;
 use App\Models\Module;
+use App\Support\ActiveCompany;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -44,28 +44,7 @@ class CheckCompanyModule
                 ->where('is_enabled', true)
                 ->exists();
         } else {
-            $companyId = (int) $request->header('X-Active-Company-Id');
-            if ($companyId && !CompanyUserAssignment::where('user_id', $user->id)
-                ->where('company_id', $companyId)
-                ->where('status', 'active')
-                ->exists()) {
-                $companyId = 0;
-            }
-
-            // Unassign Company from User — company_id is a NOT NULL column
-            // that can outlive the assignment backing it (e.g. a user whose
-            // last company was just unassigned still has *some* stale value
-            // sitting there). Never trust it on its own; require the exact
-            // same active-assignment check the header just went through.
-            if (!$companyId) {
-                $fallbackId = (int) $user->company_id;
-                if ($fallbackId && CompanyUserAssignment::where('user_id', $user->id)
-                    ->where('company_id', $fallbackId)
-                    ->where('status', 'active')
-                    ->exists()) {
-                    $companyId = $fallbackId;
-                }
-            }
+            $companyId = ActiveCompany::resolve($request, $user);
 
             if (!$companyId) {
                 return ApiResponse::error('No company assigned to your account. Contact your admin.', 403);

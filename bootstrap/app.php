@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission'           => \App\Http\Middleware\CheckUserPermission::class,
             'client.role'          => \App\Http\Middleware\CheckClientRole::class,
             'subscription.active'  => \App\Http\Middleware\EnsureSubscriptionActive::class,
+            'active.company'       => \App\Http\Middleware\RequireActiveCompany::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
