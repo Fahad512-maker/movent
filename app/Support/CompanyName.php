@@ -13,17 +13,24 @@ class CompanyName
         return preg_replace('/\s+/', ' ', trim((string) $name)) ?? '';
     }
 
-    public static function exists(
-        string $name,
-        ?int $exceptCompanyId = null,
-        ?int $exceptAdminId = null,
-        ?int $ignoreCompaniesForAdminId = null
-    ): bool {
+    /**
+     * Name uniqueness is scoped to a single admin's own account (their email),
+     * not global: two different Company Admins may run companies with the
+     * same name, but one admin can't reuse a name across their own companies.
+     * A null $adminId (brand-new signup, admin doesn't exist yet) has no
+     * companies to collide with, so it's always available.
+     */
+    public static function exists(string $name, ?int $adminId, ?int $exceptCompanyId = null): bool
+    {
+        if ($adminId === null) {
+            return false;
+        }
+
         $normalized = mb_strtolower(self::normalize($name));
 
         $companyExists = Company::query()
+            ->where('admin_id', $adminId)
             ->when($exceptCompanyId, fn ($q) => $q->where('id', '!=', $exceptCompanyId))
-            ->when($ignoreCompaniesForAdminId, fn ($q) => $q->where('admin_id', '!=', $ignoreCompaniesForAdminId))
             ->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
             ->exists();
 
@@ -32,25 +39,20 @@ class CompanyName
         }
 
         return CompanyAdmin::query()
-            ->when($exceptAdminId, fn ($q) => $q->where('id', '!=', $exceptAdminId))
+            ->where('id', $adminId)
             ->whereNotNull('business_name')
             ->whereRaw('LOWER(TRIM(business_name)) = ?', [$normalized])
             ->exists();
     }
 
-    public static function throwIfTaken(
-        string $name,
-        string $field,
-        ?int $exceptCompanyId = null,
-        ?int $exceptAdminId = null,
-        ?int $ignoreCompaniesForAdminId = null
-    ): void {
-        if (!self::exists($name, $exceptCompanyId, $exceptAdminId, $ignoreCompaniesForAdminId)) {
+    public static function throwIfTaken(string $name, string $field, ?int $adminId, ?int $exceptCompanyId = null): void
+    {
+        if (!self::exists($name, $adminId, $exceptCompanyId)) {
             return;
         }
 
         throw ValidationException::withMessages([
-            $field => ['This company name is already registered. Please choose a different name.'],
+            $field => ['You already have a company with this name. Please choose a different name.'],
         ]);
     }
 }

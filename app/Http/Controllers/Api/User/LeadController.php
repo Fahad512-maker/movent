@@ -14,6 +14,7 @@ use App\Models\SystemAuditLog;
 use App\Models\User;
 use App\Models\CompanyUserAssignment;
 use App\Models\UserCompanyPermission;
+use App\Rules\ValidPhoneNumber;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -203,7 +204,7 @@ class LeadController extends Controller
         $validated = $request->validate([
             'name'               => ['required', 'string', 'max:150'],
             'email'              => ['nullable', 'email', 'max:255'],
-            'phone'              => ['nullable', 'string', 'max:30'],
+            'phone'              => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'       => ['nullable', 'string', 'max:200'],
             'source'             => ['nullable', 'in:website,referral,cold_call,social,event,other'],
             'status'             => ['nullable', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],
@@ -270,7 +271,7 @@ class LeadController extends Controller
         $validated = $request->validate([
             'name'               => ['sometimes', 'string', 'max:150'],
             'email'              => ['nullable', 'email', 'max:255'],
-            'phone'              => ['nullable', 'string', 'max:30'],
+            'phone'              => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'       => ['nullable', 'string', 'max:200'],
             'source'             => ['nullable', 'in:website,referral,cold_call,social,event,other'],
             'status'             => ['nullable', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],

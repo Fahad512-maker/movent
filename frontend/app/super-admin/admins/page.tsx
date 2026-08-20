@@ -5,6 +5,7 @@ import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
 import { adminService } from '@/lib/services/adminService';
 import { AdminFull } from '@/types';
 import { HiPlus, HiPencil, HiPower } from 'react-icons/hi2';
+import toast from 'react-hot-toast';
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   active:    { bg: '#ecfdf5', color: '#059669' },
@@ -29,11 +30,14 @@ export default function AdminsPage() {
   useEffect(load, []);
 
   const handleToggle = async (admin: AdminFull) => {
+    const action = admin.is_active ? 'suspend' : 'activate';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} "${admin.name}"?`)) return;
     try {
       const res = await adminService.toggleStatus(admin.id);
       setAdmins(list => list.map(a => a.id === admin.id ? { ...a, is_active: res.is_active } : a));
+      toast.success(res.is_active ? 'Admin activated' : 'Admin suspended');
     } catch {
-      alert('Failed to toggle status');
+      toast.error('Failed to toggle status');
     }
   };
 

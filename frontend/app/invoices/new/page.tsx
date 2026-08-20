@@ -13,6 +13,7 @@ import { getAuthType, getAuthUser, can } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
+import PhoneInput from '@/components/ui/PhoneInput';
 import { HiArrowLeft, HiFolder, HiFolderPlus, HiPlusCircle, HiTrash, HiUserCircle, HiUsers } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -672,7 +673,7 @@ function NewInvoiceForm() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                           <label style={lbl}>Phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-                          <input style={inp} value={guestPhone} onChange={e => setGuestPhone(e.target.value)} placeholder="+1 234 567 8900" />
+                          <PhoneInput value={guestPhone} onChange={setGuestPhone} />
                         </div>
                         <div>
                           <label style={lbl}>Billing Address <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>

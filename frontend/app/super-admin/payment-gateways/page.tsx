@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
 import { paymentGatewayService, PaymentGateway } from '@/lib/services/paymentGatewayService';
+import toast from 'react-hot-toast';
 
 const GATEWAY_META: Record<string, { color: string; bg: string; icon: string }> = {
   stripe:        { color: '#635bff', bg: '#f0efff', icon: 'S' },
@@ -53,8 +54,10 @@ export default function PaymentGatewaysPage() {
     try {
       const updated = await paymentGatewayService.toggle(gateway.id);
       setGateways(prev => prev.map(g => g.id === updated.id ? updated : g));
+      toast.success(updated.is_active ? 'Gateway enabled' : 'Gateway disabled');
     } catch {
       setError('Failed to update gateway status');
+      toast.error('Failed to update gateway status');
     } finally {
       setToggling(null);
     }

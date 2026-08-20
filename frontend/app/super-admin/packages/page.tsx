@@ -5,6 +5,7 @@ import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
 import { packageService } from '@/lib/services/packageService';
 import { Package } from '@/types';
 import { HiPlus, HiPencil, HiTrash, HiPower } from 'react-icons/hi2';
+import toast from 'react-hot-toast';
 
 const TIER_COLORS: Record<string, { bg: string; color: string }> = {
   basic:        { bg: '#f0fdf4', color: '#16a34a' },
@@ -33,8 +34,9 @@ export default function PackagesPage() {
     try {
       await packageService.delete(pkg.id);
       load();
+      toast.success('Package deleted');
     } catch {
-      alert('Failed to delete package');
+      toast.error('Failed to delete package');
     }
   };
 
@@ -42,8 +44,9 @@ export default function PackagesPage() {
     try {
       const res = await packageService.toggle(pkg.id);
       setPackages(ps => ps.map(p => p.id === pkg.id ? { ...p, is_active: res.is_active } : p));
+      toast.success(res.is_active ? 'Package activated' : 'Package deactivated');
     } catch {
-      alert('Failed to toggle status');
+      toast.error('Failed to toggle status');
     }
   };
 

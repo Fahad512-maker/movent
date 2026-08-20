@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\SuperAdmin;
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyAdmin;
+use App\Rules\ValidPhoneNumber;
 use App\Support\CrossAccountEmail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,7 @@ class CompanyAdminController extends Controller
                 },
             ],
             'password'              => ['required', 'string', 'min:8'],
-            'phone'                 => ['nullable', 'string', 'max:50'],
+            'phone'                 => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'package_id'            => ['nullable', 'exists:packages,id'],
             'subscription_status'   => ['required', 'in:trial,active,suspended'],
             'trial_ends_at'         => ['nullable', 'date'],
@@ -64,7 +65,7 @@ class CompanyAdminController extends Controller
                 },
             ],
             'password'              => ['nullable', 'string', 'min:8'],
-            'phone'                 => ['nullable', 'string', 'max:50'],
+            'phone'                 => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'package_id'            => ['nullable', 'exists:packages,id'],
             'subscription_status'   => ['required', 'in:trial,active,suspended'],
             'trial_ends_at'         => ['nullable', 'date'],

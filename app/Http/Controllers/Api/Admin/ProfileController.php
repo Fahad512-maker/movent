@@ -6,6 +6,7 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminResource;
 use App\Models\SystemAuditLog;
+use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -38,7 +39,7 @@ class ProfileController extends Controller
 
         $validated = $request->validate([
             'name'     => ['required', 'string', 'max:150'],
-            'phone'    => ['nullable', 'string', 'max:30'],
+            'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             // Deliberate, scoped exception to the "never touch Settings'
             // business profile" rule above — currency moved onto My Profile
             // per 2026-08-15 request, since it's the one setting Admin

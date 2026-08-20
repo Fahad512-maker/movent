@@ -8,6 +8,7 @@ import { getAuthType, can } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -139,7 +140,7 @@ export default function NewLeadPage() {
               </div>
               <div>
                 <label style={lbl}>Phone</label>
-                <input style={inp} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" />
+                <PhoneInput value={phone} onChange={setPhone} />
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { AdminFull, Package } from '@/types';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 interface Props {
   open: boolean;
@@ -141,7 +142,7 @@ export default function AdminModal({ open, admin, packages, onClose, onSave, sav
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Phone</label>
-              <input style={inputStyle} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
+              <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
             </div>
             <div>
               <label style={labelStyle}>Package</label>

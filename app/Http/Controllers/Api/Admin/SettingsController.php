@@ -6,6 +6,7 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyPaymentGateway;
 use App\Models\Payment;
+use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -107,7 +108,7 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'industry' => ['nullable', 'string', 'max:100'],
             'email'    => ['nullable', 'email', 'max:255'],
-            'phone'    => ['nullable', 'string', 'max:30'],
+            'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'address'  => ['nullable', 'string', 'max:500'],
             'timezone' => ['nullable', 'string', 'max:60'],
         ]);

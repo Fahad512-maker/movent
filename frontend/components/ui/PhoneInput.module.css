@@ -1,0 +1,33 @@
+.phoneInput {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.phoneInput:focus-within {
+  border-color: #2563eb;
+}
+
+.phoneInput :global(.PhoneInputCountry) {
+  margin-right: 0;
+}
+
+.phoneInput :global(.PhoneInputCountrySelect) {
+  color: #1e293b;
+}
+
+.phoneInput :global(.PhoneInputInput) {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #1e293b;
+  background: transparent;
+  padding: 0;
+}

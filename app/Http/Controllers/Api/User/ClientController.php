@@ -10,6 +10,7 @@ use App\Models\ClientPortalPermission;
 use App\Models\Company;
 use App\Models\User;
 use App\Models\UserCompanyPermission;
+use App\Rules\ValidPhoneNumber;
 use App\Services\ClientPortalService;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
@@ -167,7 +168,7 @@ class ClientController extends Controller
         $validated = $request->validate([
             'name'         => ['required', 'string', 'max:255'],
             'email'        => ['nullable', 'email', 'max:255'],
-            'phone'        => ['nullable', 'string', 'max:50'],
+            'phone'        => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'company_name' => ['nullable', 'string', 'max:255'],
             'address'      => ['nullable', 'string', 'max:500'],
             'notes'        => ['nullable', 'string'],
@@ -207,7 +208,7 @@ class ClientController extends Controller
         $validated = $request->validate([
             'name'         => ['sometimes', 'string', 'max:255'],
             'email'        => ['nullable', 'email', 'max:255'],
-            'phone'        => ['nullable', 'string', 'max:50'],
+            'phone'        => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'company_name' => ['nullable', 'string', 'max:255'],
             'address'      => ['nullable', 'string', 'max:500'],
             'notes'        => ['nullable', 'string'],

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
 import { moduleService, ModuleItem } from '@/lib/services/moduleService';
 import { HiPlus, HiPower, HiTrash, HiPencil } from 'react-icons/hi2';
+import toast from 'react-hot-toast';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 13px',
@@ -56,8 +57,9 @@ export default function ModulesPage() {
     try {
       const res = await moduleService.toggle(m.id);
       setModules(ms => ms.map(x => x.id === m.id ? { ...x, is_active: res.is_active } : x));
+      toast.success(res.is_active ? 'Module activated' : 'Module deactivated');
     } catch {
-      alert('Failed to toggle module');
+      toast.error('Failed to toggle module');
     }
   };
 
@@ -66,8 +68,9 @@ export default function ModulesPage() {
     try {
       await moduleService.delete(m.id);
       load();
+      toast.success('Module deleted');
     } catch {
-      alert('Failed to delete module');
+      toast.error('Failed to delete module');
     }
   };
 

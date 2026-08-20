@@ -11,6 +11,7 @@ use App\Models\CompanyAdmin;
 use App\Models\Module;
 use App\Models\Package;
 use App\Models\PaymentGateway;
+use App\Rules\ValidPhoneNumber;
 use App\Services\ModuleDependency;
 use App\Support\CompanyName;
 use App\Support\CrossAccountEmail;
@@ -100,7 +101,10 @@ class PublicController extends Controller
     {
         $request->validate(['company_name' => ['required', 'string']]);
 
-        $available = !CompanyName::exists($request->company_name);
+        // New signup — no admin account exists yet, so there's nothing of
+        // this (not-yet-created) admin's own to collide with. Name
+        // uniqueness is scoped per admin, not global; see CompanyName.
+        $available = !CompanyName::exists($request->company_name, null);
 
         return ApiResponse::success(['available' => $available]);
     }
@@ -108,10 +112,7 @@ class PublicController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            // Letters/digits only — no spaces, no special characters.
-            // Mirrored client-side in the register form's onChange filter;
-            // enforced here too so a direct API call can't bypass it.
-            'company_name'    => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9]+$/'],
+            'company_name'    => ['required', 'string', 'max:200'],
             'name'            => ['required', 'string', 'max:150'],
             'email'           => [
                 'required', 'email', 'unique:company_admins,email',
@@ -122,7 +123,7 @@ class PublicController extends Controller
                 },
             ],
             'password'        => ['required', 'string', 'min:8', 'confirmed'],
-            'phone'           => ['nullable', 'string', 'max:50'],
+            'phone'           => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'package_id'      => ['required', 'exists:packages,id'],
             'selected_modules'=> ['required', 'array', 'min:1'],
             'selected_modules.*' => ['string'],
@@ -134,7 +135,8 @@ class PublicController extends Controller
         ]);
 
         $validated['company_name'] = CompanyName::normalize($validated['company_name']);
-        CompanyName::throwIfTaken($validated['company_name'], 'company_name');
+        // New admin, no existing companies yet — nothing to collide with (see checkCompanyName above).
+        CompanyName::throwIfTaken($validated['company_name'], 'company_name', null);
 
         $package = Package::with('modules')->findOrFail($validated['package_id']);
 

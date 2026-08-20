@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { adminSalesChatService } from '@/lib/services/salesChatService';
 import { ChatMessage } from '@/lib/services/adminProjectService';
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 interface ClientData {
   id: number; name: string; email: string | null; phone: string | null;
@@ -360,7 +361,7 @@ export default function ClientDetailPage() {
               </div>
               <div>
                 <label style={lbl}>Phone</label>
-                <input value={form.phone} onChange={e => setF('phone', e.target.value)} style={inp} />
+                <PhoneInput value={form.phone} onChange={v => setF('phone', v)} />
               </div>
             </div>
 

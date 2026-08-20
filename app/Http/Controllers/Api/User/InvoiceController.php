@@ -18,6 +18,7 @@ use App\Services\InvoiceNotificationService;
 use App\Services\PaymentProjectStartService;
 use App\Models\SystemAuditLog;
 use App\Models\UserCompanyPermission;
+use App\Rules\ValidPhoneNumber;
 use App\Support\PermissionDebug;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -267,7 +268,7 @@ class InvoiceController extends Controller
             'notes'               => 'nullable|string|max:2000',
             'customer_name'       => 'nullable|string|max:255',
             'customer_email'      => 'nullable|email|max:255',
-            'customer_phone'      => 'nullable|string|max:50',
+            'customer_phone'      => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'customer_address'    => 'nullable|string|max:500',
             'items'               => 'required|array|min:1',
             'items.*.description' => 'required|string|max:500',

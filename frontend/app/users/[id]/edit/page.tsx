@@ -9,6 +9,7 @@ import { USER_ROLE_TYPE_OPTIONS, CUSTOM_ROLE_SENTINEL, CUSTOM_ROLE_BASE_OPTIONS,
 import { CompanyOption, User } from '@/types';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { HiArrowLeft } from 'react-icons/hi2';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 // Mirrors the same helper in app/users/new/page.tsx — visible permission
 // keys per catalog module (respecting requiresDb/hideIfCatalogKey), so role
@@ -267,7 +268,7 @@ function EditUserPageContent() {
                 </div>
                 <div>
                   <label style={lbl}>Phone</label>
-                  <input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 (555) 000-0000" />
+                  <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
                 </div>
                 <div>
                   <label style={lbl}>Role</label>

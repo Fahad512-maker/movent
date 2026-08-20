@@ -8,6 +8,7 @@ import { getAuthType } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import PhoneInput from '@/components/ui/PhoneInput';
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 13px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -125,7 +126,7 @@ export default function NewClientPage() {
                 </div>
                 <div>
                   <label style={lbl}>Phone</label>
-                  <input style={inp} value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} placeholder="+1 (555) 000-0000" />
+                  <PhoneInput value={form.phone ?? ''} onChange={v => set('phone', v)} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>

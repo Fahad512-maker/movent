@@ -11,6 +11,7 @@ use App\Models\LeadTransfer;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\User;
+use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -74,7 +75,7 @@ class LeadController extends Controller
             'company_id'         => ['required', 'integer', 'in:' . implode(',', $companyIds)],
             'name'               => ['required', 'string', 'max:150'],
             'email'              => ['nullable', 'email', 'max:255'],
-            'phone'              => ['nullable', 'string', 'max:30'],
+            'phone'              => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'       => ['nullable', 'string', 'max:200'],
             'source'             => ['nullable', 'in:website,referral,cold_call,social,event,other'],
             'status'             => ['nullable', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],
@@ -160,7 +161,7 @@ class LeadController extends Controller
         $validated = $request->validate([
             'name'               => ['sometimes', 'string', 'max:150'],
             'email'              => ['nullable', 'email', 'max:255'],
-            'phone'              => ['nullable', 'string', 'max:30'],
+            'phone'              => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'       => ['nullable', 'string', 'max:200'],
             'source'             => ['nullable', 'in:website,referral,cold_call,social,event,other'],
             'status'             => ['nullable', 'in:new,contacted,qualified,proposal,negotiation,won,lost'],
