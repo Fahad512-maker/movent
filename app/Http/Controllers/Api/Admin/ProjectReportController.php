@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Task;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectReportController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()   { return auth('admin')->user(); }
     private function companyIds(): array
     {
@@ -20,12 +23,12 @@ class ProjectReportController extends Controller
 
     private function projectIds(): array
     {
-        return Project::whereIn('company_id', $this->companyIds())->pluck('id')->toArray();
+        return Project::where('company_id', $this->activeCompanyId())->pluck('id')->toArray();
     }
 
     public function statusReport(): JsonResponse
     {
-        $counts = Project::whereIn('company_id', $this->companyIds())
+        $counts = Project::where('company_id', $this->activeCompanyId())
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -90,7 +93,7 @@ class ProjectReportController extends Controller
 
     public function completedProjectsReport(): JsonResponse
     {
-        $completed = Project::whereIn('company_id', $this->companyIds())
+        $completed = Project::where('company_id', $this->activeCompanyId())
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
             ->with(['client:id,name', 'projectManager:id,name'])
