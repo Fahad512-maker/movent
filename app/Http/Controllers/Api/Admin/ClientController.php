@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Models\Client;
 use App\Models\ClientPortalPermission;
 use App\Models\Company;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ClientController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()
     {
         return auth('admin')->user();
@@ -402,11 +405,11 @@ class ClientController extends Controller
             $query->where('portal_access', $request->portal === 'enabled');
         }
 
-        if ($request->filled('company_id')) {
-            $cid = (int) $request->company_id;
-            if (in_array($cid, $companyIds)) {
-                $query->where('company_id', $cid);
-            }
+        // Company-Wise Dashboard Filtering — defaults to the active company,
+        // narrowed further by an explicit ?company_id= override when given.
+        $cid = $request->filled('company_id') ? (int) $request->company_id : $this->activeCompanyId();
+        if (in_array($cid, $companyIds, true)) {
+            $query->where('company_id', $cid);
         }
 
         $clients = $query->get([
@@ -414,10 +417,8 @@ class ClientController extends Controller
             'company_name', 'portal_access', 'status', 'created_at',
         ]);
 
-        // Show seat info for the filtered company, or first company as default
-        $seatCompanyId = $request->filled('company_id')
-            ? (int) $request->company_id
-            : ($companyIds[0] ?? null);
+        // Show seat info for the same company the list above was scoped to.
+        $seatCompanyId = in_array($cid, $companyIds, true) ? $cid : ($companyIds[0] ?? null);
 
         return ApiResponse::success([
             'clients' => $clients,

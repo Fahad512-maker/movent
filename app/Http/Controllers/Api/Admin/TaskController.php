@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\SystemAuditLog;
@@ -16,6 +17,8 @@ use Illuminate\Validation\Rule;
 
 class TaskController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()   { return auth('admin')->user(); }
     // trim()->? , not `?? 'Admin'` — a blank/whitespace-only name would
     // otherwise pass through and leave a History entry with an empty actor.
@@ -69,7 +72,8 @@ class TaskController extends Controller
      */
     public function indexAll(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        // Company-Wise Dashboard Filtering — scoped to the active company.
+        $companyIds = [$this->activeCompanyId()];
 
         // project.teamMembers.user is here so the frontend's "Assigned To"
         // reassignment picker can scope its options to this task's own

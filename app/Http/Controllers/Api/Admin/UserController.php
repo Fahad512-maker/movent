@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Resources\UserResource;
 use App\Models\Company;
 use App\Models\CompanyUserAssignment;
@@ -25,6 +26,8 @@ use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private const VALID_ROLES = [
         'seller', 'client', 'hr', 'finance', 'project_manager', 'production',
         'invoice_admin', 'invoice_manager', 'invoice_creator', 'invoice_viewer', 'payment_manager',
@@ -173,7 +176,12 @@ class UserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        // Company-Wise Dashboard Filtering — every downstream use of
+        // $companyIds in this method (which users are included, which of
+        // their company-scoped relations are shown, seat count/limit below)
+        // now narrows to the one active company instead of every company
+        // this admin owns.
+        $companyIds = [$this->activeCompanyId()];
 
         // Include users assigned to any of the admin's companies (not just primary company)
         $userIds = CompanyUserAssignment::whereIn('company_id', $companyIds)

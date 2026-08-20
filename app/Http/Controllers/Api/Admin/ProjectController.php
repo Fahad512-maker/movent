@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Mail\ProjectDeliveredMail;
 use App\Models\CompanyUserAssignment;
 use App\Models\Notification;
@@ -30,6 +31,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
+    use ScopesToActiveCompany;
+
     // System subfolders created under every project on creation.
     private const SYSTEM_FOLDERS = [
         'documents', 'tasks', 'production', 'compliance', 'invoices',
@@ -161,11 +164,16 @@ class ProjectController extends Controller
         $q = Project::whereIn('company_id', $companyIds)
             ->with(['company:id,name', 'client:id,name,email,portal_access,user_id', 'projectManager:id,name,role_type', 'teamMembers.user:id,name,role_type', 'createdBy:id,name', 'createdByAdmin:id,name']);
 
-        // Aggregates every company this admin owns by default (matches
-        // ClientController::index() — the list itself is never restricted to
-        // one company; only its seat-info sub-panel defaults to companyIds[0]).
-        // ?company_id= still narrows to one, validated by the whereIn above.
-        if ($request->filled('company_id')) $q->where('company_id', $request->company_id);
+        // Company-Wise Dashboard Filtering — defaults to the active company
+        // (matches ClientController::index()'s identical default), narrowed
+        // further by an explicit ?company_id= override when given (still
+        // validated by the whereIn above, so a foreign id yields zero rows
+        // rather than leaking another tenant's data).
+        if ($request->filled('company_id')) {
+            $q->where('company_id', $request->company_id);
+        } else {
+            $q->where('company_id', $this->activeCompanyId());
+        }
         if ($request->filled('status'))     $q->where('status', $request->status);
         if ($request->filled('priority'))   $q->where('priority', $request->priority);
         if ($request->filled('client_id'))  $q->where('client_id', $request->client_id);
