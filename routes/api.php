@@ -661,6 +661,7 @@ Route::prefix('user')->group(function () {
         Route::get('notifications/unread-counts',       [UserNotificationController::class, 'unreadCounts']);
         Route::patch('notifications/mark-category-read', [UserNotificationController::class, 'markCategoryRead']);
         Route::patch('notifications/{id}/read',         [UserNotificationController::class, 'markRead']);
+        Route::patch('notifications/{id}/open',         [UserNotificationController::class, 'open']);
         Route::patch('notifications/read-all',          [UserNotificationController::class, 'markAllRead']);
         Route::delete('notifications/{id}',              [UserNotificationController::class, 'clear']);
         Route::delete('notifications',                   [UserNotificationController::class, 'clearAll']);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
 use App\Models\Lead;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class SalesDashboardController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function companyIds(): array
     {
         return auth('admin')->user()->companies()->pluck('id')->toArray();
@@ -20,12 +23,12 @@ class SalesDashboardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        $companyId  = $this->activeCompanyId();
         $today      = now()->toDateString();
         $month      = $request->get('month', now()->month);
         $year       = $request->get('year',  now()->year);
 
-        $base = Lead::whereIn('company_id', $companyIds);
+        $base = Lead::where('company_id', $companyId);
 
         // ── Summary counts ──────────────────────────────────────────────────
         $total     = (clone $base)->count();
@@ -41,12 +44,12 @@ class SalesDashboardController extends Controller
         $pipelineVal  = (clone $base)->whereIn('status', $openStatuses)->sum('estimated_value');
         $wonValue     = (clone $base)->where('status', 'won')->sum('estimated_value');
 
-        $todayFollowUps = FollowUp::whereIn('company_id', $companyIds)
+        $todayFollowUps = FollowUp::where('company_id', $companyId)
             ->where('status', 'pending')
             ->whereDate('scheduled_at', $today)
             ->count();
 
-        $overdueFollowUps = FollowUp::whereIn('company_id', $companyIds)
+        $overdueFollowUps = FollowUp::where('company_id', $companyId)
             ->where('status', 'pending')
             ->whereDate('scheduled_at', '<', $today)
             ->count();

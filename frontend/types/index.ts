@@ -125,6 +125,10 @@ export interface InvoiceItem {
 export interface InvoicePayment {
   id: number;
   amount: number;
+  currency?: string | null;
+  converted_amount?: number | null;
+  converted_currency?: string | null;
+  exchange_rate?: number | null;
   method?: string;
   gateway?: string;
   status: string;

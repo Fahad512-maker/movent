@@ -422,7 +422,7 @@ class LeadController extends Controller
     // Pipeline: update status via drag-and-drop
     public function pipeline(Request $request): JsonResponse
     {
-        $leads = Lead::whereIn('company_id', $this->companyIds())
+        $leads = Lead::where('company_id', $this->activeCompanyId())
             ->whereNotIn('status', ['won', 'lost'])
             ->with(['assignedTo:id,name'])
             ->orderByRaw("FIELD(status,'new','contacted','qualified','proposal','negotiation')")

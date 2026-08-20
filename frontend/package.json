@@ -16,6 +16,7 @@
     "bootstrap": "^5.3.3",
     "countries-and-timezones": "^3.10.0",
     "js-cookie": "^3.0.8",
+    "libphonenumber-js": "^1.13.11",
     "next": "16.2.9",
     "postcss": "^8.5.16",
     "react": "19.2.4",

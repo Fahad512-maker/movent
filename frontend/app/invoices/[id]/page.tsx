@@ -454,6 +454,16 @@ export default function InvoiceDetailPage() {
                         {p.method?.replace('_', ' ')}
                         {p.payment_date && ` · ${new Date(p.payment_date).toLocaleDateString('en-GB')}`}
                       </div>
+                      {p.exchange_rate != null && p.converted_amount != null && (
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4,
+                          fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fffbeb',
+                          border: '1px solid #fde68a', borderRadius: 5, padding: '2px 7px',
+                        }}>
+                          🔄 Converted — gateway charged {p.converted_currency} {Number(p.converted_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {' '}(1 {invoice.currency} = {Number(p.exchange_rate).toFixed(4)} {p.converted_currency})
+                        </div>
+                      )}
                       {p.notes && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.notes}</div>}
                     </div>
                     <button onClick={() => handleRemovePayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: 4 }}>

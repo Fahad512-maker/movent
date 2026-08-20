@@ -739,7 +739,7 @@ export default function NewUserPage() {
 
     return (
       <DashboardLayout title={created.isLinked ? 'User Linked' : 'User Created'}>
-        <div style={{ maxWidth: 480 }}>
+        <div style={{ width: '100%' }}>
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
             <div style={{ padding: '22px 28px', borderBottom: '1px solid #f1f5f9', background: created.isLinked ? '#eff6ff' : '#f0fdf4', display: 'flex', alignItems: 'center', gap: 12 }}>
               <HiCheckCircle size={26} color={created.isLinked ? '#2563eb' : '#059669'} />

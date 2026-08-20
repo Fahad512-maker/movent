@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Models\CompanyUserAssignment;
 use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,22 +18,34 @@ class NotificationController extends Controller
 
     private function user() { return auth('sanctum')->user(); }
 
+    // Every company this user currently has an ACTIVE assignment to — a
+    // user assigned to more than one company must see notifications from
+    // all of them regardless of which one is the frontend's "active
+    // company" right now (Cross-Company Notifications). Suspended
+    // assignments are excluded, same as CheckCompanyModule.
+    private function activeCompanyIds($user): array
+    {
+        return CompanyUserAssignment::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->pluck('company_id')
+            ->all();
+    }
+
     public function index(): JsonResponse
     {
         $user = $this->user();
+        $companyIds = $this->activeCompanyIds($user);
 
-        // Company-scoped in addition to user_id — a belt-and-braces check
-        // alongside the FK, since user_id alone already pins this to one
-        // company, but this makes the scope explicit rather than implicit.
         $notifications = Notification::where('user_id', $user->id)
-            ->where('company_id', $user->company_id)
+            ->whereIn('company_id', $companyIds)
             ->whereNull('cleared_at')
+            ->with('company:id,name')
             ->orderByDesc('created_at')
             ->limit(30)
             ->get();
 
         $unreadCount = Notification::where('user_id', $user->id)
-            ->where('company_id', $user->company_id)
+            ->whereIn('company_id', $companyIds)
             ->whereNull('cleared_at')
             ->where('is_read', false)
             ->count();
@@ -40,6 +53,32 @@ class NotificationController extends Controller
         return ApiResponse::success([
             'notifications' => $notifications,
             'unread_count'  => $unreadCount,
+        ]);
+    }
+
+    // PATCH /user/notifications/{id}/open — the click-through handler for
+    // Cross-Company Notifications. Marks read (same as markRead()) AND
+    // resolves, fresh on every call (never trusting a possibly-stale cached
+    // company_assignments cookie), whether the user still has active access
+    // to this notification's company — the frontend uses this to decide
+    // whether to switch its active-company cookie + navigate, or show an
+    // access-denied message instead.
+    public function open(int $id): JsonResponse
+    {
+        $user = $this->user();
+        $notification = Notification::where('user_id', $user->id)->with('company:id,name')->findOrFail($id);
+        $notification->update(['is_read' => true, 'read_at' => $notification->read_at ?? now()]);
+
+        $hasAccess = CompanyUserAssignment::where('user_id', $user->id)
+            ->where('company_id', $notification->company_id)
+            ->where('status', 'active')
+            ->exists();
+
+        return ApiResponse::success([
+            'company_id'     => $notification->company_id,
+            'company_name'   => $notification->company?->name,
+            'link'           => $notification->data['link'] ?? $notification->url,
+            'access_granted' => $hasAccess,
         ]);
     }
 
