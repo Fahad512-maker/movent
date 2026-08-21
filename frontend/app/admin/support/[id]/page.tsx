@@ -25,6 +25,11 @@ export default function AdminSupportTicketPage() {
   const [sending, setSending]   = useState(false);
   const [loading, setLoading]   = useState(true);
   const [savingAssign, setSavingAssign] = useState(false);
+  // <input type="file"> is uncontrolled — setFile(null) clears our own
+  // state but the native element still visually shows the previously
+  // chosen filename. Bumping this key after every successful send remounts
+  // the input fresh, which is the only way to actually reset it.
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [savingStatus, setSavingStatus] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -43,12 +48,15 @@ export default function AdminSupportTicketPage() {
 
   const sendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyMsg.trim()) return;
+    // A reply with just an attachment and no typed message is valid — only
+    // block a genuinely empty submit (neither message nor file).
+    if (!replyMsg.trim() && !file) return;
     setSending(true);
     try {
       await adminSupportService.reply(Number(id), replyMsg, file);
       setReplyMsg('');
       setFile(null);
+      setFileInputKey(k => k + 1);
       toast.success('Reply sent');
       load();
     } catch { toast.error('Failed to send reply'); }
@@ -83,7 +91,7 @@ export default function AdminSupportTicketPage() {
 
   return (
     <DashboardLayout title={`Ticket #${t.id}`}>
-      <div style={{ maxWidth: 760 }}>
+      <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button onClick={() => router.push('/admin/support')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}>←</button>
           <div style={{ flex: 1 }}>
@@ -94,7 +102,7 @@ export default function AdminSupportTicketPage() {
               </span>
             </div>
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-              Raised by {t.raisedBy?.name || '—'} · Category: {t.category} · Priority: <strong style={{ color: t.priority === 'high' || t.priority === 'urgent' ? '#dc2626' : '#64748b' }}>{t.priority}</strong>
+              Raised by {t.raised_by?.name || '—'} · Category: {t.category} · Priority: <strong style={{ color: t.priority === 'high' || t.priority === 'urgent' ? '#dc2626' : '#64748b' }}>{t.priority}</strong>
             </div>
           </div>
         </div>
@@ -103,7 +111,7 @@ export default function AdminSupportTicketPage() {
           <div style={{ flex: 1, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 16px' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>ASSIGNED TO</div>
             <select
-              value={t.assigned_to || ''}
+              value={t.assigned_to?.id || ''}
               disabled={savingAssign}
               onChange={e => changeAssign(e.target.value)}
               style={{ width: '100%', padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
@@ -199,9 +207,9 @@ export default function AdminSupportTicketPage() {
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#64748b', flex: 1 }} />
+              <input key={fileInputKey} type="file" onChange={e => setFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#64748b', flex: 1 }} />
               <button
-                type="submit" disabled={sending || !replyMsg.trim()}
+                type="submit" disabled={sending || (!replyMsg.trim() && !file)}
                 style={{
                   padding: '8px 20px', background: sending ? '#93c5fd' : GREEN,
                   color: '#fff', border: 'none', borderRadius: 8,

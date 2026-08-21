@@ -88,7 +88,7 @@ class SupportController extends Controller
     public function reply(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'message'    => 'required|string|max:5000',
+            'message'    => 'nullable|required_without:attachment|string|max:5000',
             'attachment' => 'nullable|file|max:10240',
         ]);
 

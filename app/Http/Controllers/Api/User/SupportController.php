@@ -6,8 +6,9 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketReply;
-use App\Models\User;
+use App\Models\CompanyUserAssignment;
 use App\Models\UserCompanyPermission;
+use App\Services\SupportNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -81,7 +82,7 @@ class SupportController extends Controller
         }
 
         $request->validate([
-            'message'    => 'required|string|max:5000',
+            'message'    => 'nullable|required_without:attachment|string|max:5000',
             'attachment' => 'nullable|file|max:10240',
         ]);
 
@@ -107,6 +108,8 @@ class SupportController extends Controller
             $ticket->update(['status' => 'in_progress']);
         }
 
+        SupportNotificationService::notifyClientOnReply($ticket, $reply, $this->user()->name ?? 'Support Team');
+
         return ApiResponse::success($reply, 'Reply added');
     }
 
@@ -122,7 +125,15 @@ class SupportController extends Controller
         $validated = $request->validate(['user_id' => 'nullable|integer']);
 
         if (!empty($validated['user_id'])) {
-            $exists = User::where('id', $validated['user_id'])->where('company_id', $ticket->company_id)->exists();
+            // Checking the static users.company_id column here would reject
+            // any multi-company staff member whose primary company differs
+            // from this ticket's — even though they're a genuine, active
+            // member of it via company_user_assignments. Validate against
+            // that instead (same fix as Admin\SupportController::assign()).
+            $exists = CompanyUserAssignment::where('user_id', $validated['user_id'])
+                ->where('company_id', $ticket->company_id)
+                ->where('status', 'active')
+                ->exists();
             if (!$exists) return ApiResponse::error('Selected user is not part of this company.', 422);
         }
 

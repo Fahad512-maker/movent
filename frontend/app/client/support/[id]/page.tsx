@@ -20,6 +20,11 @@ export default function ClientTicketDetailPage() {
   const [file, setFile]         = useState<File | null>(null);
   const [sending, setSending]   = useState(false);
   const [loading, setLoading]   = useState(true);
+  // <input type="file"> is uncontrolled — setFile(null) clears our own
+  // state but the native element still visually shows the previously
+  // chosen filename. Bumping this key after every successful send remounts
+  // the input fresh, which is the only way to actually reset it.
+  const [fileInputKey, setFileInputKey] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
@@ -34,7 +39,9 @@ export default function ClientTicketDetailPage() {
 
   const sendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyMsg.trim()) return;
+    // A reply with just an attachment and no typed message is valid — only
+    // block a genuinely empty submit (neither message nor file).
+    if (!replyMsg.trim() && !file) return;
     setSending(true);
     try {
       const fd = new FormData();
@@ -43,6 +50,7 @@ export default function ClientTicketDetailPage() {
       await clientService.ticketReply(Number(id), fd);
       setReplyMsg('');
       setFile(null);
+      setFileInputKey(k => k + 1);
       toast.success('Reply sent');
       load();
     } catch { toast.error('Failed to send reply'); }
@@ -56,7 +64,7 @@ export default function ClientTicketDetailPage() {
   const sc = SC[t.status] || { bg: '#f1f5f9', color: '#64748b' };
 
   return (
-    <div style={{ maxWidth: 680 }}>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}>←</button>
         <div style={{ flex: 1 }}>
@@ -136,9 +144,9 @@ export default function ClientTicketDetailPage() {
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#64748b', flex: 1 }} />
+              <input key={fileInputKey} type="file" onChange={e => setFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#64748b', flex: 1 }} />
               <button
-                type="submit" disabled={sending || !replyMsg.trim()}
+                type="submit" disabled={sending || (!replyMsg.trim() && !file)}
                 style={{
                   padding: '8px 20px', background: sending ? '#a7f3d0' : GREEN,
                   color: '#fff', border: 'none', borderRadius: 8,

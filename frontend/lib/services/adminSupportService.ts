@@ -3,8 +3,12 @@ import api from '@/lib/axios';
 export interface SupportTicket {
   id: number;
   company_id: number;
-  raised_by: number | null;
-  assigned_to: number | null;
+  // The backend eager-loads `raisedBy`/`assignedTo` relations, which
+  // snake-case to the SAME JSON keys as these raw FK columns — Eloquent's
+  // relation serialization overwrites the raw value, so these always hold
+  // the {id, name} object (or null) once loaded, never a plain id.
+  raised_by: { id: number; name: string } | null;
+  assigned_to: { id: number; name: string } | null;
   subject: string;
   category: 'billing' | 'technical' | 'project' | 'general';
   description?: string | null;
@@ -15,8 +19,6 @@ export interface SupportTicket {
   attachment_url?: string | null;
   created_at: string;
   resolved_at: string | null;
-  raisedBy?: { id: number; name: string } | null;
-  assignedTo?: { id: number; name: string } | null;
 }
 
 export interface SupportTicketReply {

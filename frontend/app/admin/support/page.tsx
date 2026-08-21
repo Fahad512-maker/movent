@@ -81,8 +81,8 @@ export default function AdminSupportPage() {
                   <tr key={t.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                     <td style={{ padding: '12px 18px', fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>#{t.id}</td>
                     <td style={{ padding: '12px 18px', fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{t.subject}</td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{t.raisedBy?.name || '—'}</td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{t.assignedTo?.name || '—'}</td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{t.raised_by?.name || '—'}</td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{t.assigned_to?.name || '—'}</td>
                     <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b', textTransform: 'capitalize' }}>{t.category}</td>
                     <td style={{ padding: '12px 18px' }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: PRIORITY_C[t.priority] || '#64748b', textTransform: 'capitalize' }}>{t.priority}</span>

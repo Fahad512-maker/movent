@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
+use App\Models\CompanyUserAssignment;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketReply;
-use App\Models\User;
+use App\Services\SupportNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SupportController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin()   { return auth('admin')->user(); }
     private function companyIds(): array
     {
@@ -26,12 +30,20 @@ class SupportController extends Controller
     // GET /admin/support
     public function index(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        $q = SupportTicket::with(['raisedBy:id,name', 'assignedTo:id,name']);
 
-        $q = SupportTicket::whereIn('company_id', $companyIds)
-            ->with(['raisedBy:id,name', 'assignedTo:id,name']);
+        // Company-Wise Dashboard Filtering — defaults to the active company
+        // (or every owned company when "All Companies" is selected),
+        // narrowed further by an explicit ?company_id= override when given.
+        if ($request->filled('company_id')) {
+            $cid = (int) $request->company_id;
+            if (in_array($cid, $this->companyIds(), true)) {
+                $q->where('company_id', $cid);
+            }
+        } else {
+            $q->whereIn('company_id', $this->activeCompanyIds());
+        }
 
-        if ($request->filled('company_id')) $q->where('company_id', $request->company_id);
         if ($request->filled('status'))     $q->where('status', $request->status);
         if ($request->filled('category'))   $q->where('category', $request->category);
         if ($request->filled('priority'))   $q->where('priority', $request->priority);
@@ -62,7 +74,7 @@ class SupportController extends Controller
     public function reply(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'message'    => 'required|string|max:5000',
+            'message'    => 'nullable|required_without:attachment|string|max:5000',
             'attachment' => 'nullable|file|max:10240',
         ]);
 
@@ -88,6 +100,8 @@ class SupportController extends Controller
             $ticket->update(['status' => 'in_progress']);
         }
 
+        SupportNotificationService::notifyClientOnReply($ticket, $reply, $this->admin()->name ?? 'Support Team');
+
         return ApiResponse::success($reply, 'Reply added');
     }
 
@@ -99,7 +113,16 @@ class SupportController extends Controller
         $validated = $request->validate(['user_id' => 'nullable|integer']);
 
         if (!empty($validated['user_id'])) {
-            $exists = User::where('id', $validated['user_id'])->where('company_id', $ticket->company_id)->exists();
+            // Checking the static users.company_id column here would reject
+            // any multi-company staff member whose primary company differs
+            // from this ticket's — even though they're a genuine, active
+            // member of it via company_user_assignments (the same table the
+            // assignee dropdown itself is populated from, per
+            // Admin\UserController::index()). Validate against that instead.
+            $exists = CompanyUserAssignment::where('user_id', $validated['user_id'])
+                ->where('company_id', $ticket->company_id)
+                ->where('status', 'active')
+                ->exists();
             if (!$exists) return ApiResponse::error('Selected user is not part of this company.', 422);
         }
 
