@@ -8,6 +8,7 @@ import { getAuthType } from '@/lib/auth';
 import { Client } from '@/types';
 import { HiArrowLeft } from 'react-icons/hi2';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 13px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -34,6 +35,7 @@ export default function EditClientPage() {
         phone: c.phone ?? '',
         company_name: c.company_name ?? '',
         address: c.address ?? '',
+        country: c.country ?? '',
         notes: c.notes ?? '',
         status: c.status,
       });
@@ -51,6 +53,7 @@ export default function EditClientPage() {
       phone:        form.phone  || null,
       company_name: form.company_name || null,
       address:      form.address || null,
+      country:      form.country || null,
       notes:        form.notes   || null,
       status:       form.status,
     };
@@ -114,9 +117,16 @@ export default function EditClientPage() {
                 <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.address ?? ''} onChange={e => set('address', e.target.value)} placeholder="Street, City, Country" />
               </div>
               <div>
-                <label style={lbl}>Notes</label>
-                <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
+                <label style={lbl}>Country</label>
+                <select style={inp} value={form.country ?? ''} onChange={e => set('country', e.target.value)}>
+                  <option value="">— Select —</option>
+                  {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
               </div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Notes</label>
+              <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
             </div>
             <div style={{ marginBottom: 28 }}>
               <label style={lbl}>Status</label>

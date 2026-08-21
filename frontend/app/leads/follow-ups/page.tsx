@@ -18,6 +18,12 @@ const ICON: Record<string, React.ReactNode> = {
 const cap   = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
 const fmtDT = (d: string) => new Date(d).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
+  completed: { bg: '#ecfdf5', color: '#059669' },
+  missed:    { bg: '#fef2f2', color: '#dc2626' },
+  cancelled: { bg: '#f1f5f9', color: '#64748b' },
+};
+
 type Filter = 'today' | 'overdue' | 'upcoming';
 
 export default function FollowUpsPage() {
@@ -106,20 +112,27 @@ export default function FollowUpsPage() {
                       </button>
                     )}
                     {fu.assigned_user && <span style={{ fontSize: 11, color: '#64748b' }}>→ {fu.assigned_user.name}</span>}
+                    {fu.status !== 'pending' && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, textTransform: 'capitalize', ...(STATUS_STYLE[fu.status] ?? STATUS_STYLE.cancelled) }}>
+                        {fu.status}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, color: isOverdue ? '#ea580c' : '#64748b', marginTop: 2 }}>{fmtDT(fu.scheduled_at)}</div>
                   {fu.notes && <div style={{ fontSize: 12, color: '#475569', marginTop: 3, fontStyle: 'italic' }}>{fu.notes}</div>}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => handleAction(fu.id, 'complete')}
-                    style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <HiCheckCircle size={14} /> Done
-                  </button>
-                  <button onClick={() => handleAction(fu.id, 'miss')}
-                    style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: '#fef2f2', color: '#dc2626', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <HiXCircle size={14} />
-                  </button>
-                </div>
+                {fu.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => handleAction(fu.id, 'complete')}
+                      style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: '#ecfdf5', color: '#059669', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <HiCheckCircle size={14} /> Done
+                    </button>
+                    <button onClick={() => handleAction(fu.id, 'miss')}
+                      style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: '#fef2f2', color: '#dc2626', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      <HiXCircle size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

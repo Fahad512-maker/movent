@@ -82,38 +82,55 @@ export default function ClientReportsPage() {
         </div>
       ) : tab === 'invoices' && invData ? (
         <div>
-          {/* Summary cards */}
-          <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Total Invoiced', val: `USD ${Number(invData.summary?.total_invoiced || 0).toLocaleString()}` },
-              { label: 'Total Paid',     val: `USD ${Number(invData.summary?.total_paid || 0).toLocaleString()}`,   color: '#10b981' },
-              { label: 'Pending',        val: `USD ${Number(invData.summary?.total_pending || 0).toLocaleString()}`, color: '#dc2626' },
-            ].map(({ label, val, color }) => (
-              <div key={label} style={{ background: '#fff', borderRadius: 10, padding: '18px 22px', border: '1px solid #e2e8f0', flex: 1 }}>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{val}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Monthly breakdown */}
-          {(invData.monthly || []).length > 0 && (
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 14 }}>Monthly Breakdown</div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', height: 100 }}>
-                {(invData.monthly || []).map((m: any) => {
-                  const maxVal = Math.max(...(invData.monthly || []).map((x: any) => x.total || 1));
-                  const h = Math.round(((m.total || 0) / maxVal) * 80);
-                  return (
-                    <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: '100%', height: h, background: GREEN, borderRadius: '4px 4px 0 0', minHeight: 4 }} title={`USD ${Number(m.total).toLocaleString()}`} />
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.month?.slice(5)}</div>
-                    </div>
-                  );
-                })}
+          {/* Summary cards — one group per currency, never blended into one number */}
+          {(invData.summary || []).map((cs: any) => (
+            <div key={cs.currency} style={{ marginBottom: 14 }}>
+              {(invData.summary || []).length > 1 && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>{cs.currency}</div>
+              )}
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Total Invoiced', val: `${cs.currency} ${Number(cs.total_invoiced || 0).toLocaleString()}` },
+                  { label: 'Total Paid',     val: `${cs.currency} ${Number(cs.total_paid || 0).toLocaleString()}`,   color: '#10b981' },
+                  { label: 'Pending',        val: `${cs.currency} ${Number(cs.total_pending || 0).toLocaleString()}`, color: '#dc2626' },
+                ].map(({ label, val, color }) => (
+                  <div key={label} style={{ background: '#fff', borderRadius: 10, padding: '18px 22px', border: '1px solid #e2e8f0', flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{val}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          ))}
+
+          {/* Monthly breakdown — one mini chart per currency present */}
+          {(invData.monthly || []).length > 0 && (() => {
+            const months: any[] = invData.monthly || [];
+            const currencies: string[] = Array.from(new Set(months.flatMap(m => (m.by_currency || []).map((c: any) => c.currency))));
+            return currencies.map(currency => {
+              const series = months.map(m => ({
+                month: m.month,
+                total: (m.by_currency || []).find((c: any) => c.currency === currency)?.total || 0,
+              }));
+              const maxVal = Math.max(...series.map(s => s.total || 1));
+              return (
+                <div key={currency} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 14 }}>Monthly Breakdown — {currency}</div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', height: 100 }}>
+                    {series.map(s => {
+                      const h = Math.round((s.total / maxVal) * 80);
+                      return (
+                        <div key={s.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: '100%', height: h, background: GREEN, borderRadius: '4px 4px 0 0', minHeight: 4 }} title={`${currency} ${Number(s.total).toLocaleString()}`} />
+                          <div style={{ fontSize: 10, color: '#94a3b8' }}>{s.month?.slice(5)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
 
           {/* Invoice list */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>

@@ -10,6 +10,7 @@ export interface UserClientPayload {
   phone?: string | null;
   company_name?: string | null;
   address?: string | null;
+  country?: string | null;
   notes?: string | null;
   status?: 'active' | 'inactive' | 'blocked';
 }

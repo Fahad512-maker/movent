@@ -22,10 +22,16 @@ export interface PaymentRecord {
   } | null;
 }
 
-export interface PaymentSummary {
+export interface PaymentCurrencySummary {
+  currency: string;
   total: number;
   count: number;
   by_method: Record<string, number>;
+}
+
+export interface PaymentSummary {
+  count: number;
+  by_currency: PaymentCurrencySummary[];
 }
 
 export const adminPaymentService = {

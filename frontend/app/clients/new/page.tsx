@@ -9,6 +9,7 @@ import { HiArrowLeft } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 13px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fafafa', color: '#0f172a', boxSizing: 'border-box' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' };
@@ -20,7 +21,7 @@ export default function NewClientPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
   const [form, setForm] = useState<ClientPayload & { portal_email: string; portal_password: string; enable_portal: boolean }>({
-    company_id: 0, name: '', email: '', phone: '', company_name: '', address: '', notes: '', status: 'active',
+    company_id: 0, name: '', email: '', phone: '', company_name: '', address: '', country: '', notes: '', status: 'active',
     enable_portal: false, portal_email: '', portal_password: '',
   });
 
@@ -50,6 +51,7 @@ export default function NewClientPage() {
           phone:        form.phone  || null,
           company_name: form.company_name || null,
           address:      form.address || null,
+          country:      form.country || null,
           notes:        form.notes   || null,
           status:       form.status,
         });
@@ -61,6 +63,7 @@ export default function NewClientPage() {
           phone:        form.phone  || null,
           company_name: form.company_name || null,
           address:      form.address || null,
+          country:      form.country || null,
           notes:        form.notes   || null,
           status:       form.status,
           ...(form.enable_portal ? {
@@ -135,9 +138,16 @@ export default function NewClientPage() {
                   <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.address ?? ''} onChange={e => set('address', e.target.value)} placeholder="Street, City, Country" />
                 </div>
                 <div>
-                  <label style={lbl}>Notes</label>
-                  <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
+                  <label style={lbl}>Country</label>
+                  <select style={inp} value={form.country ?? ''} onChange={e => set('country', e.target.value)}>
+                    <option value="">— Select —</option>
+                    {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
                 </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={lbl}>Notes</label>
+                <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
               </div>
               <div>
                 <label style={lbl}>Status</label>

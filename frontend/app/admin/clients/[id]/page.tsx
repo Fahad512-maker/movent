@@ -8,10 +8,11 @@ import { adminSalesChatService } from '@/lib/services/salesChatService';
 import { ChatMessage } from '@/lib/services/adminProjectService';
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 interface ClientData {
   id: number; name: string; email: string | null; phone: string | null;
-  company_name: string | null; address: string | null; notes: string | null;
+  company_name: string | null; address: string | null; country: string | null; notes: string | null;
   portal_access: boolean; status: string; created_at: string;
   user: { id: number; email: string; is_active: boolean } | null;
   company: { id: number; name: string } | null;
@@ -75,7 +76,7 @@ export default function ClientDetailPage() {
 
   // Edit form
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', company_name: '', address: '', notes: '', status: 'active',
+    name: '', email: '', phone: '', company_name: '', address: '', country: '', notes: '', status: 'active',
   });
   const [savingInfo,  setSavingInfo]  = useState(false);
   const [savingPerms, setSavingPerms] = useState(false);
@@ -112,6 +113,7 @@ export default function ClientDetailPage() {
         phone:        c.phone ?? '',
         company_name: c.company_name ?? '',
         address:      c.address ?? '',
+        country:      c.country ?? '',
         notes:        c.notes ?? '',
         status:       c.status,
       });
@@ -370,9 +372,18 @@ export default function ClientDetailPage() {
               <input value={form.company_name} onChange={e => setF('company_name', e.target.value)} placeholder="Client's company / business name" style={inp} />
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Address</label>
-              <input value={form.address} onChange={e => setF('address', e.target.value)} style={inp} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={lbl}>Address</label>
+                <input value={form.address} onChange={e => setF('address', e.target.value)} style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>Country</label>
+                <select value={form.country} onChange={e => setF('country', e.target.value)} style={inp}>
+                  <option value="">— Select —</option>
+                  {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </div>
             </div>
 
             <div>

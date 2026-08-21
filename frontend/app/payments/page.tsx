@@ -103,8 +103,6 @@ export default function PaymentsPage() {
     finally { setRejecting(null); }
   };
 
-  const currency = payments[0]?.invoice?.currency ?? 'USD';
-
   return (
     <DashboardLayout title="Payments">
       <div style={{ width: '100%' }}>
@@ -115,25 +113,30 @@ export default function PaymentsPage() {
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>All payments received across invoices</p>
         </div>
 
-        {/* Summary Cards */}
-        {summary && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #f1f5f9', padding: '16px 20px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Received</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#059669', marginTop: 4 }}>{fmt(summary.total, currency)}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{summary.count} payments</div>
+        {/* Summary Cards — one group per currency, never blended into one number */}
+        {summary && summary.by_currency.map(cs => (
+          <div key={cs.currency} style={{ marginBottom: 20 }}>
+            {summary.by_currency.length > 1 && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>{cs.currency}</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+              <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #f1f5f9', padding: '16px 20px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Received</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#059669', marginTop: 4 }}>{fmt(cs.total, cs.currency)}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{cs.count} payments</div>
+              </div>
+              {Object.entries(cs.by_method).map(([m, amt]) => {
+                const mc = METHOD_COLOR[m] ?? { bg: '#f8fafc', color: '#64748b' };
+                return (
+                  <div key={m} style={{ background: mc.bg, borderRadius: 12, border: `1px solid ${mc.color}20`, padding: '16px 20px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: mc.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{METHOD_LABEL[m] ?? m}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: mc.color, marginTop: 4 }}>{fmt(amt, cs.currency)}</div>
+                  </div>
+                );
+              })}
             </div>
-            {Object.entries(summary.by_method).map(([m, amt]) => {
-              const mc = METHOD_COLOR[m] ?? { bg: '#f8fafc', color: '#64748b' };
-              return (
-                <div key={m} style={{ background: mc.bg, borderRadius: 12, border: `1px solid ${mc.color}20`, padding: '16px 20px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: mc.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{METHOD_LABEL[m] ?? m}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: mc.color, marginTop: 4 }}>{fmt(amt, currency)}</div>
-                </div>
-              );
-            })}
           </div>
-        )}
+        ))}
 
         {/* Filters */}
         <form onSubmit={handleSearch} style={{ background: '#fff', borderRadius: 12, border: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>

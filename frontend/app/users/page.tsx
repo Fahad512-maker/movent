@@ -268,7 +268,12 @@ export default function UsersPage() {
                               ))}
                             </div>
                           ) : (
-                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>—</span>
+                            <span
+                              title="Not assigned to any company yet — they'll see an empty state until you assign one"
+                              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600, whiteSpace: 'nowrap', background: '#fffbeb', color: '#b45309' }}
+                            >
+                              Unassigned
+                            </span>
                           )}
                         </td>
 

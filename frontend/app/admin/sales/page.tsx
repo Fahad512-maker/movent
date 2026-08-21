@@ -11,6 +11,9 @@ import {
 
 const PKR    = (n: number) => '$' + (n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CURRENT_YEAR = new Date().getFullYear();
+const START_YEAR    = 2025;
+const YEAR_OPTIONS  = Array.from({ length: CURRENT_YEAR - START_YEAR + 1 }, (_, i) => START_YEAR + i);
 
 const STAGE_COLOR: Record<string, string> = {
   new: '#2563eb', contacted: '#16a34a', qualified: '#7c3aed',
@@ -63,7 +66,7 @@ export default function SalesDashboardPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select value={year} onChange={e => setYear(Number(e.target.value))}
               style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', fontSize: 13, color: '#0f172a', cursor: 'pointer' }}>
-              {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
+              {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <button onClick={() => router.push('/admin/pipeline')}
               style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>

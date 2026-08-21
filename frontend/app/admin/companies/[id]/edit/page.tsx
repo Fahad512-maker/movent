@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 interface FormState {
   name: string;
@@ -14,6 +15,7 @@ interface FormState {
   phone: string;
   address: string;
   timezone: string;
+  country: string;
 }
 
 const TIMEZONES = [
@@ -41,7 +43,7 @@ export default function EditCompanyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
-    name: '', currency: 'USD', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York',
+    name: '', currency: 'USD', industry: '', email: '', phone: '', address: '', timezone: 'America/New_York', country: '',
   });
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function EditCompanyPage() {
         phone:    c.phone ?? '',
         address:  c.address ?? '',
         timezone: c.timezone ?? 'Asia/Karachi',
+        country:  c.country ?? '',
       });
     }).catch(() => toast.error('Failed to load company')).finally(() => setLoading(false));
   }, [companyId]);
@@ -170,11 +173,20 @@ export default function EditCompanyPage() {
               />
             </div>
 
-            <div>
-              <label style={labelStyle}>Timezone</label>
-              <select value={form.timezone} onChange={set('timezone')} style={inputStyle}>
-                {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Country</label>
+                <select value={form.country} onChange={set('country')} style={inputStyle}>
+                  <option value="">— Select —</option>
+                  {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Timezone</label>
+                <select value={form.timezone} onChange={set('timezone')} style={inputStyle}>
+                  {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 

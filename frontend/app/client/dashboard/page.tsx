@@ -49,7 +49,7 @@ export default function ClientDashboardPage() {
   );
 
   const s   = data?.stats   || {};
-  const cur = data?.currency || 'USD';
+  const byCurrency: { currency: string; invoiced: number; paid: number; outstanding: number }[] = s.by_currency || [];
   const hasProjects = (data?.modules || []).includes('projects');
   const recentInvoices: any[] = data?.recent_invoices || [];
   const recentProjects: any[] = data?.recent_projects || [];
@@ -59,27 +59,44 @@ export default function ClientDashboardPage() {
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 4px' }}>Dashboard</h1>
       <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 24px' }}>Welcome to your client portal</p>
 
-      {/* ── Invoice summary stat cards ── */}
+      {/* ── Invoice summary stat cards — one row per currency, never blended ── */}
+      {byCurrency.map(cs => (
+        <div key={cs.currency} style={{ marginBottom: 14 }}>
+          {byCurrency.length > 1 && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>{cs.currency}</div>
+          )}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <StatCard
+              label="Total Invoiced"
+              value={fmt(cs.invoiced, cs.currency)}
+              color="#1e293b"
+              href="/client/invoices"
+            />
+            <StatCard
+              label="Amount Paid"
+              value={fmt(cs.paid, cs.currency)}
+              color="#059669"
+            />
+            <StatCard
+              label="Outstanding"
+              value={fmt(cs.outstanding, cs.currency)}
+              color={cs.outstanding > 0 ? '#ea580c' : '#059669'}
+              href={cs.outstanding > 0 ? '/client/invoices' : undefined}
+            />
+          </div>
+        </div>
+      ))}
+
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard
-          label="Total Invoiced"
-          value={fmt(s.total_invoiced || 0, cur)}
-          sub={`${s.total_invoices || 0} invoice${s.total_invoices !== 1 ? 's' : ''}`}
-          color="#1e293b"
-          href="/client/invoices"
-        />
-        <StatCard
-          label="Amount Paid"
-          value={fmt(s.total_paid || 0, cur)}
-          color="#059669"
-        />
-        <StatCard
-          label="Outstanding"
-          value={fmt(s.outstanding || 0, cur)}
-          sub={s.overdue_count > 0 ? `${s.overdue_count} overdue` : undefined}
-          color={s.outstanding > 0 ? '#ea580c' : '#059669'}
-          href={s.outstanding > 0 ? '/client/invoices' : undefined}
-        />
+        {s.overdue_count > 0 && (
+          <StatCard
+            label="Overdue"
+            value={s.overdue_count}
+            sub="invoices past due date"
+            color="#dc2626"
+            href="/client/invoices?status=overdue"
+          />
+        )}
         {s.pending_count > 0 && (
           <StatCard
             label="Awaiting Payment"
@@ -124,9 +141,9 @@ export default function ClientDashboardPage() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{fmt(inv.total_amount || 0, inv.currency || cur)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{fmt(inv.total_amount || 0, inv.currency || 'USD')}</div>
                       {balance > 0 && inv.status !== 'paid' && (
-                        <div style={{ fontSize: 11, color: '#ea580c', marginTop: 1 }}>Balance: {fmt(balance, inv.currency || cur)}</div>
+                        <div style={{ fontSize: 11, color: '#ea580c', marginTop: 1 }}>Balance: {fmt(balance, inv.currency || 'USD')}</div>
                       )}
                       <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, marginTop: 2, display: 'inline-block', ...st }}>{st.label}</span>
                     </div>

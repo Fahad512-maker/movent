@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 interface FormState {
   name: string;
@@ -16,6 +17,7 @@ interface FormState {
   phone: string;
   address: string;
   timezone: string;
+  country: string;
 }
 
 const TIMEZONES = [
@@ -46,6 +48,7 @@ export default function CreateCompanyPage() {
     phone:    '',
     address:  '',
     timezone: 'America/New_York',
+    country:  '',
   });
 
   const set = (k: keyof FormState) => (e: { target: { value: string } }) =>
@@ -159,11 +162,20 @@ export default function CreateCompanyPage() {
               />
             </div>
 
-            <div>
-              <label style={labelStyle}>Timezone</label>
-              <select value={form.timezone} onChange={set('timezone')} style={inputStyle}>
-                {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Country</label>
+                <select value={form.country} onChange={set('country')} style={inputStyle}>
+                  <option value="">— Select —</option>
+                  {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Timezone</label>
+                <select value={form.timezone} onChange={set('timezone')} style={inputStyle}>
+                  {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 

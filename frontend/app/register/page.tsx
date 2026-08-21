@@ -1160,7 +1160,7 @@ function RegisterContent() {
         phone: phone || undefined,
         package_id: pkgToUse.id,
         selected_modules: modulesToUse,
-        currency, start_type: 'paid', timezone: selectedCountry.timezone,
+        currency, start_type: 'paid', timezone: selectedCountry.timezone, country: countryCode,
         max_users: seat.value, max_companies: company.value,
       });
       if (res.success) {

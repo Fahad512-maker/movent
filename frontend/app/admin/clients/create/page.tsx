@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 interface Company { id: number; name: string; currency: string }
 
@@ -39,7 +40,7 @@ export default function CreateClientPage() {
 
   const [form, setForm] = useState({
     company_id: '', name: '', email: '', phone: '',
-    company_name: '', address: '', notes: '', status: 'active',
+    company_name: '', address: '', country: '', notes: '', status: 'active',
     enable_portal: false, portal_password: '',
   });
 
@@ -71,6 +72,7 @@ export default function CreateClientPage() {
         phone:         form.phone || null,
         company_name:  form.company_name || null,
         address:       form.address || null,
+        country:       form.country || null,
         notes:         form.notes || null,
         status:        form.status,
         enable_portal: form.enable_portal,
@@ -165,9 +167,18 @@ export default function CreateClientPage() {
                 <input value={form.company_name} onChange={e => setF('company_name', e.target.value)} placeholder="e.g. ABC Pvt Ltd" style={inp} />
               </div>
 
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Address</label>
-                <input value={form.address} onChange={e => setF('address', e.target.value)} placeholder="Street, City, Country" style={inp} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={lbl}>Address</label>
+                  <input value={form.address} onChange={e => setF('address', e.target.value)} placeholder="Street, City, Country" style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Country</label>
+                  <select value={form.country} onChange={e => setF('country', e.target.value)} style={inp}>
+                    <option value="">— Select —</option>
+                    {ALL_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div>

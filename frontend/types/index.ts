@@ -98,6 +98,7 @@ export interface Client {
   phone?: string;
   company_name?: string;
   address?: string;
+  country?: string;
   portal_access: boolean;
   status: 'active' | 'inactive' | 'blocked';
   notes?: string;

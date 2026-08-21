@@ -13,6 +13,7 @@ export interface RegisterData {
   currency: 'USD';
   start_type: 'trial' | 'paid';
   timezone: string;
+  country?: string;
   max_users?: number | null;
   max_companies?: number | null;
 }

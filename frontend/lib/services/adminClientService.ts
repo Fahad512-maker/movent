@@ -8,6 +8,7 @@ export interface ClientPayload {
   phone?: string | null;
   company_name?: string | null;
   address?: string | null;
+  country?: string | null;
   notes?: string | null;
   status?: 'active' | 'inactive' | 'blocked';
   enable_portal?: boolean;
