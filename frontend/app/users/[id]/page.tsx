@@ -104,7 +104,14 @@ export default function UserProfilePage() {
         <div style={card}>
           <h3 style={sectionTitle}>Details</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
-            <div><div style={fieldLabel}>Company</div><div style={fieldValue}>{user.company?.name ?? '—'}</div></div>
+            <div>
+              <div style={fieldLabel}>{assignments.length > 1 ? 'Companies' : 'Company'}</div>
+              <div style={fieldValue}>
+                {assignments.length > 0
+                  ? assignments.map(a => a.company_name + (a.status === 'suspended' ? ' (suspended)' : '')).join(', ')
+                  : (user.company?.name ?? '—')}
+              </div>
+            </div>
             <div><div style={fieldLabel}>Created By</div><div style={fieldValue}>{user.created_by?.name ?? 'Company Admin'}</div></div>
             <div><div style={fieldLabel}>Joined Date</div><div style={fieldValue}>{fmtDate(user.created_at)}</div></div>
             <div><div style={fieldLabel}>Last Login</div><div style={fieldValue}>{fmtDate(user.last_login_at)}</div></div>
