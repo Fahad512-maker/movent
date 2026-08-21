@@ -333,17 +333,9 @@ class ClientController extends Controller
     {
         $company = $this->admin()->companies()->findOrFail($id);
 
-        return ApiResponse::success(array_merge(
-            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country', 'is_active']),
-            // Tenant-level currency (company_admins.currency) is what's
-            // actually authoritative for invoices (Company::invoicingProfile()),
-            // not the legacy per-company column below — prefilling this edit
-            // form from that legacy column let a stale value sit there
-            // unnoticed and silently revert a later Settings → Company
-            // currency change the next time this form got saved for some
-            // unrelated edit (see updateCompany()).
-            ['currency' => $this->admin()->currency]
-        ));
+        return ApiResponse::success(
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country', 'currency', 'is_active'])
+        );
     }
 
     // =========================================================================
@@ -369,20 +361,14 @@ class ClientController extends Controller
 
         $company->update($data);
 
-        // The tenant-level currency (company_admins.currency) is what
-        // invoices actually key off (Company::invoicingProfile() — one
-        // Company Admin can own multiple companies, so invoicing uses one
-        // shared currency identity across all of them, same value the
-        // Settings → Company tab writes via
-        // Api\Admin\SettingsController::updateCompany()). Without this,
-        // changing currency here would update companies.currency but leave
-        // invoices unaffected.
-        $this->admin()->update(['currency' => $data['currency']]);
-
-        return ApiResponse::success(array_merge(
-            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country']),
-            ['currency' => $this->admin()->currency]
-        ), 'Company updated successfully');
+        // Currency is this company's own — Company::invoicingProfile() reads
+        // it straight off this row, not the admin's shared record, so an
+        // admin with a PKR company and a USD company can set each
+        // independently without one leaking into the other's invoices.
+        return ApiResponse::success(
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country', 'currency']),
+            'Company updated successfully'
+        );
     }
 
     // =========================================================================

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { adminLeadService, userLeadService } from '@/lib/services/adminLeadService';
 import { adminClientService, ClientCompany } from '@/lib/services/adminClientService';
-import { getAuthType, can } from '@/lib/auth';
+import { getAuthType, can, getActiveCompany } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -44,7 +44,13 @@ export default function NewLeadPage() {
     if (isAdmin) {
       adminClientService.companies().then(cs => {
         setCompanies(cs);
-        if (cs.length) setCompanyId(cs[0].id);
+        if (cs.length) {
+          // Whichever company is active (the CompanySelector dropdown) wins
+          // — otherwise this always defaulted to the alphabetically-first
+          // company regardless of which one the admin actually had selected.
+          const active = getActiveCompany();
+          setCompanyId(typeof active === 'number' && cs.some(c => c.id === active) ? active : cs[0].id);
+        }
       }).catch(() => {}).finally(() => setCompaniesLoading(false));
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

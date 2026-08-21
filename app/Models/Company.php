@@ -41,13 +41,18 @@ class Company extends Model
         return [
             'name'                  => $admin?->business_name         ?: $this->name,
             'logo_path'             => $admin?->logo_path              ?: $this->logo_path,
-            // The currency Company Admin configures in Settings (tenant-wide,
-            // company_admins.currency) is authoritative for every invoice this
-            // admin issues, regardless of which of their companies it's under
-            // — this company's own (legacy, pre-tenant-refactor) `currency`
-            // column is only ever a fallback for an admin who hasn't opened
-            // Settings yet.
-            'currency'              => $admin?->currency               ?: ($this->currency ?? 'USD'),
+            // Unlike every other field here, currency is deliberately NOT
+            // tenant-wide — one Company Admin can legitimately own multiple
+            // companies that each invoice in their own currency (e.g. a PKR
+            // company and a USD company), so this company's OWN `currency`
+            // column is authoritative. company_admins.currency is only a
+            // fallback for the rare row where the company's own column is
+            // somehow empty. (Was the other way around until the bug where
+            // editing any one company's currency silently leaked into every
+            // other company's new invoices — see Api\Admin\ClientController::
+            // showCompany()/updateCompany(), which used to read/write
+            // company_admins.currency here instead of the row's own.)
+            'currency'              => $this->currency ?: ($admin?->currency ?: 'USD'),
             'invoice_prefix'        => $admin?->invoice_prefix         ?: ($this->invoice_prefix ?? 'INV'),
             'invoice_tax_rate'      => $admin?->invoice_tax_rate       ?? ($this->invoice_tax_rate ?? 0),
             'invoice_payment_terms' => $admin?->invoice_payment_terms  ?? ($this->invoice_payment_terms ?? 30),

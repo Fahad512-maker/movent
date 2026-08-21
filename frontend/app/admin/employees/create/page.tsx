@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
 import { adminHrService, EmploymentType } from '@/lib/services/adminHrService';
 import { adminClientService, ClientCompany } from '@/lib/services/adminClientService';
+import { getActiveCompany } from '@/lib/auth';
 import { inp, lbl, card } from '@/components/admin/projects/shared';
 import toast from 'react-hot-toast';
 import SubmitButton from '@/components/ui/SubmitButton';
@@ -30,7 +31,13 @@ export default function CreateEmployeePage() {
   useEffect(() => {
     adminClientService.companies().then(cs => {
       setCompanies(cs);
-      if (cs.length) setCompanyId(cs[0].id);
+      if (cs.length) {
+        // Whichever company is active (the CompanySelector dropdown) wins
+        // — otherwise this always defaulted to the alphabetically-first
+        // company regardless of which one the admin actually had selected.
+        const active = getActiveCompany();
+        setCompanyId(typeof active === 'number' && cs.some(c => c.id === active) ? active : cs[0].id);
+      }
     }).catch(() => {});
   }, []);
 

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { adminClientService, ClientCompany, ClientPayload } from '@/lib/services/adminClientService';
 import { userClientService } from '@/lib/services/userClientService';
-import { getAuthType } from '@/lib/auth';
+import { getAuthType, getActiveCompany } from '@/lib/auth';
 import { HiArrowLeft } from 'react-icons/hi2';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -32,7 +32,14 @@ export default function NewClientPage() {
     if (isSubUser) return;
     adminClientService.companies().then(cs => {
       setCompanies(cs);
-      if (cs.length) setForm(f => ({ ...f, company_id: cs[0].id }));
+      if (!cs.length) return;
+      // Whichever company is active (the CompanySelector dropdown) wins,
+      // same priority as ClientController::index() uses server-side —
+      // otherwise this always defaulted to the alphabetically-first
+      // company regardless of which one the admin actually had selected.
+      const active = getActiveCompany();
+      const companyId = typeof active === 'number' && cs.some(c => c.id === active) ? active : cs[0].id;
+      setForm(f => ({ ...f, company_id: companyId }));
     }).catch(() => {});
   }, [isSubUser]);
 

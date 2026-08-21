@@ -196,11 +196,12 @@ class InvoiceController extends Controller
             'discount_amount' => $discount,
             'total_amount'    => $totals['total_amount'],
             'paid_amount'     => 0,
-            // The currency Company Admin configured in Settings is
-            // authoritative — never a bare 'USD' literal — so every invoice
-            // this admin issues, across any of their companies, lines up with
-            // what they actually set (see Company::invoicingProfile()).
-            'currency'        => $data['currency'] ?? $this->admin()->currency ?? 'USD',
+            // This SPECIFIC company's own currency — never the admin's
+            // other companies', never a bare 'USD' literal. An admin who
+            // owns e.g. a PKR company and a USD company must get each
+            // invoiced in its own currency (see Company::invoicingProfile(),
+            // where this is resolved the same way).
+            'currency'        => $data['currency'] ?? Company::find($data['company_id'])?->invoicingProfile()['currency'] ?? 'USD',
             'status'          => $sendNow ? 'sent' : 'draft',
             'sent_at'         => $sendNow ? now() : null,
             'due_date'        => $data['due_date']        ?? null,

@@ -9,7 +9,7 @@ import { adminLeadService, userLeadService, Lead } from '@/lib/services/adminLea
 import { adminProjectService, Project } from '@/lib/services/adminProjectService';
 import { userProjectService } from '@/lib/services/userProjectService';
 import { Admin, Client, User } from '@/types';
-import { getAuthType, getAuthUser, can } from '@/lib/auth';
+import { getAuthType, getAuthUser, can, getActiveCompany } from '@/lib/auth';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -68,7 +68,10 @@ function NewInvoiceForm() {
   // Company + settings
   const [companies, setCompanies]   = useState<ClientCompany[]>([]);
   const [companyId, setCompanyId]   = useState(0);
-  const [currency, setCurrency]     = useState('USD');
+  // The selected company's OWN currency — never a shared/admin-wide value,
+  // since one admin can own companies that each invoice in a different
+  // currency (see Company::invoicingProfile() on the backend, same fix).
+  const currency = companies.find(c => c.id === companyId)?.currency ?? 'USD';
   const [dueDate, setDueDate]       = useState('');
   const [taxRate, setTaxRate]       = useState(0);
   const [discount, setDiscount]     = useState(0);
@@ -141,19 +144,24 @@ function NewInvoiceForm() {
         setCompanies([c]);
         setCompanyId(c.id);
       }
-      // Company Admin's own Settings-configured currency — authoritative,
-      // unlike the legacy per-company `currency` above (see
-      // Company::invoicingProfile() on the backend).
-      if (user?.company?.admin?.currency) setCurrency(user.company.admin.currency);
     } else {
       const admin = getAuthUser() as Admin | null;
-      if (admin?.currency) setCurrency(admin.currency);
       const hasProjects = (admin?.modules ?? []).includes('projects') || (admin?.modules ?? []).includes('project_management');
       setProjectModuleAvailable(hasProjects);
       if (hasProjects && !leadId) setProjectMode('existing');
       adminClientService.companies().then(cs => {
         setCompanies(cs);
-        if (cs.length) setCompanyId(companyIdParam && cs.some(c => c.id === companyIdParam) ? companyIdParam : cs[0].id);
+        if (!cs.length) return;
+        // Same priority order as the CompanySelector's own init logic and
+        // Api\Admin\ClientController::index(): an explicit ?company_id= wins,
+        // then whichever company is active (the CompanySelector dropdown),
+        // then the first company as a last resort. Without this, creating
+        // an invoice straight from the sidebar (no query param) always
+        // defaulted to the alphabetically-first company regardless of which
+        // one was actually selected as active — including its currency.
+        const active = getActiveCompany();
+        const fallback = typeof active === 'number' && cs.some(c => c.id === active) ? active : cs[0].id;
+        setCompanyId(companyIdParam && cs.some(c => c.id === companyIdParam) ? companyIdParam : fallback);
       }).catch(() => {});
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -354,11 +362,10 @@ function NewInvoiceForm() {
       company_id:      companyId,
       lead_id:         leadId || undefined,
       // Not sent — `currency` here is just a read-only preview of the
-      // Company Admin's Settings-configured currency (see the comment where
-      // it's set above). Sending a value cached at login/page-load could go
-      // stale if currency was changed since; the backend always derives it
+      // selected company's own currency. The backend always derives it
       // fresh from Company::invoicingProfile() when omitted (see
-      // Api\Admin\InvoiceController::store()/Api\User\InvoiceController::store()).
+      // Api\Admin\InvoiceController::store()/Api\User\InvoiceController::store()),
+      // so there's no risk of sending a stale cached value.
       tax_rate:        taxRate,
       discount_amount: discount,
       notes:           notes || null,
