@@ -63,7 +63,7 @@ export default function UserProfilePage() {
 
   return (
     <DashboardLayout title="User Profile">
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <button onClick={() => router.push('/admin/users')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14 }}>
             <HiArrowLeft size={16} /> Back to Users

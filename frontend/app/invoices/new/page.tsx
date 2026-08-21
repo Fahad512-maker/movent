@@ -209,6 +209,20 @@ function NewInvoiceForm() {
     return () => { cancelled = true; };
   }, [companyId, isAdmin, projectModuleAvailable]);
 
+  // Existing-project picker only makes sense scoped to the selected client —
+  // otherwise every project in the company (including other clients') shows
+  // up as a pickable option for this invoice.
+  const visibleProjects = customerType === 'client' && clientId
+    ? projects.filter(p => p.client_id === clientId)
+    : projects;
+
+  // Selecting/changing the client can strand a previously-picked project
+  // that belongs to someone else — drop it so the picker doesn't silently
+  // keep a cross-client selection.
+  useEffect(() => {
+    if (projectId && !visibleProjects.some(p => p.id === projectId)) setProjectId(null);
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Pre-fill from a Lead (e.g. arriving via /invoices/new?lead_id=50 from a
   // won lead's detail page) — once. Doesn't wait on (or validate against)
   // the client list: lead.client_id is already company-scoped and
@@ -716,9 +730,13 @@ function NewInvoiceForm() {
                       <label style={lbl}>Select Project *</label>
                       {loadingProjects ? (
                         <div style={{ padding: '10px 0', fontSize: 13, color: '#94a3b8' }}>Loading projects…</div>
-                      ) : projects.length === 0 ? (
+                      ) : customerType === 'client' && !clientId ? (
+                        <div style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, color: '#64748b' }}>
+                          Select a client above to see their projects.
+                        </div>
+                      ) : visibleProjects.length === 0 ? (
                         <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, color: '#dc2626' }}>
-                          No projects found. <button type="button" onClick={() => setProjectMode('new')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 600, fontSize: 13, padding: 0 }}>Switch to New Project</button>
+                          {customerType === 'client' ? 'This client has no projects yet.' : 'No projects found.'} <button type="button" onClick={() => setProjectMode('new')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 600, fontSize: 13, padding: 0 }}>Switch to New Project</button>
                         </div>
                       ) : (
                         <select
@@ -727,13 +745,13 @@ function NewInvoiceForm() {
                           onChange={e => setProjectId(Number(e.target.value) || null)}
                         >
                           <option value="">Select a project…</option>
-                          {projects.map(p => (
+                          {visibleProjects.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
                       )}
                       {projectId && (() => {
-                        const sel = projects.find(p => p.id === projectId);
+                        const sel = visibleProjects.find(p => p.id === projectId);
                         if (!sel) return null;
                         return (
                           <div style={{ marginTop: 10, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12, color: '#166534' }}>
