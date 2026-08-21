@@ -4,10 +4,22 @@ import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import toast from 'react-hot-toast';
 import { useModuleGuard } from '@/hooks/useModuleGuard';
-import { adminProjectService, Project } from '@/lib/services/adminProjectService';
+import { adminProjectService, Project, TeamMember } from '@/lib/services/adminProjectService';
 import { TEAM_ROLE_LABEL } from '@/components/admin/projects/shared';
+import { ROLE_LABELS } from '@/lib/roleUtils';
 
 interface UserRow { userId: number; name: string; projects: { id: number; name: string; role: string }[] }
+
+// A team member's actual job (role_type, e.g. "Seller") is more useful here
+// than the generic 4-value project role_in_project — fall back to the
+// latter only if the user has no role_type set. Same pattern as
+// frontend/app/projects/team/page.tsx and frontend/app/admin/projects/[id]/
+// team/page.tsx — this page previously showed role_in_project raw, so a
+// Seller self-managing their own project (role_in_project defaults to
+// 'project_manager' — see Api\User\ProjectController::store()) showed as
+// "Project Manager" here instead of their real role, "Seller".
+const memberRoleLabel = (m: TeamMember): string =>
+  (m.user?.role_type && ROLE_LABELS[m.user.role_type]) || TEAM_ROLE_LABEL[m.role_in_project];
 
 export default function TeamOverviewPage() {
   useModuleGuard('projects');
@@ -26,7 +38,7 @@ export default function TeamOverviewPage() {
     (p.team_members ?? []).forEach(m => {
       if (!m.user) return;
       const row = byUser.get(m.user.id) ?? { userId: m.user.id, name: m.user.name, projects: [] };
-      row.projects.push({ id: p.id, name: p.name, role: m.role_in_project });
+      row.projects.push({ id: p.id, name: p.name, role: memberRoleLabel(m) });
       byUser.set(m.user.id, row);
     });
   });
@@ -62,7 +74,7 @@ export default function TeamOverviewPage() {
                       {r.projects.map(p => (
                         <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, maxWidth: 420 }}>
                           <Link href={`/admin/projects/${p.id}/team`} style={{ fontSize: 13, color: '#2563eb', textDecoration: 'none' }}>{p.name}</Link>
-                          <span style={{ fontSize: 12, color: '#94a3b8' }}>{TEAM_ROLE_LABEL[p.role] ?? p.role}</span>
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>{p.role}</span>
                         </div>
                       ))}
                     </div>

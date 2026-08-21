@@ -1142,6 +1142,24 @@ class ProjectController extends Controller
             ]);
         }
 
+        // The Seller's own cosmetic 'project_manager' row (see the comment
+        // on $existingPm above) is only ever a stand-in for "nobody's been
+        // assigned yet". Once a REAL Project Manager takes over, it must be
+        // removed too — otherwise the Seller keeps showing up as "Project
+        // Manager" on any Team/Resources view that reads role_in_project
+        // directly (frontend/app/admin/projects/team/page.tsx), even though
+        // they're no longer one and were never a genuine team member either.
+        if ($pm) {
+            $sellerCosmeticRow = $project->teamMembers()
+                ->where('role_in_project', 'project_manager')
+                ->where('user_id', $user->id)
+                ->first();
+            if ($sellerCosmeticRow) {
+                $sellerCosmeticRow->delete();
+                ProjectChatService::removeParticipantIfNoLongerEligible($project, $user->id);
+            }
+        }
+
         if ($pm) {
             $wasAlreadyOnTeam = $project->teamMembers()->where('user_id', $pm->id)->exists();
             ProjectTeamMember::updateOrCreate(
@@ -1272,6 +1290,26 @@ class ProjectController extends Controller
             }
         }
 
+        // Every OTHER actor (not Seller, not Lead Manager — e.g. a Project
+        // Manager, or any other role holding canAssignTeamResources) may
+        // still only add users whose job actually belongs on a project team
+        // — never an HR/Finance/Compliance/Invoice/Client-role_type user
+        // added by mistake or a direct API call. A Seller entry here has
+        // already cleared the "who can add a Seller" gate above. Previously
+        // this whitelist (frontend/app/projects/team/page.tsx's
+        // TEAM_ELIGIBLE_ROLES) was enforced client-side only — the API
+        // itself accepted any company user regardless of role_type.
+        if (!in_array($actor->role_type, ['seller', 'lead_manager'], true)) {
+            $eligibleRoles = ['project_manager', 'production', 'developer', 'designer', 'qa', 'team_member', 'seller'];
+            $disallowedIds = User::where('company_id', $actor->company_id)
+                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+                ->whereNotIn('role_type', $eligibleRoles)
+                ->pluck('id');
+            if ($disallowedIds->isNotEmpty()) {
+                return ApiResponse::error('This user\'s role isn\'t eligible for a project team.', 422);
+            }
+        }
+
         // A project may only ever have ONE Project Manager and ONE Seller on
         // its team — mirrors the frontend picker in
         // frontend/app/projects/team/page.tsx, which already drops a role
@@ -1371,6 +1409,16 @@ class ProjectController extends Controller
             $project->logActivity('team_member_removed', "{$this->user()->name} removed {$removedUserName} from the project team.", $this->user()->name, [
                 'user_id' => $removedUserId,
             ]);
+
+            // A removed PM/Seller must not leave a dangling project_manager_id/
+            // seller_id reference — otherwise assignTeam()'s one-PM/one-Seller
+            // cap (which only counts CURRENT team rows) stops seeing them,
+            // silently letting a second PM/Seller be added while the stale FK
+            // still points at the one who's no longer on the team.
+            $fkUpdates = [];
+            if ((int) $project->project_manager_id === (int) $removedUserId) $fkUpdates['project_manager_id'] = null;
+            if ((int) $project->seller_id === (int) $removedUserId) $fkUpdates['seller_id'] = null;
+            if ($fkUpdates) $project->update($fkUpdates);
         }
 
         return ApiResponse::success(null, 'Team member removed');

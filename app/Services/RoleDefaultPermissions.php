@@ -120,6 +120,12 @@ class RoleDefaultPermissions
                 'canDeleteProjectAttachments', 'canDeleteTaskAttachments', 'canAddSellerToProjectChat',
                 'canViewAllCompanyProjects', 'canViewClosedProjects', 'canManageProjectChatParticipants',
                 'canDeleteAnyProjectChatMessage', 'canOverrideProjectCreationBeforePayment',
+                // Team/Resources — same oversight the 2026-08-14 Lead Manager
+                // backfill fixed: QA already gets canAssignProjectSeller and
+                // canViewAllCompanyProjects above (more sensitive than
+                // Team/Resources), so leaving Team/Resources itself out was
+                // an inconsistent omission, not a deliberate restriction.
+                'canViewTeamResources', 'canAssignTeamResources',
             ],
         ],
         // pm_view + pm_manage_tasks + pm_manage_files + pm_manage_comments + pm_manage_chat (no Production, no Deliverables/QA)

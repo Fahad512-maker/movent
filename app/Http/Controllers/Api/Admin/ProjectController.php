@@ -749,6 +749,42 @@ class ProjectController extends Controller
             'members.*.user_id.exists' => 'Selected user does not belong to this company.',
         ]);
 
+        // This roster is for the general project team — a Seller is
+        // assigned to a project through its own separate mechanism
+        // (project.seller_id / ProjectSellerAssignmentService), never as a
+        // team_members row, matching this endpoint's own frontend
+        // (frontend/app/admin/projects/[id]/team/page.tsx excludes Seller
+        // from its own addable-users list). Previously this endpoint had no
+        // role_type restriction at all — any active company member,
+        // including a Seller, could be added with any role_in_project.
+        $eligibleRoles = ['project_manager', 'production', 'developer', 'designer', 'qa', 'team_member'];
+        $disallowedIds = User::whereIn('id', collect($validated['members'])->pluck('user_id'))
+            ->whereNotIn('role_type', $eligibleRoles)
+            ->pluck('id');
+        if ($disallowedIds->isNotEmpty()) {
+            return ApiResponse::error("This user's role isn't eligible for a project team.", 422);
+        }
+
+        // A project may only ever have ONE Project Manager and ONE Seller on
+        // its team — mirrors the same cap in
+        // Api\User\ProjectController::assignTeam(), which was previously
+        // enforced only on the Seller/staff-facing guard, not here. Checked
+        // against the union of already-existing members and this request's
+        // payload, so re-submitting the SAME existing PM (e.g. a role change
+        // save) never trips it, but adding a second, different one does.
+        $allUserIds = $project->teamMembers()->pluck('user_id')
+            ->merge(collect($validated['members'])->pluck('user_id'))
+            ->unique();
+        foreach (['project_manager' => 'Project Manager', 'seller' => 'Seller'] as $roleType => $label) {
+            $count = User::where('company_id', $project->company_id)
+                ->where('role_type', $roleType)
+                ->whereIn('id', $allUserIds)
+                ->count();
+            if ($count > 1) {
+                return ApiResponse::error("A project can only have one {$label} on its team.", 422);
+            }
+        }
+
         foreach ($validated['members'] as $member) {
             $existingMember = ProjectTeamMember::where('project_id', $project->id)
                 ->where('user_id', $member['user_id'])
@@ -882,6 +918,16 @@ class ProjectController extends Controller
         // access — but only if they're not still tied to the project some
         // other way (e.g. still assigned to an open task).
         ProjectChatService::removeParticipantIfNoLongerEligible($project, $removedUserId);
+
+        // A removed PM/Seller must not leave a dangling project_manager_id/
+        // seller_id reference — otherwise assignTeam()'s one-PM/one-Seller
+        // cap (which only counts CURRENT team rows) stops seeing them,
+        // silently letting a second PM/Seller be added while the stale FK
+        // still points at the one who's no longer on the team.
+        $fkUpdates = [];
+        if ((int) $project->project_manager_id === (int) $removedUserId) $fkUpdates['project_manager_id'] = null;
+        if ((int) $project->seller_id === (int) $removedUserId) $fkUpdates['seller_id'] = null;
+        if ($fkUpdates) $project->update($fkUpdates);
 
         SystemAuditLog::create([
             'company_id'  => $project->company_id,

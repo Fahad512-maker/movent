@@ -92,7 +92,26 @@ function UserTeamPageInner() {
     if (canAssign) userProjectService.team.companyUsers().then(setUsers).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selected = projects.find(p => String(p.id) === projectId) ?? null;
+  // A Seller adding team members may only ever hand the project to a Project
+  // Manager or bring in another Seller — never a Production/Developer/
+  // Designer/QA/Team Member directly, that's PM/Admin territory. Mirrors the
+  // server-side gate in Api\User\ProjectController::assignTeam(). Declared
+  // early (also used by the project picker filter below).
+  const isSellerActor = me?.role_type === 'seller';
+
+  // A Seller must only see, in this Team Resources project picker, projects
+  // they're CURRENTLY actually part of (as PM or team member) — not every
+  // project they've ever originated/created. Once a Seller hands a project
+  // off to a real Project Manager and is removed from its team, it moves
+  // entirely to that PM's side and should stop cluttering the Seller's own
+  // list here (the backend's visibleProjects() still returns it broadly for
+  // other purposes, like Sales handoff history — this narrows just this
+  // page's picker for a Seller specifically).
+  const pickerProjects = isSellerActor && me
+    ? projects.filter(p => p.project_manager_id === me.id || (p.team_members ?? []).some(m => m.user_id === me.id))
+    : projects;
+
+  const selected = pickerProjects.find(p => String(p.id) === projectId) ?? null;
   const members = selected?.team_members ?? [];
   // companyUsers() is shared with the Support Ticket staff-assignment picker
   // (frontend/app/support/[id]/page.tsx), which genuinely needs every role —
@@ -106,11 +125,6 @@ function UserTeamPageInner() {
   // literal PM only; every other caller, including a Seller who isn't this
   // project's PM, would just get a 403 back).
   const isLiteralPm = !!selected && !!me && selected.project_manager_id === me.id;
-  // A Seller adding team members may only ever hand the project to a Project
-  // Manager or bring in another Seller — never a Production/Developer/
-  // Designer/QA/Team Member directly, that's PM/Admin territory. Mirrors the
-  // server-side gate in Api\User\ProjectController::assignTeam().
-  const isSellerActor = me?.role_type === 'seller';
   // A Lead Manager may only ever hand the project to a Project Manager —
   // never a Seller either (unlike the Seller-actor rule above), and never
   // Production/Developer/Designer/QA/Team Member. Staffing the rest of the
@@ -151,6 +165,7 @@ function UserTeamPageInner() {
 
   const removeMember = async (memberId: number) => {
     if (!projectId) return;
+    if (!confirm('Remove this team member from the project?')) return;
     try {
       await userProjectService.team.remove(Number(projectId), memberId);
       toast.success('Team member removed');
@@ -169,7 +184,7 @@ function UserTeamPageInner() {
           <label style={lbl}>Select Project</label>
           <select value={projectId} onChange={e => setProjectId(e.target.value)} style={{ ...inp, maxWidth: 320 }}>
             <option value="">Choose a project…</option>
-            {projects.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+            {pickerProjects.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
           </select>
         </div>
 
@@ -269,7 +284,7 @@ function UserTeamPageInner() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['Member', canAssign ? 'Actions' : ''].map(h => (
+                  {['Member', 'Role', canAssign ? 'Actions' : ''].map(h => (
                     <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
@@ -279,7 +294,9 @@ function UserTeamPageInner() {
                   <tr key={m.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                     <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
                       {m.user?.name ?? '—'}
-                      <span style={{ fontWeight: 400, color: '#94a3b8' }}> ({memberRoleLabel(m)})</span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748b' }}>
+                      {memberRoleLabel(m)}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       {canAssign && (
