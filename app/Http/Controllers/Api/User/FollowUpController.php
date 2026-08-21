@@ -39,8 +39,14 @@ class FollowUpController extends Controller
         $filter    = $request->get('filter', 'today'); // today | upcoming | overdue | all
         $today     = now()->toDateString();
 
+        // Deliberately not status-scoped to 'pending' — a follow-up marked
+        // completed/missed must keep showing here (with its real status,
+        // handled by the frontend) for whichever date bucket it was
+        // scheduled in, the same as it still shows on the Lead detail page's
+        // own follow-up list, which is never status-filtered either. Before
+        // this, completing/missing a follow-up just made it vanish from
+        // this queue entirely.
         $q = FollowUp::where('company_id', $companyId)
-            ->where('status', 'pending')
             ->with(['lead:id,name,status', 'assignedTo:id,name'])
             ->orderBy('scheduled_at');
 

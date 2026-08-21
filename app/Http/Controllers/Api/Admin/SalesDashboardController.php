@@ -28,7 +28,7 @@ class SalesDashboardController extends Controller
         $month      = $request->get('month', now()->month);
         $year       = $request->get('year',  now()->year);
 
-        $base = Lead::whereIn('company_id', $companyIds);
+        $base = Lead::whereIn('company_id', $companyIds)->whereYear('created_at', $year);
 
         // ── Summary counts ──────────────────────────────────────────────────
         $total     = (clone $base)->count();
@@ -59,7 +59,7 @@ class SalesDashboardController extends Controller
         for ($m = 1; $m <= 12; $m++) {
             $months[$m] = ['month' => $m, 'total' => 0, 'won' => 0, 'lost' => 0, 'value' => 0];
         }
-        (clone $base)->whereYear('created_at', $year)
+        (clone $base)
             ->get(['status', 'estimated_value', 'created_at'])
             ->each(function ($l) use (&$months) {
                 $m = (int) date('n', strtotime($l->created_at));

@@ -171,6 +171,7 @@ class ClientController extends Controller
             'phone'        => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'company_name' => ['nullable', 'string', 'max:255'],
             'address'      => ['nullable', 'string', 'max:500'],
+            'country'      => ['nullable', 'string', 'max:5'],
             'notes'        => ['nullable', 'string'],
             'status'       => ['nullable', 'in:active,inactive,blocked'],
         ]);
@@ -211,6 +212,7 @@ class ClientController extends Controller
             'phone'        => ['nullable', 'string', 'max:50', new ValidPhoneNumber],
             'company_name' => ['nullable', 'string', 'max:255'],
             'address'      => ['nullable', 'string', 'max:500'],
+            'country'      => ['nullable', 'string', 'max:5'],
             'notes'        => ['nullable', 'string'],
             'status'       => ['sometimes', 'in:active,inactive,blocked'],
         ]);

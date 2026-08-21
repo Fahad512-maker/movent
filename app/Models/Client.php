@@ -13,7 +13,7 @@ class Client extends Model
 
     protected $fillable = [
         'company_id', 'lead_id', 'account_manager', 'user_id', 'name',
-        'email', 'phone', 'company_name', 'address', 'portal_access', 'status', 'notes',
+        'email', 'phone', 'company_name', 'address', 'country', 'portal_access', 'status', 'notes',
     ];
 
     protected $casts = ['portal_access' => 'boolean'];

@@ -130,6 +130,7 @@ class PublicController extends Controller
             'currency'        => ['required', 'in:USD'],
             'start_type'      => ['required', 'in:trial,paid'],
             'timezone'        => ['nullable', 'string', 'max:100'],
+            'country'         => ['nullable', 'string', 'max:5'],
             'max_users'       => ['nullable', 'integer', 'min:1'],
             'max_companies'   => ['nullable', 'integer', 'min:1'],
         ]);
@@ -214,6 +215,7 @@ class PublicController extends Controller
             // frontend's timezone selector somehow didn't send one.
             'timezone'       => $validated['timezone'] ?? 'America/New_York',
             'currency'       => $validated['currency'],
+            'country'        => $validated['country'] ?? null,
             'storage_folder' => 'companies/0/', // temp, updated below
             'is_active'      => true,
         ]);

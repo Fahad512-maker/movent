@@ -676,6 +676,18 @@ class ProjectController extends Controller
         $existingCurrency = $project->invoices()->oldest('created_at')->value('currency')
             ?? $project->company?->invoicingProfile()['currency'] ?? null;
 
+        // The frontend never sends a conflicting value (it reads/sends this
+        // same $existingCurrency back), but reject rather than silently
+        // discard it for any other caller — same "explicit error over
+        // silent correction" rule as the payment-currency mismatch guard in
+        // InvoicePaymentService::applyToInvoice().
+        if ($existingCurrency && !empty($data['currency']) && strcasecmp($data['currency'], $existingCurrency) !== 0) {
+            return ApiResponse::error(
+                "This project's invoices are already in {$existingCurrency} — a new invoice can't be created in {$data['currency']} instead.",
+                422
+            );
+        }
+
         $invoice = Invoice::create([
             'company_id'      => $project->company_id,
             'client_id'       => $project->client_id,

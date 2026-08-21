@@ -216,6 +216,20 @@ class UserController extends Controller
             ->values()
             ->toArray();
 
+        // Fully-unassigned users (created with zero company_assignments —
+        // see store()'s $defaultCompId fallback) have no CompanyUserAssignment
+        // row at all, so they'd never match the query above no matter which
+        // company is active — permanently invisible, with no way for the
+        // admin to ever find them to assign a company. Always surfaced
+        // regardless of the active-company filter since they aren't
+        // structurally tied to any one company yet.
+        $unassignedUserIds = User::whereIn('company_id', $orgCompanyIds)
+            ->whereDoesntHave('companyAssignments')
+            ->pluck('id')
+            ->toArray();
+
+        $userIds = array_values(array_unique(array_merge($userIds, $unassignedUserIds)));
+
         $query = User::with([
                 // Scoped to the admin's own companies only — a user who also
                 // belongs to a company outside this admin's org must never

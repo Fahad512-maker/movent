@@ -57,12 +57,22 @@ class InvoicePaymentService
      */
     public static function applyToInvoice(Invoice $invoice, Payment $payment): void
     {
+        // A payment recorded without its own currency captured (e.g. by a
+        // path that predates that column being populated) is assumed to be
+        // in the invoice's own currency, same as every current
+        // payment-creation path already assumes — backfilled here rather
+        // than left null, so the mismatch check below is never skipped.
+        if (!$payment->currency) {
+            $payment->currency = $invoice->currency;
+            $payment->save();
+        }
+
         // Payment.amount/currency must always be in the invoice's own
         // currency (converted_amount/converted_currency are separate audit
         // fields for whatever was actually sent to the gateway) — reject
         // rather than silently corrupt paid_amount/status against the wrong
         // currency's number.
-        if ($payment->currency && $invoice->currency && strcasecmp($payment->currency, $invoice->currency) !== 0) {
+        if ($invoice->currency && strcasecmp($payment->currency, $invoice->currency) !== 0) {
             Log::error('Refusing to apply payment with mismatched currency to invoice', [
                 'invoice_id' => $invoice->id, 'payment_id' => $payment->id,
                 'invoice_currency' => $invoice->currency, 'payment_currency' => $payment->currency,

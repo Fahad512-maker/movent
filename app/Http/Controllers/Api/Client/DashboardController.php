@@ -45,9 +45,20 @@ class DashboardController extends Controller
             ->get(['id', 'invoice_number', 'total_amount', 'paid_amount',
                    'currency', 'status', 'due_date', 'created_at']);
 
-        $totalInvoiced = (float) $invoices->sum('total_amount');
-        $totalPaid     = (float) $invoices->sum('paid_amount');
-        $outstanding   = $totalInvoiced - $totalPaid;
+        // Grouped by currency, not blended — a client can have invoices in
+        // more than one currency (e.g. after the company switched its
+        // Settings currency), and summing raw amounts across currencies as
+        // one number/one label is meaningless.
+        $byCurrency = $invoices->groupBy('currency')->map(function ($group, $currency) {
+            $invoiced = (float) $group->sum('total_amount');
+            $paid     = (float) $group->sum('paid_amount');
+            return [
+                'currency'    => $currency,
+                'invoiced'    => $invoiced,
+                'paid'        => $paid,
+                'outstanding' => round($invoiced - $paid, 2),
+            ];
+        })->values();
         $overdueCount  = $invoices->where('status', 'overdue')->count();
         $pendingCount  = $invoices->whereIn('status', ['sent', 'overdue', 'partially_paid'])->count();
 
@@ -78,9 +89,7 @@ class DashboardController extends Controller
         return ApiResponse::success([
             'stats' => [
                 'total_invoices'  => $invoices->count(),
-                'total_invoiced'  => $totalInvoiced,
-                'total_paid'      => $totalPaid,
-                'outstanding'     => $outstanding,
+                'by_currency'     => $byCurrency,
                 'overdue_count'   => $overdueCount,
                 'pending_count'   => $pendingCount,
                 'active_projects' => $activeProjects,
@@ -89,7 +98,6 @@ class DashboardController extends Controller
             'recent_invoices' => $recentInvoices,
             'recent_projects' => $recentProjects,
             'modules'         => $companyModules,
-            'currency'        => $primaryClient->company?->currency ?? 'USD',
         ]);
     }
 }

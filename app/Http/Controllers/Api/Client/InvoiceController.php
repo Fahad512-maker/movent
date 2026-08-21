@@ -209,6 +209,12 @@ class InvoiceController extends Controller
             'invoice_id'     => $invoice->id,
             'recorded_by'    => $request->user()->id,
             'amount'         => $amount,
+            // Always the invoice's own currency — this claim's amount is
+            // computed straight from the invoice's own outstanding balance,
+            // never a separately-entered figure. Stamping it (not leaving it
+            // null) is what lets reporting/aggregation code group payments
+            // by currency correctly instead of assuming one.
+            'currency'       => $invoice->currency,
             'method'         => $dbMethod,
             'gateway'        => $gateway,
             'gateway_ref'    => $request->gateway_ref,
@@ -271,6 +277,7 @@ class InvoiceController extends Controller
                 'invoice_id'          => $invoice->id,
                 'recorded_by'         => $request->user()->id,
                 'amount'              => $amount,
+                'currency'            => $invoice->currency,
                 'method'              => 'gateway',
                 'gateway'             => $gateway,
                 'company_gateway_id'  => $gatewayRow->id,

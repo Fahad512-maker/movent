@@ -10,7 +10,7 @@ class Company extends Model
 {
     protected $fillable = [
         'admin_id', 'name', 'industry', 'email', 'phone', 'address',
-        'timezone', 'currency', 'logo_path', 'storage_folder', 'is_active',
+        'timezone', 'currency', 'country', 'logo_path', 'storage_folder', 'is_active',
         'invoice_prefix', 'invoice_tax_rate', 'invoice_payment_terms', 'invoice_notes',
         'bank_name', 'bank_account_name', 'bank_account_number', 'bank_iban', 'bank_swift',
     ];

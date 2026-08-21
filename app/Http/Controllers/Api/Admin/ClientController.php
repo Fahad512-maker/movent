@@ -282,6 +282,7 @@ class ClientController extends Controller
             'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'address'  => 'nullable|string|max:500',
             'timezone' => 'nullable|string|max:100',
+            'country'  => 'nullable|string|max:5',
         ]);
 
         $data['name'] = CompanyName::normalize($data['name']);
@@ -296,6 +297,7 @@ class ClientController extends Controller
             'phone'          => $data['phone'] ?? null,
             'address'        => $data['address'] ?? null,
             'timezone'       => $data['timezone'] ?? 'Asia/Karachi',
+            'country'        => $data['country'] ?? null,
             'storage_folder' => 'companies/0/',
             'is_active'      => true,
         ]);
@@ -332,7 +334,7 @@ class ClientController extends Controller
         $company = $this->admin()->companies()->findOrFail($id);
 
         return ApiResponse::success(array_merge(
-            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'is_active']),
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country', 'is_active']),
             // Tenant-level currency (company_admins.currency) is what's
             // actually authoritative for invoices (Company::invoicingProfile()),
             // not the legacy per-company column below — prefilling this edit
@@ -359,6 +361,7 @@ class ClientController extends Controller
             'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'address'  => 'nullable|string|max:500',
             'timezone' => 'nullable|string|max:100',
+            'country'  => 'nullable|string|max:5',
         ]);
 
         $data['name'] = CompanyName::normalize($data['name']);
@@ -377,7 +380,7 @@ class ClientController extends Controller
         $this->admin()->update(['currency' => $data['currency']]);
 
         return ApiResponse::success(array_merge(
-            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone']),
+            $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country']),
             ['currency' => $this->admin()->currency]
         ), 'Company updated successfully');
     }
@@ -505,6 +508,7 @@ class ClientController extends Controller
             'phone'           => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name'    => 'nullable|string|max:150',
             'address'         => 'nullable|string|max:500',
+            'country'         => 'nullable|string|max:5',
             'notes'           => 'nullable|string|max:1000',
             'status'          => 'nullable|in:active,inactive,blocked',
             'enable_portal'   => 'nullable|boolean',
@@ -558,6 +562,7 @@ class ClientController extends Controller
             'phone'         => $data['phone'] ?? null,
             'company_name'  => $data['company_name'] ?? null,
             'address'       => $data['address'] ?? null,
+            'country'       => $data['country'] ?? null,
             'notes'         => $data['notes'] ?? null,
             'status'        => $data['status'] ?? 'active',
             'portal_access' => false,
@@ -602,6 +607,7 @@ class ClientController extends Controller
             'phone'        => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
             'company_name' => 'nullable|string|max:150',
             'address'      => 'nullable|string|max:500',
+            'country'      => 'nullable|string|max:5',
             'notes'        => 'nullable|string|max:1000',
             'status'       => 'nullable|in:active,inactive,blocked',
         ]);

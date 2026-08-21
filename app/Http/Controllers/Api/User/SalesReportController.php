@@ -83,11 +83,12 @@ class SalesReportController extends Controller
         }
 
         $year = (int) ($request->year ?? now()->year);
+        $base = (clone $this->visibleLeads())->whereYear('created_at', $year);
 
         $months = [];
         for ($m = 1; $m <= 12; $m++) $months[$m] = ['month' => $m, 'total' => 0, 'won' => 0, 'lost' => 0];
 
-        (clone $this->visibleLeads())->whereYear('created_at', $year)
+        (clone $base)
             ->get(['status', 'created_at'])
             ->each(function ($l) use (&$months) {
                 $m = (int) date('n', strtotime($l->created_at));
@@ -96,8 +97,8 @@ class SalesReportController extends Controller
                 if ($l->status === 'lost') $months[$m]['lost']++;
             });
 
-        $total = (clone $this->visibleLeads())->count();
-        $won   = (clone $this->visibleLeads())->where('status', 'won')->count();
+        $total = (clone $base)->count();
+        $won   = (clone $base)->where('status', 'won')->count();
 
         return ApiResponse::success([
             'monthly'          => array_values($months),

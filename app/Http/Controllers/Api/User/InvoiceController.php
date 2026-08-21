@@ -71,62 +71,79 @@ class InvoiceController extends Controller
         $year      = (int) ($request->year ?? now()->year);
 
         $base = Invoice::where('company_id', $companyId)
-                       ->where('created_by', $this->user()->id);
+                       ->where('created_by', $this->user()->id)
+                       ->whereYear('created_at', $year);
 
-        $all = (clone $base)->get(['status', 'total_amount', 'paid_amount', 'due_date']);
+        $all = (clone $base)->get(['status', 'total_amount', 'paid_amount', 'due_date', 'currency']);
 
         $summary = [
-            'total_invoiced'    => $all->sum('total_amount'),
-            'total_paid'        => $all->sum('paid_amount'),
-            'total_outstanding' => $all->sum(fn($i) => max(0, $i->total_amount - $i->paid_amount)),
-            'total_count'       => $all->count(),
-            'paid_count'        => $all->where('status', 'paid')->count(),
-            'unpaid_count'      => $all->whereIn('status', ['draft', 'sent', 'partially_paid'])->count(),
-            'overdue_count'     => $all->where('status', 'overdue')->count(),
-            'cancelled_count'   => $all->where('status', 'cancelled')->count(),
+            'total_count'      => $all->count(),
+            'paid_count'       => $all->where('status', 'paid')->count(),
+            'unpaid_count'     => $all->whereIn('status', ['draft', 'sent', 'partially_paid'])->count(),
+            'overdue_count'    => $all->where('status', 'overdue')->count(),
+            'cancelled_count'  => $all->where('status', 'cancelled')->count(),
+            'by_currency'      => $all->groupBy('currency')->map(fn($g, $currency) => [
+                'currency'          => $currency,
+                'total_invoiced'    => (float) $g->sum('total_amount'),
+                'total_paid'        => (float) $g->sum('paid_amount'),
+                'total_outstanding' => (float) $g->sum(fn($i) => max(0, $i->total_amount - $i->paid_amount)),
+            ])->values(),
         ];
 
         $byStatus = $all->groupBy('status')->map(fn($g) => [
-            'count'  => $g->count(),
-            'amount' => $g->sum('total_amount'),
+            'count'       => $g->count(),
+            'by_currency' => $g->groupBy('currency')->map(fn($cg, $currency) => [
+                'currency' => $currency,
+                'amount'   => (float) $cg->sum('total_amount'),
+            ])->values(),
         ])->toArray();
 
         $monthly = [];
-        for ($m = 1; $m <= 12; $m++) $monthly[$m] = ['invoiced' => 0, 'paid' => 0, 'count' => 0];
-        (clone $base)->whereYear('created_at', $year)->get(['total_amount', 'paid_amount', 'created_at'])
+        for ($m = 1; $m <= 12; $m++) $monthly[$m] = [];
+        (clone $base)->get(['total_amount', 'paid_amount', 'created_at', 'currency'])
             ->each(function ($inv) use (&$monthly) {
-                $m = (int) date('n', strtotime($inv->created_at));
-                $monthly[$m]['invoiced'] += $inv->total_amount;
-                $monthly[$m]['paid']     += $inv->paid_amount;
-                $monthly[$m]['count']++;
+                $m   = (int) date('n', strtotime($inv->created_at));
+                $cur = $inv->currency;
+                $monthly[$m][$cur] ??= ['currency' => $cur, 'invoiced' => 0, 'paid' => 0, 'count' => 0];
+                $monthly[$m][$cur]['invoiced'] += $inv->total_amount;
+                $monthly[$m][$cur]['paid']     += $inv->paid_amount;
+                $monthly[$m][$cur]['count']++;
             });
         $monthlyArr = array_values(array_map(
-            fn($m, $d) => array_merge(['month' => $m], $d),
+            fn($m, $d) => ['month' => $m, 'by_currency' => array_values($d)],
             array_keys($monthly), $monthly
         ));
 
+        // Ranked by invoice count, not amount — a client's invoices can span
+        // more than one currency, and there's no meaningful single "total"
+        // to sort by without blending units.
         $topClients = (clone $base)->with('client:id,name,company_name')
             ->whereNotNull('client_id')
-            ->get(['client_id', 'total_amount', 'paid_amount', 'status'])
+            ->get(['client_id', 'total_amount', 'paid_amount', 'status', 'currency'])
             ->groupBy('client_id')
             ->map(fn($g) => [
                 'client_id'   => $g->first()->client_id,
                 'name'        => $g->first()->client?->name ?? 'Unknown',
                 'company'     => $g->first()->client?->company_name,
-                'total'       => $g->sum('total_amount'),
-                'paid'        => $g->sum('paid_amount'),
-                'outstanding' => $g->sum(fn($i) => max(0, $i->total_amount - $i->paid_amount)),
                 'count'       => $g->count(),
+                'by_currency' => $g->groupBy('currency')->map(fn($cg, $currency) => [
+                    'currency'    => $currency,
+                    'total'       => (float) $cg->sum('total_amount'),
+                    'paid'        => (float) $cg->sum('paid_amount'),
+                    'outstanding' => (float) $cg->sum(fn($i) => max(0, $i->total_amount - $i->paid_amount)),
+                ])->values(),
             ])
-            ->sortByDesc('total')->values()->take(10);
+            ->sortByDesc('count')->values()->take(10);
 
         $recentPayments = Payment::whereHas('invoice', fn($q) => $q->where('company_id', $companyId)->where('created_by', $this->user()->id))
-            ->with('invoice:id,invoice_number,client_id', 'invoice.client:id,name')
+            ->whereYear('payment_date', $year)
+            ->with('invoice:id,invoice_number,client_id,currency', 'invoice.client:id,name')
             ->latest()->limit(10)
-            ->get(['id', 'invoice_id', 'amount', 'method', 'payment_date'])
+            ->get(['id', 'invoice_id', 'amount', 'currency', 'method', 'payment_date'])
             ->map(fn($p) => [
                 'id'             => $p->id,
                 'amount'         => $p->amount,
+                'currency'       => $p->currency ?? $p->invoice?->currency,
                 'method'         => $p->method,
                 'payment_date'   => $p->payment_date,
                 'invoice_number' => $p->invoice?->invoice_number,

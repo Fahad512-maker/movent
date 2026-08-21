@@ -114,12 +114,23 @@ class PaymentController extends Controller
 
         $payments = $query->get();
 
+        // Grouped by currency, not blended — this company can have payments
+        // in more than one currency (e.g. after a Settings currency change),
+        // and summing raw amounts across currencies as one number is
+        // meaningless. 'currency' falls back to the invoice's own currency
+        // for any payment recorded before that column existed on `payments`.
+        $byCurrency = $payments->groupBy(fn($p) => $p->currency ?? $p->invoice?->currency ?? 'USD')
+            ->map(fn($g, $currency) => [
+                'currency'  => $currency,
+                'total'     => (float) $g->sum('amount'),
+                'count'     => $g->count(),
+                'by_method' => $g->groupBy('method')->map(fn($m) => (float) $m->sum('amount'))->toArray(),
+            ])
+            ->values();
+
         $summary = [
-            'total'      => (float) $payments->sum('amount'),
-            'count'      => $payments->count(),
-            'by_method'  => $payments->groupBy('method')
-                ->map(fn($g) => (float) $g->sum('amount'))
-                ->toArray(),
+            'count'       => $payments->count(),
+            'by_currency' => $byCurrency,
         ];
 
         return ApiResponse::success([
@@ -155,6 +166,13 @@ class PaymentController extends Controller
             'invoice_id'     => $invoice->id,
             'receipt_number' => $receiptNumber,
             'amount'         => $data['amount'],
+            // Always the invoice's own currency — this form's amount is
+            // already validated against the invoice's outstanding balance in
+            // that same currency (see $outstanding above), so there's no
+            // separate currency to capture here. Stamping it explicitly (not
+            // leaving it null) is what lets reporting/aggregation code group
+            // payments by currency correctly instead of assuming one.
+            'currency'       => $invoice->currency,
             'method'         => $data['method']       ?? null,
             'payment_date'   => $data['payment_date'] ?? now()->toDateString(),
             'notes'          => $data['notes']        ?? null,

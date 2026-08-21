@@ -57,22 +57,30 @@ class ReportController extends Controller
             ->orderBy('created_at')
             ->get(['id', 'invoice_number', 'total_amount', 'paid_amount', 'currency', 'status', 'created_at', 'due_date']);
 
-        $summary = [
-            'total_invoiced' => $invoices->sum('total_amount'),
-            'total_paid'     => $invoices->where('status', 'paid')->sum('total_amount'),
-            'total_pending'  => $invoices->whereIn('status', ['sent', 'payment_pending'])->sum('total_amount'),
-            'total_overdue'  => $invoices->where('status', 'overdue')->sum('total_amount'),
-        ];
+        // Grouped by currency, not blended — see Client\DashboardController's
+        // stats for the same reasoning (a client can have invoices in more
+        // than one currency; summing raw amounts across currencies as one
+        // number is meaningless).
+        $summary = $invoices->groupBy('currency')->map(fn($group, $currency) => [
+            'currency'       => $currency,
+            'total_invoiced' => (float) $group->sum('total_amount'),
+            'total_paid'     => (float) $group->where('status', 'paid')->sum('total_amount'),
+            'total_pending'  => (float) $group->whereIn('status', ['sent', 'payment_pending'])->sum('total_amount'),
+            'total_overdue'  => (float) $group->where('status', 'overdue')->sum('total_amount'),
+        ])->values();
 
-        // Monthly breakdown — last 6 months
+        // Monthly breakdown — last 6 months, per currency within each month
         $monthly = $invoices
             ->groupBy(fn($inv) => Carbon::parse($inv->created_at)->format('Y-m'))
             ->map(fn($group, $month) => [
-                'month'   => $month,
-                'count'   => $group->count(),
-                'total'   => (float) $group->sum('total_amount'),
-                'paid'    => (float) $group->where('status', 'paid')->sum('total_amount'),
-                'pending' => (float) $group->whereIn('status', ['sent', 'payment_pending', 'overdue'])->sum('total_amount'),
+                'month'       => $month,
+                'by_currency' => $group->groupBy('currency')->map(fn($g, $currency) => [
+                    'currency' => $currency,
+                    'count'    => $g->count(),
+                    'total'    => (float) $g->sum('total_amount'),
+                    'paid'     => (float) $g->where('status', 'paid')->sum('total_amount'),
+                    'pending'  => (float) $g->whereIn('status', ['sent', 'payment_pending', 'overdue'])->sum('total_amount'),
+                ])->values(),
             ])
             ->sortKeys()
             ->slice(-6)

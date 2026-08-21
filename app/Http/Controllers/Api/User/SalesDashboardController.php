@@ -52,7 +52,7 @@ class SalesDashboardController extends Controller
         $today      = now()->toDateString();
         $year       = $request->get('year', now()->year);
 
-        $base = $this->visibleLeads();
+        $base = $this->visibleLeads()->whereYear('created_at', $year);
 
         $total     = (clone $base)->count();
         $newCount  = (clone $base)->where('status', 'new')->count();
@@ -87,7 +87,7 @@ class SalesDashboardController extends Controller
         for ($m = 1; $m <= 12; $m++) {
             $months[$m] = ['month' => $m, 'total' => 0, 'won' => 0, 'lost' => 0, 'value' => 0];
         }
-        (clone $base)->whereYear('created_at', $year)
+        (clone $base)
             ->get(['status', 'estimated_value', 'created_at'])
             ->each(function ($l) use (&$months) {
                 $m = (int) date('n', strtotime($l->created_at));
