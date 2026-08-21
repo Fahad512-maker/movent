@@ -89,14 +89,16 @@ class ProjectController extends Controller
         // that can meaningfully be added to a project team.
         $internalRoles = ['project_manager', 'production', 'developer', 'designer', 'qa', 'team_member'];
 
-        // Sellers are queried directly off `users.company_id`, NOT via
-        // companyUserIds()/company_user_assignments like the groups above —
-        // that table isn't populated for every Seller (verified against real
-        // data), so scoping through it would silently hide valid active
-        // Sellers from this dropdown. Mirrors
-        // Api\User\LeadController::assignableSeller()'s same-company/
-        // is_active/status/role_type check.
-        $sellers = User::where('company_id', $companyId)
+        // Sellers can belong to more than one company. Include both the
+        // legacy primary users.company_id and active CompanyUserAssignment
+        // memberships so multi-company sellers appear for their selected
+        // project company.
+        $sellers = User::where(function ($q) use ($companyId) {
+                $q->where('company_id', $companyId)
+                    ->orWhereHas('companyAssignments', fn ($a) => $a
+                        ->where('company_id', $companyId)
+                        ->where('status', 'active'));
+            })
             ->where('is_active', true)
             ->where('status', 'active')
             ->where('role_type', 'seller')
@@ -205,7 +207,7 @@ class ProjectController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        $companyIds = $this->activeCompanyIds();
         $base = Project::whereIn('company_id', $companyIds);
 
         $counts = (clone $base)->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');

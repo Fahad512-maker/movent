@@ -1,5 +1,6 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/axios';
@@ -10,7 +11,6 @@ import { adminProjectService } from '@/lib/services/adminProjectService';
 import { adminClientService } from '@/lib/services/adminClientService';
 import { adminLeadService } from '@/lib/services/adminLeadService';
 import { inp, lbl, card, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_MB, fmtFileSize } from '@/components/admin/projects/shared';
-import { ROLE_LABELS } from '@/lib/roleUtils';
 import { Admin } from '@/types';
 import SubmitButton from '@/components/ui/SubmitButton';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -47,7 +47,7 @@ function CreateProjectForm() {
     // regeneration that visibly corrupted the layout and could interrupt the
     // post-submit router.push() below.
     const [admin, setAdmin] = useState<Admin | null>(null);
-    useEffect(() => { setAdmin(getAuthUser() as Admin | null); }, []);
+    useEffect(() => { queueMicrotask(() => setAdmin(getAuthUser() as Admin | null)); }, []);
     // 'client_portal' is the real purchasable module_key — 'clients' was never
     // a real CompanyModule row (see ModuleSeeder.php).
     const hasClients = admin?.modules?.includes("client_portal") ?? false;
@@ -85,6 +85,9 @@ function CreateProjectForm() {
                 setLeadName(lead.name);
                 setForm((f) => ({
                     ...f,
+                    company_id: lead.company_id
+                        ? String(lead.company_id)
+                        : f.company_id,
                     name: f.name || `${lead.name} — Project`,
                     client_id: lead.client_id
                         ? String(lead.client_id)
@@ -103,6 +106,9 @@ function CreateProjectForm() {
                 setInvoiceNumber(inv.invoice_number);
                 setForm((f) => ({
                     ...f,
+                    company_id: inv.company_id
+                        ? String(inv.company_id)
+                        : f.company_id,
                     name: f.name || `${inv.invoice_number} — Project`,
                     client_id: inv.client_id
                         ? String(inv.client_id)
@@ -144,25 +150,53 @@ function CreateProjectForm() {
             })
             .catch(() => {});
 
-        if (hasClients) {
-            adminClientService
-                .list()
-                .then((d) => setClients(d.clients))
-                .catch(() => {});
-        }
     }, [hasClients]);
+
+    // Client options are scoped to the selected company. Without this, a
+    // multi-company admin could link a project in Company A to a client from
+    // Company B from the same dropdown.
+    useEffect(() => {
+        if (!hasClients || !form.company_id) {
+            queueMicrotask(() => {
+                setClients([]);
+                setForm((f) => (f.client_id ? { ...f, client_id: "" } : f));
+            });
+            return;
+        }
+
+        adminClientService
+            .list({ company_id: form.company_id })
+            .then((d) => {
+                setClients(d.clients);
+                setForm((f) => {
+                    if (!f.client_id) return f;
+                    return d.clients.some((c) => String(c.id) === f.client_id)
+                        ? f
+                        : { ...f, client_id: "" };
+                });
+            })
+            .catch(() => {
+                setClients([]);
+                setForm((f) => (f.client_id ? { ...f, client_id: "" } : f));
+            });
+    }, [hasClients, form.company_id]);
 
     // Project Manager options are scoped to the SELECTED company only — reload
     // and clear the previous pick whenever the company changes, so a PM from a
     // different company this admin owns never lingers in the dropdown/value.
     useEffect(() => {
-        setF("project_manager_id", "");
         if (!form.company_id) {
-            setUsers([]);
+            queueMicrotask(() => {
+                setF("project_manager_id", "");
+                setUsers([]);
+            });
             return;
         }
 
-        setUsersLoading(true);
+        queueMicrotask(() => {
+            setF("project_manager_id", "");
+            setUsersLoading(true);
+        });
         adminProjectService
             .projectUsers(Number(form.company_id))
             .then((d) =>
@@ -176,7 +210,7 @@ function CreateProjectForm() {
             )
             .catch(() => setUsers([]))
             .finally(() => setUsersLoading(false));
-    }, [form.company_id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [form.company_id]);
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
@@ -312,12 +346,12 @@ function CreateProjectForm() {
                                 >
                                     No clients yet — you can create the project
                                     without one, or{" "}
-                                    <a
+                                    <Link
                                         href="/admin/clients/create"
                                         style={{ color: "#2563eb" }}
                                     >
                                         add a client first
-                                    </a>
+                                    </Link>
                                     .
                                 </div>
                             )}

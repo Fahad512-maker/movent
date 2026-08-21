@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken, logout, getActiveCompany, setActiveCompany } from '@/lib/auth';
+import { isAuthenticated, getAuthType, getAuthUser, setAuthData, getToken, logout, getActiveCompany, setActiveCompany, clearActiveCompany } from '@/lib/auth';
 import { Admin, User } from '@/types';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
@@ -15,7 +15,21 @@ export default function DashboardLayout({
   title?: string;
 }) {
   const router = useRouter();
-  // Unassign Company from User — set once the periodic refresh below finds
+  // Unassign Company from User — counts consecutive polls in a row that saw
+  // zero active companies (or an active-company selection no longer valid).
+  // A Company Admin's "remove this company, then add 2 new ones" edit is
+  // two separate steps (remove is immediate; add only lands once they hit
+  // Save) — for however long that takes, this user genuinely has zero
+  // companies server-side. Reacting to a single poll landing in that few-
+  // second gap (clearing the cookie, bouncing to /select-company or the
+  // "no company" screen) is what turned an ordinary multi-step admin edit
+  // into a visible flash/redirect cascade for the affected session. Only
+  // acting once the SAME reading holds for two consecutive polls (~60s
+  // apart) means a transient blip self-heals before this layout ever does
+  // anything about it, while a genuine, lasting removal still reacts within
+  // about a minute — same order of latency as before, just debounced.
+  const suspiciousStreakRef = useRef(0);
+  // Set once the periodic refresh below finds
   // this User session has zero active company_assignments left. Renders in
   // place of the normal sidebar/content rather than navigating away, so
   // "block company-specific CRM access" holds no matter which page they
@@ -44,6 +58,24 @@ export default function DashboardLayout({
 
     if (type === 'super_admin') { router.replace('/super-admin/dashboard'); return; }
     if (isAdminRoute && type !== 'admin') { router.replace(type === 'user' ? '/dashboard' : '/login'); return; }
+
+    if (type === 'user') {
+      const cachedUser = getAuthUser() as User | null;
+      const active = (cachedUser?.company_assignments ?? []).filter(a => a.status === 'active');
+      const activeId = getActiveCompany();
+      const selected = typeof activeId === 'number'
+        ? active.some(a => a.company_id === activeId)
+        : false;
+
+      if (active.length > 1 && !selected && window.location.pathname !== '/select-company') {
+        router.replace('/select-company');
+        return;
+      }
+
+      if (active.length === 1 && !selected) {
+        setActiveCompany(active[0].company_id);
+      }
+    }
 
     // A pending_payment admin only ever holds a payment-scoped token (see
     // routes/api.php's 'subscription.active' middleware) — every API call
@@ -87,23 +119,40 @@ export default function DashboardLayout({
               router.replace('/login');
             }
 
-            // Unassign Company from User — react the moment THIS session's
-            // own company list shrinks (an admin removing them from a
-            // company happens in a different session entirely, so this poll
-            // is how the affected user's own browser finds out).
+            // Unassign Company from User — react once THIS session's own
+            // company list shrinks (an admin removing them from a company
+            // happens in a different session entirely, so this poll is how
+            // the affected user's own browser finds out) — but only once
+            // that's held for 2 consecutive polls (see suspiciousStreakRef
+            // above) so a brief mid-edit blip can't trigger it.
             if (type === 'user') {
               const active = ((fresh as User).company_assignments ?? []).filter(a => a.status === 'active');
-              setNoCompanyAssigned(active.length === 0);
-
               const activeId = getActiveCompany();
               const stillValid = activeId !== null && active.some(a => a.company_id === activeId);
-              if (active.length > 0 && !stillValid) {
-                if (active.length === 1) {
-                  // Automatically switch — nothing to ask, there's only one.
-                  setActiveCompany(active[0].company_id);
-                } else if (window.location.pathname !== '/select-company') {
-                  // Ask them to pick, same as the post-login flow.
-                  router.replace('/select-company');
+              const suspicious = active.length === 0 || !stillValid;
+
+              suspiciousStreakRef.current = suspicious ? suspiciousStreakRef.current + 1 : 0;
+              const confirmed = suspiciousStreakRef.current >= 2;
+
+              if (active.length === 0) {
+                setNoCompanyAssigned(confirmed);
+                // A stale active_company_id cookie pointing at a company this
+                // user no longer has must never linger — if it's left sitting
+                // there and the admin later reassigns this user to 2+ NEW
+                // companies, this stale value would still fail the stillValid
+                // check below on a future poll, re-triggering this same
+                // branch again after they've already picked one.
+                if (confirmed) clearActiveCompany();
+              } else {
+                setNoCompanyAssigned(false);
+                if (!stillValid && confirmed) {
+                  if (active.length === 1) {
+                    // Automatically switch — nothing to ask, there's only one.
+                    setActiveCompany(active[0].company_id);
+                  } else if (window.location.pathname !== '/select-company') {
+                    // Ask them to pick, same as the post-login flow.
+                    router.replace('/select-company');
+                  }
                 }
               }
             }

@@ -414,17 +414,22 @@ class ClientController extends Controller
             if (in_array($cid, $companyIds, true)) {
                 $query->where('company_id', $cid);
             }
+            // Show seat info for the same company the list above was scoped to.
+            $seatCompanyId = in_array($cid, $companyIds, true) ? $cid : ($companyIds[0] ?? null);
         } else {
             $query->whereIn('company_id', $this->activeCompanyIds());
+            // Seat limits are inherently per-company — even when "All
+            // Companies" is selected (activeCompanyIds() returns every
+            // owned company), show seat info for the one active company
+            // (activeCompanyId()'s own single-company resolution), not an
+            // arbitrary/undefined pick.
+            $seatCompanyId = $this->activeCompanyId() ?: ($companyIds[0] ?? null);
         }
 
         $clients = $query->get([
             'id', 'company_id', 'user_id', 'name', 'email', 'phone',
             'company_name', 'portal_access', 'status', 'created_at',
         ]);
-
-        // Show seat info for the same company the list above was scoped to.
-        $seatCompanyId = in_array($cid, $companyIds, true) ? $cid : ($companyIds[0] ?? null);
 
         return ApiResponse::success([
             'clients' => $clients,

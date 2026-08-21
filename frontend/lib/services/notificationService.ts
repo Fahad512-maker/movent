@@ -8,7 +8,7 @@ export interface AppNotification {
   type: string | null;
   title: string | null;
   body: string | null;
-  data: Record<string, any> | null;
+  data: Record<string, unknown> | null;
   is_read: boolean;
   read_at: string | null;
   cleared_at: string | null;

@@ -201,7 +201,13 @@ class UserController extends Controller
         // company_id (still validated against this admin's own companies,
         // so a foreign admin's orphan can never leak in) for exactly the
         // zero-assignment case.
+        // Client-portal logins (role_type='client', created by
+        // ClientController::createOrUpdatePortalUser()) never get a
+        // CompanyUserAssignment row either — that mechanism is staff-only —
+        // so without this exclusion every client login would also match
+        // "zero assignments" and leak into this staff list.
         $orphanedUserIds = User::whereIn('company_id', $activeCompanyIds)
+            ->where('role_type', '!=', 'client')
             ->whereDoesntHave('companyAssignments')
             ->pluck('id');
 

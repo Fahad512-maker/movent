@@ -61,6 +61,7 @@ api.interceptors.response.use(
         Cookies.remove('auth_token');
         Cookies.remove('auth_user');
         Cookies.remove('auth_type');
+        window.localStorage.removeItem('auth_user');
         window.location.href = '/login';
       }
     }

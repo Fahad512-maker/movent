@@ -1,19 +1,32 @@
 import Cookies from 'js-cookie';
 import { User, Admin, SuperAdmin, CompanyAssignment } from '@/types';
 
+const AUTH_USER_STORAGE_KEY = 'auth_user';
+
 export const setAuthData = (
   token: string,
   user: User | Admin | SuperAdmin,
   type: 'user' | 'admin' | 'super_admin'
 ) => {
   Cookies.set('auth_token', token, { expires: 7 });
-  Cookies.set('auth_user', JSON.stringify(user), { expires: 7 });
   Cookies.set('auth_type', type, { expires: 7 });
+  Cookies.remove('auth_user');
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+  }
 };
 
 export const getAuthUser = (): User | Admin | null => {
-  const user = Cookies.get('auth_user');
-  return user ? JSON.parse(user) : null;
+  const user = typeof window !== 'undefined'
+    ? window.localStorage.getItem(AUTH_USER_STORAGE_KEY) ?? Cookies.get('auth_user')
+    : Cookies.get('auth_user');
+
+  if (!user) return null;
+  try {
+    return JSON.parse(user);
+  } catch {
+    return null;
+  }
 };
 
 export const getAuthType = () => Cookies.get('auth_type') || null;
@@ -112,4 +125,7 @@ export const logout = () => {
   Cookies.remove('auth_user');
   Cookies.remove('auth_type');
   Cookies.remove('active_company_id');
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+  }
 };

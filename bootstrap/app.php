@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'client.role'          => \App\Http\Middleware\CheckClientRole::class,
             'subscription.active'  => \App\Http\Middleware\EnsureSubscriptionActive::class,
             'active.company'       => \App\Http\Middleware\RequireActiveCompany::class,
+            'sync.active.company'  => \App\Http\Middleware\SyncActiveCompanyContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

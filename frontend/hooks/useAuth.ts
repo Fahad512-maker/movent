@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
-import { setAuthData, setActiveCompany, resolveStaffRedirect, logout as clearAuth } from '@/lib/auth';
+import { setAuthData, setActiveCompany, clearActiveCompany, resolveStaffRedirect, logout as clearAuth } from '@/lib/auth';
 import { User, Admin } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -60,6 +60,7 @@ export const useAuth = () => {
     // active-only check shows the "not assigned to any company" empty state.
     const assignments = (user?.company_assignments ?? []).filter(a => a.status === 'active');
     if (assignments.length > 1) {
+      clearActiveCompany();
       router.push('/select-company');
     } else {
       const active = assignments[0];

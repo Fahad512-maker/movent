@@ -645,7 +645,7 @@ Route::prefix('user')->group(function () {
     Route::get('auth/google/callback',  [GoogleAuthController::class, 'callback']);
     Route::post('auth/google/exchange', [GoogleAuthController::class, 'exchange']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'sync.active.company'])->group(function () {
         Route::post('logout', [UserAuthController::class, 'logout']);
         Route::get('me',     [UserAuthController::class, 'me']);
 

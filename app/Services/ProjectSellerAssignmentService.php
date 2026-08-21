@@ -27,7 +27,12 @@ class ProjectSellerAssignmentService
     public function assignableSeller(int $companyId, int $sellerId): ?User
     {
         return User::where('id', $sellerId)
-            ->where('company_id', $companyId)
+            ->where(function ($q) use ($companyId) {
+                $q->where('company_id', $companyId)
+                    ->orWhereHas('companyAssignments', fn ($a) => $a
+                        ->where('company_id', $companyId)
+                        ->where('status', 'active'));
+            })
             ->where('is_active', true)
             ->where('status', 'active')
             ->where('role_type', 'seller')

@@ -7,14 +7,14 @@ import Link from 'next/link';
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@/hooks/useAuth';
-import { isAuthenticated, getAuthType } from '@/lib/auth';
+import { isAuthenticated, getAuthType, getAuthUser, getActiveCompany, resolveStaffRedirect } from '@/lib/auth';
+import { User } from '@/types';
 import toast from 'react-hot-toast';
 
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import Container from '@/components/ui/Conatiner';
 import LandingNavbar from '@/components/landing/Navbar';
 import LandingFooter from '@/components/landing/Footer';
-import { FaArrowRight } from 'react-icons/fa6';
 
 // Single login form for Company Admin AND staff/sub-users — the backend
 // (Auth\UnifiedLoginController for password, GoogleAuthController for
@@ -50,11 +50,27 @@ function UnifiedLoginContent() {
   useEffect(() => {
     const type = getAuthType();
     if (isAuthenticated() && type) {
-      const dest = type === 'admin' ? '/admin/dashboard' : type === 'super_admin' ? '/super-admin/dashboard' : '/dashboard';
+      let dest = type === 'admin' ? '/admin/dashboard' : type === 'super_admin' ? '/super-admin/dashboard' : '/dashboard';
+      if (type === 'user') {
+        const user = getAuthUser() as User | null;
+        const activeAssignments = (user?.company_assignments ?? []).filter(a => a.status === 'active');
+        const activeId = getActiveCompany();
+        const selected = typeof activeId === 'number'
+          ? activeAssignments.find(a => a.company_id === activeId)
+          : undefined;
+
+        if (activeAssignments.length > 1 && !selected) {
+          dest = '/select-company';
+        } else if (activeAssignments.length === 1) {
+          dest = resolveStaffRedirect(activeAssignments[0]);
+        } else if (selected) {
+          dest = resolveStaffRedirect(selected);
+        }
+      }
       router.replace(dest);
       return;
     }
-    setCheckingAuth(false);
+    queueMicrotask(() => setCheckingAuth(false));
   }, [router]);
 
   // Handles the return trip from the Google OAuth popup (see handleGoogleClick).

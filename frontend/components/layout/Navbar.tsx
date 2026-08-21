@@ -500,15 +500,59 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                                                 gap: 8,
                                             }}
                                         >
-                                            <div style={{ minWidth: 0 }}>
+                                            <div style={{ minWidth: 0, flex: 1 }}>
                                                 <div
                                                     style={{
-                                                        fontSize: 13,
-                                                        fontWeight: 600,
-                                                        color: "#0f172a",
+                                                        display: "flex",
+                                                        alignItems: "flex-start",
+                                                        justifyContent: "space-between",
+                                                        gap: 8,
                                                     }}
                                                 >
-                                                    {n.title}
+                                                    <span
+                                                        style={{
+                                                            fontSize: 13,
+                                                            fontWeight: 600,
+                                                            color: "#0f172a",
+                                                            minWidth: 0,
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                        }}
+                                                    >
+                                                        {n.title}
+                                                    </span>
+                                                    {authType === "user" &&
+                                                        n.companyName && (
+                                                            <span
+                                                                style={{
+                                                                    display:
+                                                                        "inline-flex",
+                                                                    alignItems:
+                                                                        "center",
+                                                                    gap: 4,
+                                                                    fontSize: 10.5,
+                                                                    fontWeight: 700,
+                                                                    color:
+                                                                        n.companyId === getActiveCompany()
+                                                                            ? "#059669"
+                                                                            : "#2563eb",
+                                                                    background:
+                                                                        n.companyId === getActiveCompany()
+                                                                            ? "#ecfdf5"
+                                                                            : "#eff6ff",
+                                                                    borderRadius: 5,
+                                                                    padding:
+                                                                        "2px 7px",
+                                                                    whiteSpace:
+                                                                        "nowrap",
+                                                                    flexShrink: 0,
+                                                                }}
+                                                                title={`Company: ${n.companyName}`}
+                                                            >
+                                                                <HiBuildingOffice2 size={11} />
+                                                                {n.companyName}
+                                                            </span>
+                                                        )}
                                                 </div>
                                                 <div
                                                     style={{
