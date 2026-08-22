@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\User\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
 use App\Models\Lead;
@@ -13,6 +14,8 @@ use Illuminate\Http\Request;
 
 class FollowUpController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function user()     { return auth('sanctum')->user(); }
     private function userName(): string { return $this->user()->name ?? 'User'; }
 
@@ -28,14 +31,18 @@ class FollowUpController extends Controller
         return $result;
     }
 
-    // GET /user/follow-ups
+    // GET /user/follow-ups — scoped to whichever company is currently
+    // active (see ScopesToActiveCompany), not just the raw primary
+    // users.company_id column, so a multi-company Sales/Lead Manager who
+    // switches company sees that company's follow-ups instead of always
+    // whichever company their account defaulted to.
     public function queue(Request $request): JsonResponse
     {
         if (!$this->can('canViewLeads')) {
             return ApiResponse::error('Permission denied', 403);
         }
 
-        $companyId = $this->user()->company_id;
+        $companyId = $this->activeCompanyId();
         $filter    = $request->get('filter', 'today'); // today | upcoming | overdue | all
         $today     = now()->toDateString();
 

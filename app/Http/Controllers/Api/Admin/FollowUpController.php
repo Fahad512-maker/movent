@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
 use App\Models\Lead;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 
 class FollowUpController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin() { return auth('admin')->user(); }
     private function adminName(): string { return $this->admin()->name ?? 'Admin'; }
     private function companyIds(): array
@@ -114,10 +117,15 @@ class FollowUpController extends Controller
         return ApiResponse::success(null, 'Follow-up deleted');
     }
 
-    // GET /admin/follow-ups   — today / upcoming / overdue queue
+    // GET /admin/follow-ups   — today / upcoming / overdue queue, scoped to
+    // the active company (or every owned company under "All Companies") —
+    // same Company-Wise Dashboard Filtering pattern as every other admin
+    // list page. Previously used companyIds() (every company this admin
+    // owns) regardless of the active-company selector, so Company 1's
+    // follow-ups kept showing while Company 2 was selected, and vice versa.
     public function queue(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
+        $companyIds = $this->activeCompanyIds();
         $filter     = $request->get('filter', 'today'); // today | upcoming | overdue | all
         $today      = now()->toDateString();
 

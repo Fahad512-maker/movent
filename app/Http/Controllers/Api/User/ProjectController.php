@@ -1157,20 +1157,25 @@ class ProjectController extends Controller
 
         // The Seller's own cosmetic 'project_manager' row (see the comment
         // on $existingPm above) is only ever a stand-in for "nobody's been
-        // assigned yet". Once a REAL Project Manager takes over, it must be
-        // removed too — otherwise the Seller keeps showing up as "Project
-        // Manager" on any Team/Resources view that reads role_in_project
-        // directly (frontend/app/admin/projects/team/page.tsx), even though
-        // they're no longer one and were never a genuine team member either.
+        // assigned yet". Once a REAL Project Manager takes over, its
+        // role_in_project must be corrected — otherwise the Seller keeps
+        // showing up as "Project Manager" on any Team/Resources view that
+        // reads role_in_project directly. It must NOT be deleted outright
+        // though: every Team/Resources view (frontend/app/projects/team/
+        // page.tsx, frontend/app/admin/projects/team/page.tsx,
+        // frontend/app/admin/projects/[id]/team/page.tsx) already prefers
+        // the member's actual role_type ("Seller") over this column for
+        // display, via each page's own memberRoleLabel() — so downgrading
+        // it to 'team_member' still shows correctly as "Seller" everywhere,
+        // while keeping this Seller listed as a team resource on the
+        // project they originated, instead of silently dropping off every
+        // Team/Resources view the moment a real PM is assigned.
         if ($pm) {
             $sellerCosmeticRow = $project->teamMembers()
                 ->where('role_in_project', 'project_manager')
                 ->where('user_id', $user->id)
                 ->first();
-            if ($sellerCosmeticRow) {
-                $sellerCosmeticRow->delete();
-                ProjectChatService::removeParticipantIfNoLongerEligible($project, $user->id);
-            }
+            $sellerCosmeticRow?->update(['role_in_project' => 'team_member']);
         }
 
         if ($pm) {

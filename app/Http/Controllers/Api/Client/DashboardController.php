@@ -45,30 +45,30 @@ class DashboardController extends Controller
             ->get(['id', 'invoice_number', 'total_amount', 'paid_amount',
                    'currency', 'status', 'due_date', 'created_at']);
 
-        // Grouped by currency, not blended — a client can have invoices in
-        // more than one currency (e.g. after the company switched its
-        // Settings currency), and summing raw amounts across currencies as
-        // one number/one label is meaningless.
-        $byCurrency = $invoices->groupBy('currency')->map(function ($group, $currency) {
-            $invoiced = (float) $group->sum('total_amount');
-            $paid     = (float) $group->sum('paid_amount');
-            return [
-                'currency'    => $currency,
-                'invoiced'    => $invoiced,
-                'paid'        => $paid,
-                'outstanding' => round($invoiced - $paid, 2),
-            ];
-        })->values();
+        $paidInvoices    = $invoices->where('status', 'paid');
+        $pendingInvoices = $invoices->whereIn('status', ['sent', 'overdue', 'partially_paid']);
+
+        $paidCount     = $paidInvoices->count();
+        $paidAmount    = (float) $paidInvoices->sum('total_amount');
+        $pendingCount  = $pendingInvoices->count();
+        $pendingAmount = (float) $pendingInvoices->sum(fn ($i) => max(0, $i->total_amount - $i->paid_amount));
         $overdueCount  = $invoices->where('status', 'overdue')->count();
-        $pendingCount  = $invoices->whereIn('status', ['sent', 'overdue', 'partially_paid'])->count();
 
         // ── Projects (only if module purchased) ──────────────────────────────
-        $activeProjects = 0;
-        $recentProjects = [];
+        $totalProjects     = 0;
+        $pendingProjects   = 0;
+        $ongoingProjects   = 0;
+        $completedProjects = 0;
+        $recentProjects    = [];
         if ($hasModule('projects')) {
-            $activeProjects = Project::whereIn('client_id', $clientIds)
-                ->whereIn('status', ['planning', 'active', 'on_hold'])
-                ->count();
+            $projects = Project::whereIn('client_id', $clientIds)->notDraft()->get(['id', 'status']);
+            $totalProjects     = $projects->count();
+            $completedProjects = $projects->where('status', 'completed')->count();
+            // "Pending" = not started/paused yet; "Ongoing" = actively being
+            // worked on right now — split out of what was previously one
+            // combined planning/active/on_hold bucket.
+            $pendingProjects   = $projects->whereIn('status', ['planning', 'on_hold'])->count();
+            $ongoingProjects   = $projects->where('status', 'active')->count();
 
             $recentProjects = Project::whereIn('client_id', $clientIds)
                 ->notDraft()
@@ -88,12 +88,17 @@ class DashboardController extends Controller
 
         return ApiResponse::success([
             'stats' => [
-                'total_invoices'  => $invoices->count(),
-                'by_currency'     => $byCurrency,
-                'overdue_count'   => $overdueCount,
-                'pending_count'   => $pendingCount,
-                'active_projects' => $activeProjects,
-                'open_tickets'    => $openTickets,
+                'total_invoices'     => $invoices->count(),
+                'paid_count'         => $paidCount,
+                'paid_amount'        => $paidAmount,
+                'pending_count'      => $pendingCount,
+                'pending_amount'     => $pendingAmount,
+                'overdue_count'      => $overdueCount,
+                'total_projects'     => $totalProjects,
+                'pending_projects'   => $pendingProjects,
+                'ongoing_projects'   => $ongoingProjects,
+                'completed_projects' => $completedProjects,
+                'open_tickets'       => $openTickets,
             ],
             'recent_invoices' => $recentInvoices,
             'recent_projects' => $recentProjects,
