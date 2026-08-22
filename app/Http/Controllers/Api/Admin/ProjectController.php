@@ -776,8 +776,7 @@ class ProjectController extends Controller
             ->merge(collect($validated['members'])->pluck('user_id'))
             ->unique();
         foreach (['project_manager' => 'Project Manager', 'seller' => 'Seller'] as $roleType => $label) {
-            $count = User::where('company_id', $project->company_id)
-                ->where('role_type', $roleType)
+            $count = User::where('role_type', $roleType)
                 ->whereIn('id', $allUserIds)
                 ->count();
             if ($count > 1) {

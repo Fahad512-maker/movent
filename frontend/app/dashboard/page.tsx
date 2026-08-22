@@ -21,15 +21,17 @@ interface Stats {
   clients:   { total: number; portal: number; active: number };
   projects:  { total: number; active: number; done: number; on_hold: number };
   tasks:     { todo: number; in_progress: number; completed: number; overdue: number };
-  invoices:  { total: number; unpaid: number; overdue: number; paid: number; total_billed: number; total_unpaid: number };
-  payments:  { total_received: number; this_month: number };
+  invoices:  { total: number; unpaid: number; overdue: number; paid: number; by_currency: CurrencyBilling[] };
+  payments:  { by_currency: CurrencyPayments[] };
   employees: { total: number; users: number };
   support:   { open_tickets: number };
 }
+interface CurrencyBilling { currency: string; total_billed: number; total_unpaid: number }
+interface CurrencyPayments { currency: string; total_received: number; this_month: number }
 interface Company { id: number; name: string; is_active: boolean; clients_count: number; portal_clients_count: number; seat_limit: number | null }
 interface RecentLead    { id: number; name: string; email: string | null; status: string; source: string | null; created_at: string }
 interface RecentClient  { id: number; name: string; company_name: string | null; portal_access: boolean; status: string; created_at: string }
-interface RecentInvoice { id: number; invoice_number: string; total_amount: number; status: string; due_date: string | null; created_at: string }
+interface RecentInvoice { id: number; invoice_number: string; total_amount: number; currency: string; status: string; due_date: string | null; created_at: string }
 interface RecentProject { id: number; name: string; status: string; deadline: string | null; created_at: string }
 interface DashData {
   modules: string[];
@@ -39,7 +41,7 @@ interface DashData {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const PKR = (n: number) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+const PKR = (n: number, cur = 'USD') => `${cur} ${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   active: { bg: '#ecfdf5', color: '#059669' }, won: { bg: '#ecfdf5', color: '#059669' },
@@ -201,8 +203,10 @@ export default function DashboardPage() {
   const purchasedModules = MODULE_CATALOG.filter(m => m.internalKeys.some(k => modules.includes(k)));
 
   const clientStats      = s?.clients   ?? { total: 0, portal: 0, active: 0 };
-  const invoiceStats     = s?.invoices  ?? { total: 0, unpaid: 0, overdue: 0, paid: 0, total_billed: 0, total_unpaid: 0 };
-  const payStats         = s?.payments  ?? { total_received: 0, this_month: 0 };
+  const invoiceStats     = s?.invoices  ?? { total: 0, unpaid: 0, overdue: 0, paid: 0, by_currency: [] as CurrencyBilling[] };
+  const payStats         = s?.payments  ?? { by_currency: [] as CurrencyPayments[] };
+  const billingByCurrency  = invoiceStats.by_currency ?? [];
+  const paymentsByCurrency = payStats.by_currency ?? [];
   const invoicesByStatus = data?.by_status.invoices ?? {};
   const recentClients    = data?.recent.clients  ?? [];
   const recentInvoices   = data?.recent.invoices ?? [];
@@ -304,14 +308,36 @@ export default function DashboardPage() {
   // A bare path like '/projects' routes into the sub-user page, which then
   // calls /user/* endpoints with this Admin's token and 401s, which the axios
   // interceptor treats as an expired session and force-logs-out.
+  // Billed/Revenue are split one card per currency present — an admin can
+  // have invoices/payments in more than one currency (e.g. after switching
+  // Settings currency), and blending amounts across currencies into one
+  // number is meaningless. Mirrors the by_currency pattern in /reports and
+  // the client dashboard.
+  const billingCards = has('invoices')
+    ? billingByCurrency.map(b => ({
+        label: billingByCurrency.length > 1 ? `Total Billed (${b.currency})` : 'Total Billed',
+        value: PKR(b.total_billed, b.currency),
+        sub:   `${PKR(b.total_unpaid, b.currency)} pending`,
+        color: '#059669', href: '/admin/invoices',
+      }))
+    : [];
+  const revenueCards = hasFinance
+    ? paymentsByCurrency.map(p => ({
+        label: paymentsByCurrency.length > 1 ? `Revenue (${p.currency})` : 'Revenue',
+        value: PKR(p.total_received, p.currency),
+        sub:   `${PKR(p.this_month, p.currency)} this month`,
+        color: '#16a34a', href: '/admin/payments',
+      }))
+    : [];
+
   const statCards = [
     has('leads')    && s && { label: 'Leads',        value: s.leads.total,                sub: `${s.leads.new} new · ${s.leads.won} won`,                              color: '#2563eb', href: '/admin/leads' },
     has('client_portal') && { label: 'Clients',      value: clientStats.total,            sub: `${clientStats.portal} portal active`,                                  color: '#7c3aed', href: '/admin/clients' },
     has('projects') && s && { label: 'Projects',     value: s.projects.total,             sub: `${s.projects.active} active · ${s.projects.done} done`,               color: '#059669', href: '/admin/projects' },
     has('tasks')    && s && { label: 'Tasks',        value: s.tasks.todo + s.tasks.in_progress, sub: s.tasks.overdue ? `${s.tasks.overdue} overdue!` : `${s.tasks.completed} done`, color: s.tasks.overdue ? '#dc2626' : '#0891b2', href: '/admin/tasks' },
     has('invoices') &&      { label: 'Invoices',     value: invoiceStats.total,           sub: `${invoiceStats.unpaid} unpaid · ${invoiceStats.overdue} overdue`,       color: '#d97706', href: '/admin/invoices' },
-    has('invoices') &&      { label: 'Total Billed', value: PKR(invoiceStats.total_billed),  sub: `${PKR(invoiceStats.total_unpaid)} pending`,                        color: '#059669', href: '/admin/invoices' },
-    hasFinance      &&      { label: 'Revenue',      value: PKR(payStats.total_received),    sub: `${PKR(payStats.this_month)} this month`,                            color: '#16a34a', href: '/admin/payments' },
+    ...billingCards,
+    ...revenueCards,
     // Placeholder — no Expense model/table exists in this codebase yet.
     // Reserves the card's spot in the layout for when that feature lands;
     // deliberately not wired to any query.
@@ -397,7 +423,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>{inv.invoice_number}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>{PKR(inv.total_amount)}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>{PKR(inv.total_amount, inv.currency)}</div>
               </div>
               <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: c.bg, color: c.color, fontWeight: 600, flexShrink: 0, marginLeft: 6 }}>{cap(inv.status)}</span>
             </div>

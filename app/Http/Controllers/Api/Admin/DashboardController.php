@@ -92,8 +92,18 @@ class DashboardController extends Controller
         $invoicesOverdue  = (clone $invoices)->where('status', 'overdue')->count();
         $invoicesPaid     = (clone $invoices)->where('status', 'paid')->count();
 
-        $totalBilled   = (clone $invoices)->whereNotIn('status', ['draft', 'cancelled'])->sum('total_amount');
-        $totalUnpaid   = (clone $invoices)->whereIn('status', ['sent', 'partially_paid', 'overdue'])->sum('total_amount');
+        // Grouped by currency, not blended — an admin can have invoices in
+        // more than one currency (e.g. after switching their Settings
+        // currency), and summing raw amounts across currencies as one
+        // number is meaningless. Mirrors Admin\ReportController::invoices().
+        $invoiceMoney = (clone $invoices)
+            ->whereNotIn('status', ['draft', 'cancelled'])
+            ->get(['status', 'total_amount', 'currency']);
+        $invoicesByCurrency = $invoiceMoney->groupBy('currency')->map(fn($g, $currency) => [
+            'currency'     => $currency,
+            'total_billed' => (float) $g->sum('total_amount'),
+            'total_unpaid' => (float) $g->whereIn('status', ['sent', 'partially_paid', 'overdue'])->sum('total_amount'),
+        ])->values();
 
         $invoicesByStatus = (clone $invoices)
             ->select('status', DB::raw('count(*) as total'))
@@ -104,14 +114,19 @@ class DashboardController extends Controller
         // payments has no company_id — join through invoices
         // status enum: confirmed, pending, failed, refunded
         $invoiceIds = Invoice::whereIn('company_id', $companyIds)->pluck('id');
-        $totalReceived = Payment::whereIn('invoice_id', $invoiceIds)
+        $paymentMoney = Payment::whereIn('invoice_id', $invoiceIds)
             ->where('status', 'confirmed')
-            ->sum('amount');
-        $paymentsThisMonth = Payment::whereIn('invoice_id', $invoiceIds)
-            ->where('status', 'confirmed')
-            ->whereMonth('created_at', now()->month)
-            ->whereYear('created_at', now()->year)
-            ->sum('amount');
+            ->with('invoice:id,currency')
+            ->get(['id', 'invoice_id', 'amount', 'currency', 'created_at']);
+        $paymentsByCurrency = $paymentMoney
+            ->groupBy(fn($p) => $p->currency ?? $p->invoice?->currency ?? 'USD')
+            ->map(fn($g, $currency) => [
+                'currency'       => $currency,
+                'total_received' => (float) $g->sum('amount'),
+                'this_month'     => (float) $g->filter(
+                    fn($p) => $p->created_at->month === now()->month && $p->created_at->year === now()->year
+                )->sum('amount'),
+            ])->values();
 
         // ── Employees / Users ────────────────────────────────────────────
         $employeesTotal  = Employee::whereIn('company_id', $companyIds)->count();
@@ -140,7 +155,7 @@ class DashboardController extends Controller
         $recentInvoices = Invoice::whereIn('company_id', $companyIds)
             ->orderByDesc('created_at')
             ->limit(5)
-            ->get(['id', 'invoice_number', 'client_id', 'total_amount', 'status', 'due_date', 'created_at']);
+            ->get(['id', 'invoice_number', 'client_id', 'total_amount', 'currency', 'status', 'due_date', 'created_at']);
 
         $recentProjects = Project::whereIn('company_id', $companyIds)
             ->orderByDesc('created_at')
@@ -195,8 +210,8 @@ class DashboardController extends Controller
                 'projects'  => ['total' => $projectsTotal, 'active' => $projectsActive,'done' => $projectsDone,  'on_hold' => $projectsOnHold],
                 'tasks'     => ['todo' => $tasksTodo, 'in_progress' => $tasksInProg, 'completed' => $tasksDone, 'overdue' => $tasksOverdue],
                 'invoices'  => ['total' => $invoicesTotal, 'unpaid' => $invoicesUnpaid, 'overdue' => $invoicesOverdue, 'paid' => $invoicesPaid,
-                                'total_billed' => (float) $totalBilled, 'total_unpaid' => (float) $totalUnpaid],
-                'payments'  => ['total_received' => (float) $totalReceived, 'this_month' => (float) $paymentsThisMonth],
+                                'by_currency' => $invoicesByCurrency],
+                'payments'  => ['by_currency' => $paymentsByCurrency],
                 'employees' => ['total' => $employeesTotal, 'users' => $usersTotal, 'portal_users' => $clientPortalUsers],
                 'support'   => ['open_tickets' => $ticketsOpen],
             ],

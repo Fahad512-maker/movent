@@ -50,6 +50,26 @@ class User extends Authenticatable
         return $this->hasMany(CompanyUserAssignment::class);
     }
 
+    // Company-membership check that also covers a multi-company user — true
+    // for either the legacy primary company_id column OR an ACTIVE
+    // company_user_assignments row for $companyId. A user assigned to more
+    // than one company keeps this same company_id column pointed at just
+    // one of them (whichever was picked as "default" when they were added),
+    // so any "who belongs to company X" query that checks that column alone
+    // silently drops them from every OTHER company they're actually active
+    // in. Mirrors the pattern already used by
+    // ProjectSellerAssignmentService::assignableSeller() and
+    // Api\Admin\ProjectController::projectUsers()'s Seller block.
+    public function scopeOfCompany($query, int $companyId)
+    {
+        return $query->where(function ($q) use ($companyId) {
+            $q->where('company_id', $companyId)
+                ->orWhereHas('companyAssignments', fn ($a) => $a
+                    ->where('company_id', $companyId)
+                    ->where('status', 'active'));
+        });
+    }
+
     public function userCompanyPermissions(): HasMany
     {
         return $this->hasMany(UserCompanyPermission::class);

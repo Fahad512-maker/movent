@@ -364,7 +364,7 @@ class ProjectController extends Controller
             // Sales → Project handoff: links this project back to the won
             // lead it came from, so Sales can show "Linked Projects".
             'lead_id'            => ['nullable', 'integer', Rule::exists('leads', 'id')->where('company_id', $companyId)],
-            'project_manager_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('company_id', $companyId)],
+            'project_manager_id' => ['nullable', 'integer'],
             'name'               => ['required', 'string', 'max:255'],
             'description'        => ['nullable', 'string'],
             'status'             => ['nullable', 'in:planning,active,on_hold,completed,cancelled'],
@@ -381,6 +381,14 @@ class ProjectController extends Controller
         // via the default below, same as before).
         if ($isHandoff && !$this->can('canRequestPMAssignment')) {
             unset($validated['project_manager_id']);
+        }
+
+        // A plain company_id Rule::exists() would wrongly reject a
+        // multi-company user whose raw company_id column points at their
+        // OTHER company — ofCompany() also accepts an active
+        // company_user_assignments row for this one.
+        if (!empty($validated['project_manager_id']) && !User::ofCompany($companyId)->where('id', $validated['project_manager_id'])->exists()) {
+            return ApiResponse::error('The selected project manager is invalid.', 422);
         }
 
         $validated['company_id'] = $companyId;
@@ -1030,7 +1038,7 @@ class ProjectController extends Controller
         }
 
         $user = $this->user();
-        $sellers = User::where('company_id', $user->company_id)
+        $sellers = User::ofCompany($user->company_id)
             ->where('is_active', true)
             ->where('status', 'active')
             ->where('role_type', 'seller')
@@ -1102,14 +1110,19 @@ class ProjectController extends Controller
         }
 
         $validated = $request->validate([
-            'project_manager_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+            'project_manager_id' => ['nullable', 'integer'],
         ]);
         $pmId = $validated['project_manager_id'] ?? null;
 
         $pm = null;
         if ($pmId) {
-            $pm = User::where('id', $pmId)
-                ->where('company_id', $project->company_id)
+            // ofCompany() (not a raw company_id match) so a Project Manager
+            // assigned to more than one company still resolves here when
+            // this project's company is their secondary one, not just
+            // whichever company their users.company_id column happens to
+            // point at.
+            $pm = User::ofCompany($project->company_id)
+                ->where('id', $pmId)
                 ->where('role_type', 'project_manager')
                 ->where('is_active', true)
                 ->first();
@@ -1201,7 +1214,12 @@ class ProjectController extends Controller
 
         $user = $this->user();
 
-        $users = User::where('company_id', $user->company_id)
+        // ofCompany() so a user assigned to more than one company (e.g. a
+        // Project Manager also assigned elsewhere) still shows up here for
+        // this one, the same as any single-company user does — a raw
+        // company_id match alone misses them whenever this isn't the
+        // company sitting in their users.company_id column.
+        $users = User::ofCompany($user->company_id)
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'role_type']);
@@ -1233,24 +1251,37 @@ class ProjectController extends Controller
             return ApiResponse::error(Project::LOCKED_MESSAGE, 422);
         }
 
-        // Team members must be real, existing users of this staff member's
-        // own company — not just any user id in the system.
+        // Team members must be real, active members of this project's own
+        // company — not just any user id in the system.
         $validated = $request->validate([
             'members'                    => ['required', 'array'],
-            'members.*.user_id'          => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)],
+            'members.*.user_id'          => ['required', 'integer'],
             'members.*.role_in_project'  => ['required', 'in:project_manager,production_user,team_member,reviewer'],
         ]);
 
         $actor = $this->user();
+        $submittedIds = collect($validated['members'])->pluck('user_id')->unique();
+
+        // ofCompany() (not a raw company_id match) so a multi-company user
+        // (e.g. a Project Manager also assigned to another company) can be
+        // added here just like a single-company one — a plain
+        // Rule::exists()->where('company_id', ...) validation would reject
+        // them whenever this project's company isn't the one sitting in
+        // their users.company_id column. Every id below is already known to
+        // belong to this company, so the role checks that follow don't need
+        // to re-filter by company.
+        $validCompanyCount = User::ofCompany($project->company_id)->whereIn('id', $submittedIds)->count();
+        if ($validCompanyCount !== $submittedIds->count()) {
+            return ApiResponse::error('One or more selected users do not belong to this company.', 422);
+        }
 
         // Adding a Seller to the team is Admin/PM territory — everyone else
         // holding canAssignTeamResources can still add a plain team member,
         // just not a Seller specifically (mirrors the frontend gate in
         // frontend/app/projects/team/page.tsx's addableUsers filter).
         if ((int) $project->project_manager_id !== (int) $actor->id) {
-            $sellerIds = User::where('company_id', $actor->company_id)
-                ->where('role_type', 'seller')
-                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+            $sellerIds = User::where('role_type', 'seller')
+                ->whereIn('id', $submittedIds)
                 ->pluck('id');
             if ($sellerIds->isNotEmpty()) {
                 return ApiResponse::error('Only the Company Admin or this project\'s Project Manager can add a Seller to the team.', 403);
@@ -1264,8 +1295,7 @@ class ProjectController extends Controller
         // narrowed to eligibleRoles = ['project_manager'], plus 'seller' via
         // the isLiteralPm branch).
         if ($actor->role_type === 'seller') {
-            $disallowedIds = User::where('company_id', $actor->company_id)
-                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+            $disallowedIds = User::whereIn('id', $submittedIds)
                 ->whereNotIn('role_type', ['project_manager', 'seller'])
                 ->pluck('id');
             if ($disallowedIds->isNotEmpty()) {
@@ -1281,8 +1311,7 @@ class ProjectController extends Controller
         // (Lead Manager actor narrowed to eligibleRoles = ['project_manager'],
         // with no isLiteralPm/'seller' exception).
         if ($actor->role_type === 'lead_manager') {
-            $disallowedIds = User::where('company_id', $actor->company_id)
-                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+            $disallowedIds = User::whereIn('id', $submittedIds)
                 ->where('role_type', '!=', 'project_manager')
                 ->pluck('id');
             if ($disallowedIds->isNotEmpty()) {
@@ -1301,8 +1330,7 @@ class ProjectController extends Controller
         // itself accepted any company user regardless of role_type.
         if (!in_array($actor->role_type, ['seller', 'lead_manager'], true)) {
             $eligibleRoles = ['project_manager', 'production', 'developer', 'designer', 'qa', 'team_member', 'seller'];
-            $disallowedIds = User::where('company_id', $actor->company_id)
-                ->whereIn('id', collect($validated['members'])->pluck('user_id'))
+            $disallowedIds = User::whereIn('id', $submittedIds)
                 ->whereNotIn('role_type', $eligibleRoles)
                 ->pluck('id');
             if ($disallowedIds->isNotEmpty()) {
@@ -1318,11 +1346,10 @@ class ProjectController extends Controller
         // re-submitting the SAME existing PM/Seller (e.g. a role change
         // save) never trips it, but adding a second, different one does.
         $allUserIds = $project->teamMembers()->pluck('user_id')
-            ->merge(collect($validated['members'])->pluck('user_id'))
+            ->merge($submittedIds)
             ->unique();
         foreach (['project_manager' => 'Project Manager', 'seller' => 'Seller'] as $roleType => $label) {
-            $count = User::where('company_id', $actor->company_id)
-                ->where('role_type', $roleType)
+            $count = User::where('role_type', $roleType)
                 ->whereIn('id', $allUserIds)
                 ->count();
             if ($count > 1) {

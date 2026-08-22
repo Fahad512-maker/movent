@@ -121,7 +121,7 @@ class ProjectMessengerController extends Controller
         $project = $this->project($projectId);
         $memberIds = $this->projectMemberIds($project);
 
-        $users = User::where('company_id', $project->company_id)
+        $users = User::ofCompany($project->company_id)
             ->where('is_active', true)
             ->where(function ($q) use ($memberIds, $project) {
                 $q->whereIn('id', $memberIds);
@@ -140,9 +140,17 @@ class ProjectMessengerController extends Controller
         $project = $this->project($projectId);
 
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
         $targetId = (int) $validated['user_id'];
+
+        // ofCompany() (not a raw company_id match) so a user assigned to
+        // more than one company can still be added when this project's
+        // company is their secondary one, not just whichever company their
+        // users.company_id column happens to point at.
+        if (!User::ofCompany($project->company_id)->where('id', $targetId)->exists()) {
+            return ApiResponse::error('Selected user does not belong to this company.', 422);
+        }
 
         $thread = ProjectChatService::threadFor($project);
         $this->addParticipants($project, $thread, [$targetId], null);

@@ -19,7 +19,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectChatController extends Controller
@@ -276,8 +275,15 @@ class ProjectChatController extends Controller
         }
 
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)],
+            'user_id' => ['required', 'integer'],
         ]);
+
+        // ofCompany() (not a raw company_id match) so a Seller assigned to
+        // more than one company can still be added when this project's
+        // company is their secondary one.
+        if (!User::ofCompany($project->company_id)->where('id', $validated['user_id'])->exists()) {
+            return ApiResponse::error('Selected user does not belong to this company.', 422);
+        }
 
         $target = User::find($validated['user_id']);
         if (in_array($target->role_type, ['developer', 'designer', 'qa', 'production'], true)) {

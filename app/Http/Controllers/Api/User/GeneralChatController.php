@@ -163,16 +163,18 @@ class GeneralChatController extends Controller
         $user = $this->user();
 
         $validated = $request->validate([
-            'recipient_user_id' => [
-                'required', 'integer',
-                Rule::exists('users', 'id')->where('company_id', $user->company_id),
-            ],
+            'recipient_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
         $recipientId = (int) $validated['recipient_user_id'];
 
         if ($recipientId === $user->id) {
             return ApiResponse::error('Cannot start a direct chat with yourself.', 422);
         }
+        // No separate company_id check needed — can() below already checks
+        // for a canUseGeneralChat grant scoped to THIS company specifically,
+        // a stronger guarantee than the raw users.company_id column (which,
+        // for a multi-company recipient, may point at a different company
+        // than the one that actually granted them this permission).
         if (!$this->can($recipientId, $user->company_id, 'canUseGeneralChat')) {
             return ApiResponse::error('Selected user does not have chat access.', 422);
         }
@@ -191,7 +193,7 @@ class GeneralChatController extends Controller
         $validated = $request->validate([
             'title'                  => ['required', 'string', 'max:255'],
             'participant_user_ids'   => ['required', 'array', 'min:1'],
-            'participant_user_ids.*' => ['integer', Rule::exists('users', 'id')->where('company_id', $user->company_id)],
+            'participant_user_ids.*' => ['integer', Rule::exists('users', 'id')],
         ]);
 
         $participantIds = collect($validated['participant_user_ids'])
@@ -227,10 +229,12 @@ class GeneralChatController extends Controller
         $thread = $this->groupThreadManagedBy($threadId, $user->id);
 
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $thread->company_id)],
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
         $newUserId = (int) $validated['user_id'];
 
+        // No separate company_id check needed — can() below already checks
+        // for a canUseGeneralChat grant scoped to THIS thread's company.
         if (!$this->can($newUserId, $thread->company_id, 'canUseGeneralChat')) {
             return ApiResponse::error('Selected user does not have chat access.', 422);
         }

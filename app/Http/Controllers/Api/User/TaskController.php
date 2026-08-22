@@ -38,10 +38,17 @@ class TaskController extends Controller
     {
         $teamMemberIds = $project->teamMembers()->pluck('user_id');
 
+        // No separate company_id check needed — whereIn('id', $teamMemberIds)
+        // already restricts this to actual members of THIS project's team,
+        // which is a strictly narrower, more reliable guarantee (assigning
+        // them to the team already validated their company membership,
+        // including a multi-company member whose raw company_id column
+        // points at a different company than this one).
+        //
         // Rule::exists()->where() only supports 2-arg (column, value) equality
         // — a 3-arg (column, operator, value) call silently misparses, so a
         // closure is required for a "!=" condition.
-        return Rule::exists('users', 'id')->where('company_id', $this->user()->company_id)
+        return Rule::exists('users', 'id')
             ->where(fn ($query) => $query->whereNotIn('role_type', ['seller', 'client', 'project_manager']))
             ->whereIn('id', $teamMemberIds->isNotEmpty() ? $teamMemberIds->all() : [0]);
     }
@@ -211,7 +218,7 @@ class TaskController extends Controller
     // Production. Same no-permission-gate reasoning as qaUsers() above.
     public function productionUsers(): JsonResponse
     {
-        $users = User::where('company_id', $this->user()->company_id)
+        $users = User::ofCompany($this->user()->company_id)
             ->whereIn('role_type', ['production', 'developer', 'designer'])
             ->where('is_active', true)
             ->orderBy('name')

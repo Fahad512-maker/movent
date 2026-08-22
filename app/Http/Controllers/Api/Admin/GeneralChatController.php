@@ -122,9 +122,14 @@ class GeneralChatController extends Controller
 
         $validated = $request->validate([
             'company_id' => ['required', 'integer', 'in:' . implode(',', $companyIds)],
-            'user_id'    => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $request->input('company_id'))],
+            'user_id'    => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
 
+        // No separate company_id check needed — hasGeneralChat() below
+        // already checks for a canUseGeneralChat grant scoped to THIS
+        // company specifically, a stronger guarantee than the raw
+        // users.company_id column (which, for a multi-company user, may
+        // point at a different company than the one that granted this).
         if (!$this->hasGeneralChat((int) $validated['user_id'], $validated['company_id'])) {
             return ApiResponse::error('Selected user does not have chat access.', 422);
         }
@@ -155,7 +160,7 @@ class GeneralChatController extends Controller
             'company_id'             => ['required', 'integer', 'in:' . implode(',', $companyIds)],
             'title'                  => ['required', 'string', 'max:255'],
             'participant_user_ids'   => ['required', 'array', 'min:2'],
-            'participant_user_ids.*' => ['integer', Rule::exists('users', 'id')->where('company_id', $request->input('company_id'))],
+            'participant_user_ids.*' => ['integer', Rule::exists('users', 'id')],
         ]);
 
         $participantIds = collect($validated['participant_user_ids'])

@@ -498,7 +498,7 @@ class ProjectMessengerController extends Controller
 
         $memberIds = $this->projectMemberIds($project);
 
-        $users = User::where('company_id', $project->company_id)
+        $users = User::ofCompany($project->company_id)
             ->where('is_active', true)
             ->where('id', '!=', $user->id)
             ->where(function ($q) use ($memberIds, $project) {
@@ -526,7 +526,7 @@ class ProjectMessengerController extends Controller
             return ApiResponse::error('Only this project\'s Seller can invite a Project Manager.', 403);
         }
 
-        $users = User::where('company_id', $project->company_id)
+        $users = User::ofCompany($project->company_id)
             ->where('role_type', 'project_manager')
             ->where('is_active', true)
             ->orderBy('name')
@@ -562,12 +562,15 @@ class ProjectMessengerController extends Controller
         }
 
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+            'user_id' => ['required', 'integer'],
         ]);
         $pmId = (int) $validated['user_id'];
 
-        $pm = User::where('id', $pmId)
-            ->where('company_id', $project->company_id)
+        // ofCompany() (not a raw company_id match) so a Project Manager
+        // assigned to more than one company can still be invited here when
+        // this project's company is their secondary one.
+        $pm = User::ofCompany($project->company_id)
+            ->where('id', $pmId)
             ->where('role_type', 'project_manager')
             ->where('is_active', true)
             ->first();
@@ -635,8 +638,14 @@ class ProjectMessengerController extends Controller
             return ApiResponse::error('You do not have permission to manage project chat participants.', 403);
         }
 
+        // Company membership isn't re-checked here — notProjectEligible()
+        // below is a strictly narrower, more reliable gate (formally tied to
+        // THIS project already implies belonging to its company), and a
+        // plain company_id Rule::exists() would wrongly reject an eligible
+        // multi-company team member whose raw company_id column points at
+        // their OTHER company.
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('company_id', $project->company_id)],
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
         $targetId = (int) $validated['user_id'];
 

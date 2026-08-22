@@ -15,7 +15,6 @@ use App\Models\User;
 use App\Rules\ValidPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
 {
@@ -355,20 +354,7 @@ class LeadController extends Controller
         }
 
         $validated = $request->validate([
-            'to_user_id' => [
-                'required',
-                'integer',
-                // A lead can be transferred to a Seller (the normal case) or a
-                // Lead Manager (who owns/redistributes leads directly per
-                // RoleDefaultPermissions — canTransferLeads/canAssignLeadOwner
-                // are granted to that role by default) — never any other
-                // internal role. Mirrors companyUsers() below exactly, so
-                // this picker can never offer a choice transfer() then rejects.
-                Rule::exists('users', 'id')
-                    ->where('company_id', $lead->company_id)
-                    ->where('is_active', true)
-                    ->whereIn('role_type', ['seller', 'lead_manager']),
-            ],
+            'to_user_id' => ['required', 'integer'],
             'reason'     => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -377,6 +363,24 @@ class LeadController extends Controller
 
         if ($fromUserId === $toUserId) {
             return ApiResponse::error('Lead is already assigned to this user.', 422);
+        }
+
+        // A lead can be transferred to a Seller (the normal case) or a Lead
+        // Manager (who owns/redistributes leads directly per
+        // RoleDefaultPermissions — canTransferLeads/canAssignLeadOwner are
+        // granted to that role by default) — never any other internal role.
+        // Mirrors companyUsers() above exactly, so this picker can never
+        // offer a choice this rejects. ofCompany() (not a raw company_id
+        // match) so a Seller/Lead Manager assigned to more than one company
+        // is still a valid target when this lead's company is their
+        // secondary one.
+        $isValidTarget = User::ofCompany($lead->company_id)
+            ->where('id', $toUserId)
+            ->where('is_active', true)
+            ->whereIn('role_type', ['seller', 'lead_manager'])
+            ->exists();
+        if (!$isValidTarget) {
+            return ApiResponse::error('Selected user is not an eligible transfer target at this company.', 422);
         }
 
         LeadTransfer::create([
@@ -410,7 +414,7 @@ class LeadController extends Controller
             'company_id' => ['required', 'integer', 'in:' . implode(',', $this->companyIds())],
         ]);
 
-        $users = User::where('company_id', $data['company_id'])
+        $users = User::ofCompany($data['company_id'])
             ->where('is_active', true)
             ->whereIn('role_type', ['seller', 'lead_manager'])
             ->orderBy('name')
