@@ -15,7 +15,7 @@ const lbl: React.CSSProperties = {
   color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em',
 };
 
-const EMPTY_FORM = { key: '', label: '', description: '', price_pkr: '', price_usd: '' };
+const EMPTY_FORM = { key: '', label: '', description: '', price_usd: '' };
 
 export default function ModulesPage() {
   const [modules, setModules] = useState<ModuleItem[]>([]);
@@ -46,7 +46,6 @@ export default function ModulesPage() {
       key: m.key,
       label: m.label,
       description: m.description ?? '',
-      price_pkr: String(m.price_pkr ?? 0),
       price_usd: String(m.price_usd ?? 0),
     });
     setError('');
@@ -79,14 +78,13 @@ export default function ModulesPage() {
     setError('');
     setSaving(true);
     try {
-      const price_pkr = form.price_pkr ? Number(form.price_pkr) : 0;
       const price_usd = form.price_usd ? Number(form.price_usd) : 0;
       if (editingId) {
-        await moduleService.update(editingId, { label: form.label, description: form.description || null, price_pkr, price_usd });
+        await moduleService.update(editingId, { label: form.label, description: form.description || null, price_usd });
       } else {
         const key = form.key.trim().toLowerCase().replace(/\s+/g, '_');
         if (!key) { setError('Key is required'); setSaving(false); return; }
-        await moduleService.create({ key, label: form.label, description: form.description || null, price_pkr, price_usd });
+        await moduleService.create({ key, label: form.label, description: form.description || null, price_usd });
       }
       setForm(EMPTY_FORM);
       setEditingId(null);
@@ -138,15 +136,9 @@ export default function ModulesPage() {
               <label style={lbl}>Description</label>
               <input style={inp} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Short description" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div>
-                <label style={lbl}>Price (PKR)</label>
-                <input style={inp} type="number" min="0" value={form.price_pkr} onChange={e => setForm(f => ({ ...f, price_pkr: e.target.value }))} placeholder="0" />
-              </div>
-              <div>
-                <label style={lbl}>Price (USD)</label>
-                <input style={inp} type="number" min="0" value={form.price_usd} onChange={e => setForm(f => ({ ...f, price_usd: e.target.value }))} placeholder="0" />
-              </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Price (USD)</label>
+              <input style={inp} type="number" min="0" value={form.price_usd} onChange={e => setForm(f => ({ ...f, price_usd: e.target.value }))} placeholder="0" />
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button type="button" onClick={() => setShowForm(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>

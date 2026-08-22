@@ -130,11 +130,12 @@ export default function EditCompanyPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
               <div>
-                <label style={labelStyle}>Currency *</label>
-                <select value={form.currency} onChange={set('currency')} style={inputStyle}>
-                  <option value="PKR">PKR — Pakistani Rupee</option>
-                  <option value="USD">USD — US Dollar</option>
-                </select>
+                {/* USD is the system's only supported currency now — no
+                    longer editable. Shown read-only rather than hidden so an
+                    older company still on a legacy currency (e.g. PKR) isn't
+                    silently misrepresented as USD here. */}
+                <label style={labelStyle}>Currency</label>
+                <input value={form.currency} disabled style={{ ...inputStyle, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }} />
               </div>
               <div>
                 <label style={labelStyle}>Industry</label>

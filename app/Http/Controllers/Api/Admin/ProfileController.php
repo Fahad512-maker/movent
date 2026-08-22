@@ -40,13 +40,10 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name'     => ['required', 'string', 'max:150'],
             'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
-            // Deliberate, scoped exception to the "never touch Settings'
-            // business profile" rule above — currency moved onto My Profile
-            // per 2026-08-15 request, since it's the one setting Admin
-            // wanted here rather than buried in a Settings tab. Everything
-            // else that SettingsController owns (industry/email/timezone/
-            // invoice prefix/bank details/etc.) still lives there only.
-            'currency' => ['nullable', 'in:PKR,USD,EUR,GBP,AED,SAR'],
+            // currency is deliberately NOT accepted here — the system only
+            // ever operates in USD now (see company_admins.currency's
+            // default and Api\Admin\ClientController's company currency
+            // lock), so there is nothing left for an Admin to change.
         ]);
 
         $old = $admin->only(['name', 'phone']);

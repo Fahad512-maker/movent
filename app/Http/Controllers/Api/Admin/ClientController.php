@@ -276,7 +276,8 @@ class ClientController extends Controller
 
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:200'],
-            'currency' => 'required|in:PKR,USD',
+            // currency is deliberately NOT accepted here — every company is
+            // created in USD, the system's only supported currency now.
             'industry' => 'nullable|string|max:100',
             'email'    => 'nullable|email|max:255',
             'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
@@ -291,7 +292,7 @@ class ClientController extends Controller
         $company = Company::create([
             'admin_id'       => $admin->id,
             'name'           => $data['name'],
-            'currency'       => $data['currency'],
+            'currency'       => 'USD',
             'industry'       => $data['industry'] ?? null,
             'email'          => $data['email'] ?? null,
             'phone'          => $data['phone'] ?? null,
@@ -347,7 +348,11 @@ class ClientController extends Controller
 
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:200'],
-            'currency' => 'required|in:PKR,USD',
+            // currency is deliberately NOT accepted here — the system only
+            // supports USD now, and an existing company's currency (whatever
+            // it already is) is left untouched rather than silently
+            // relabeled, since that would misrepresent its historical
+            // invoices' real currency.
             'industry' => 'nullable|string|max:100',
             'email'    => 'nullable|email|max:255',
             'phone'    => ['nullable', 'string', 'max:30', new ValidPhoneNumber],
@@ -361,10 +366,6 @@ class ClientController extends Controller
 
         $company->update($data);
 
-        // Currency is this company's own — Company::invoicingProfile() reads
-        // it straight off this row, not the admin's shared record, so an
-        // admin with a PKR company and a USD company can set each
-        // independently without one leaking into the other's invoices.
         return ApiResponse::success(
             $company->only(['id', 'name', 'industry', 'email', 'phone', 'address', 'timezone', 'country', 'currency']),
             'Company updated successfully'

@@ -16,7 +16,6 @@ export interface ModulePayload {
   key: string;
   label: string;
   description?: string | null;
-  price_pkr?: number | null;
   price_usd?: number | null;
 }
 

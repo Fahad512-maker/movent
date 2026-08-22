@@ -282,7 +282,9 @@ class InvoiceController extends Controller
             'project_title'       => 'nullable|string|max:255',
             'project_reference'   => 'nullable|string|max:100',
             'due_date'            => 'nullable|date',
-            'currency'            => 'nullable|string|max:10',
+            // USD is the system's only supported currency now — locked here
+            // the same as Api\Admin\InvoiceController::store().
+            'currency'            => 'nullable|in:USD',
             'tax_rate'            => 'nullable|numeric|min:0|max:100',
             'discount_amount'     => 'nullable|numeric|min:0',
             'notes'               => 'nullable|string|max:2000',

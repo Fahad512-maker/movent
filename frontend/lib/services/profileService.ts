@@ -21,10 +21,7 @@ function buildProfileService<T extends Admin | User>(base: '/admin' | '/user') {
   return {
     get: async (): Promise<T> => (await api.get(`${base}/profile`)).data.data,
 
-    // currency is only ever sent for the '/admin' variant (see profile page's
-    // isAdmin gate) — Api\User\ProfileController::update() doesn't accept it
-    // at all, so it'd be silently ignored there anyway even if sent.
-    update: async (payload: { name: string; phone?: string | null; currency?: string }): Promise<T> =>
+    update: async (payload: { name: string; phone?: string | null }): Promise<T> =>
       (await api.put(`${base}/profile`, payload)).data.data,
 
     uploadAvatar: async (file: File): Promise<T> => {

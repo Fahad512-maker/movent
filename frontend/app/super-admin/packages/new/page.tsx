@@ -27,7 +27,7 @@ export default function NewPackagePage() {
   const [availableModules, setAvailableModules] = useState<ModuleItem[]>([]);
   const [form, setForm] = useState({
     name: '', tier: 'basic' as Package['tier'], price: '',
-    price_pkr: '', price_usd: '', trial_days: '14',
+    price_usd: '', trial_days: '14',
     billing_cycle: 'monthly' as Package['billing_cycle'],
     max_companies: '', max_users_per_company: '',
     description: '', is_visible: true, is_popular: false,
@@ -58,7 +58,6 @@ export default function NewPackagePage() {
       const payload: PackagePayload = {
         name: form.name, tier: form.tier,
         price: Number(form.price),
-        price_pkr: form.price_pkr ? Number(form.price_pkr) : null,
         price_usd: form.price_usd ? Number(form.price_usd) : null,
         billing_cycle: form.billing_cycle,
         trial_days: form.trial_days ? Number(form.trial_days) : null,
@@ -137,14 +136,10 @@ export default function NewPackagePage() {
             {/* Pricing */}
             <div style={{ marginBottom: 28 }}>
               <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>Pricing</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={lbl}>Base Price (USD) *</label>
                   <input style={inp} type="number" min="0" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} required placeholder="0.00" />
-                </div>
-                <div>
-                  <label style={lbl}>Price PKR</label>
-                  <input style={inp} type="number" min="0" value={form.price_pkr} onChange={e => setForm(f => ({ ...f, price_pkr: e.target.value }))} placeholder="0" />
                 </div>
                 <div>
                   <label style={lbl}>Trial Days</label>

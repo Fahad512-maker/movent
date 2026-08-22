@@ -137,7 +137,11 @@ class InvoiceController extends Controller
             'project_reference'   => 'nullable|string|max:100',
             'send_now'            => 'nullable|boolean',
             'due_date'            => 'nullable|date',
-            'currency'            => 'nullable|string|max:10',
+            // USD is the system's only supported currency now — an override
+            // is still accepted here (never silently rejected) but locked to
+            // 'USD', so a direct API call can't slip a different currency in
+            // even though the frontend no longer offers the picker.
+            'currency'            => 'nullable|in:USD',
             'tax_rate'            => 'nullable|numeric|min:0|max:100',
             'discount_amount'     => 'nullable|numeric|min:0',
             'notes'               => 'nullable|string|max:2000',
@@ -286,7 +290,10 @@ class InvoiceController extends Controller
 
         $data = $request->validate([
             'due_date'            => 'nullable|date',
-            'currency'            => 'nullable|string|max:10',
+            // Same USD-only lock as store() — omitted entirely by the
+            // frontend now, so this just guards against a direct API call
+            // relabeling an existing (possibly historical non-USD) invoice.
+            'currency'            => 'nullable|in:USD',
             'tax_rate'            => 'nullable|numeric|min:0|max:100',
             'discount_amount'     => 'nullable|numeric|min:0',
             'notes'               => 'nullable|string|max:2000',

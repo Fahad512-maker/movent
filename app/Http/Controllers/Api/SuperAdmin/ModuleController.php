@@ -18,11 +18,13 @@ class ModuleController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // price_pkr is deliberately NOT accepted here — USD is the system's
+        // only supported currency now. New modules keep that column's own DB
+        // default; existing ones keep whatever value they already had.
         $validated = $request->validate([
             'key'         => ['required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/', Rule::unique('modules', 'key')],
             'label'       => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:255'],
-            'price_pkr'   => ['nullable', 'numeric', 'min:0'],
             'price_usd'   => ['nullable', 'numeric', 'min:0'],
         ]);
 
@@ -31,7 +33,6 @@ class ModuleController extends Controller
             'label'       => $validated['label'],
             'description' => $validated['description'] ?? null,
             'sub_modules' => [$validated['key']],
-            'price_pkr'   => $validated['price_pkr'] ?? 0,
             'price_usd'   => $validated['price_usd'] ?? 0,
             'is_active'   => true,
             'is_system'   => false,
@@ -45,14 +46,12 @@ class ModuleController extends Controller
         $validated = $request->validate([
             'label'       => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:255'],
-            'price_pkr'   => ['nullable', 'numeric', 'min:0'],
             'price_usd'   => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $module->update([
             'label'       => $validated['label'],
             'description' => $validated['description'] ?? null,
-            'price_pkr'   => $validated['price_pkr'] ?? 0,
             'price_usd'   => $validated['price_usd'] ?? 0,
         ]);
 

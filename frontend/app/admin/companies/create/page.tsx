@@ -11,7 +11,6 @@ import { ALL_COUNTRIES } from '@/lib/countries';
 
 interface FormState {
   name: string;
-  currency: string;
   industry: string;
   email: string;
   phone: string;
@@ -42,7 +41,6 @@ export default function CreateCompanyPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
     name:     '',
-    currency: 'USD',
     industry: '',
     email:    '',
     phone:    '',
@@ -117,21 +115,12 @@ export default function CreateCompanyPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
-              <div>
-                <label style={labelStyle}>Currency *</label>
-                <select value={form.currency} onChange={set('currency')} style={inputStyle}>
-                  <option value="USD">USD — US Dollar</option>
-                  <option value="PKR">PKR — Pakistani Rupee</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Industry</label>
-                <select value={form.industry} onChange={set('industry')} style={inputStyle}>
-                  <option value="">— Select —</option>
-                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-                </select>
-              </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Industry</label>
+              <select value={form.industry} onChange={set('industry')} style={inputStyle}>
+                <option value="">— Select —</option>
+                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
@@ -191,6 +180,7 @@ export default function CreateCompanyPage() {
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#3b82f6', lineHeight: 1.8 }}>
                 <li>Each company has its own clients, projects, invoices</li>
+                <li>Every invoice is raised in USD</li>
                 <li>All your companies share the same client portal seat pool</li>
                 <li>Modules are copied from your first company automatically</li>
                 <li>You can manage which company a client belongs to on the client page</li>

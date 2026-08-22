@@ -42,7 +42,9 @@ class PackageController extends Controller
             'name'                   => ['required', 'string', 'max:255'],
             'tier'                   => ['required', 'in:basic,professional,enterprise,custom'],
             'price'                  => ['required', 'numeric', 'min:0'],
-            'price_pkr'              => ['nullable', 'numeric', 'min:0'],
+            // price_pkr is deliberately NOT accepted here — USD is the
+            // system's only supported currency now. Existing packages keep
+            // whatever value that column already has, untouched.
             'price_usd'              => ['nullable', 'numeric', 'min:0'],
             'billing_cycle'          => ['required', 'in:monthly,yearly'],
             'trial_days'             => ['nullable', 'integer', 'min:0'],
@@ -66,7 +68,6 @@ class PackageController extends Controller
             'name'                  => $validated['name'],
             'tier'                  => $validated['tier'],
             'price'                 => $validated['price'],
-            'price_pkr'             => $validated['price_pkr'] ?? null,
             'price_usd'             => $validated['price_usd'] ?? null,
             'billing_cycle'         => $validated['billing_cycle'],
             'trial_days'            => $validated['trial_days'] ?? 14,
@@ -96,7 +97,9 @@ class PackageController extends Controller
             'name'                   => ['required', 'string', 'max:255'],
             'tier'                   => ['required', 'in:basic,professional,enterprise,custom'],
             'price'                  => ['required', 'numeric', 'min:0'],
-            'price_pkr'              => ['nullable', 'numeric', 'min:0'],
+            // price_pkr is deliberately NOT accepted here — USD is the
+            // system's only supported currency now. Existing packages keep
+            // whatever value that column already has, untouched.
             'price_usd'              => ['nullable', 'numeric', 'min:0'],
             'billing_cycle'          => ['required', 'in:monthly,yearly'],
             'trial_days'             => ['nullable', 'integer', 'min:0'],
@@ -120,7 +123,6 @@ class PackageController extends Controller
             'name'                  => $validated['name'],
             'tier'                  => $validated['tier'],
             'price'                 => $validated['price'],
-            'price_pkr'             => $validated['price_pkr'] ?? null,
             'price_usd'             => $validated['price_usd'] ?? null,
             'billing_cycle'         => $validated['billing_cycle'],
             'trial_days'            => $validated['trial_days'] ?? $package->trial_days,

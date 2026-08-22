@@ -5,7 +5,6 @@ export interface PackagePayload {
   name: string;
   tier: Package['tier'];
   price: number;
-  price_pkr?: number | null;
   price_usd?: number | null;
   billing_cycle: Package['billing_cycle'];
   trial_days?: number | null;

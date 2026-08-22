@@ -462,7 +462,8 @@ class ProjectController extends Controller
         // client, see 2026_07_04_000003_make_projects_client_id_nullable).
         $data = $request->validate([
             'due_date'            => 'nullable|date',
-            'currency'            => 'nullable|string|max:10',
+            // USD is the system's only supported currency now.
+            'currency'            => 'nullable|in:USD',
             'tax_rate'            => 'nullable|numeric|min:0|max:100',
             'discount_amount'     => 'nullable|numeric|min:0',
             'notes'               => 'nullable|string|max:2000',

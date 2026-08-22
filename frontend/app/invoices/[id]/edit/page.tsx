@@ -104,7 +104,6 @@ export default function EditInvoicePage() {
     setSaving(true); setError('');
     try {
       await adminInvoiceService.update(invoiceId, {
-        currency,
         tax_rate:        taxRate,
         discount_amount: discount,
         notes:    notes || null,
@@ -147,13 +146,12 @@ export default function EditInvoicePage() {
                   {error && <div style={{ marginBottom: 14, padding: '9px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, color: '#dc2626', fontSize: 13 }}>{error}</div>}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                     <div>
+                      {/* USD is the system's only supported currency now —
+                          no longer editable. Shown read-only (not hidden) so
+                          an older invoice on a legacy currency (e.g. PKR)
+                          isn't silently misrepresented as USD here. */}
                       <label style={lbl}>Currency</label>
-                      <select style={inp} value={currency} onChange={e => setCurrency(e.target.value)}>
-                        <option value="PKR">PKR</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                      </select>
+                      <input style={{ ...inp, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' }} value={currency} disabled />
                     </div>
                     <div>
                       <label style={lbl}>Due Date</label>
