@@ -120,7 +120,7 @@ export default function ClientPaymentPage() {
   if (!data)   return null;
 
   if (receipt) return (
-    <div style={{ maxWidth: 480 }}>
+    <div style={{ maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
       <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 14, padding: '32px 28px', textAlign: 'center' }}>
         <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', border: '3px solid #86efac', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: 28 }}>✅</div>
         <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#15803d' }}>

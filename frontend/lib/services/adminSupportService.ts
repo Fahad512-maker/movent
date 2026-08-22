@@ -24,15 +24,19 @@ export interface SupportTicket {
 export interface SupportTicketReply {
   id: number;
   ticket_id: number;
-  replied_by: number | null;
+  // Same relation/attribute key collision as SupportTicket.raised_by/assigned_to —
+  // the eager-loaded repliedBy relation shadows this raw FK column, so it always
+  // holds the {id, name, role_type} object (or null) once loaded, never a plain id.
+  replied_by: { id: number; name: string; role_type?: string } | null;
   replied_by_admin_id: number | null;
+  // repliedByAdmin relation snake-cases to this key (no collision — the raw
+  // FK column is replied_by_admin_id, a different name).
+  replied_by_admin?: { id: number; name: string } | null;
   message: string;
   attachment_path?: string | null;
   attachment_name?: string | null;
   attachment_url?: string | null;
   created_at: string;
-  repliedBy?: { id: number; name: string; role_type?: string } | null;
-  repliedByAdmin?: { id: number; name: string } | null;
 }
 
 export const adminSupportService = {

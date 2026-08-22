@@ -32,6 +32,7 @@ export default function AdminSupportTicketPage() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [savingStatus, setSavingStatus] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastReplyCount = useRef<number | null>(null);
 
   const load = () => {
     adminSupportService.get(Number(id))
@@ -41,7 +42,25 @@ export default function AdminSupportTicketPage() {
   };
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [data]);
+  // Client replies otherwise only show up after a manual page reload — poll
+  // quietly (no loading state, no redirect-away on a transient error) so a
+  // new reply appears without the admin having to refresh.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      adminSupportService.get(Number(id)).then(setData).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [id]);
+  useEffect(() => {
+    const count = data?.replies?.length ?? 0;
+    // Only autoscroll when a reply was actually added — a background poll
+    // that returns unchanged data must not yank the admin back down while
+    // they're reading older messages further up.
+    if (lastReplyCount.current === null || count > lastReplyCount.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    lastReplyCount.current = count;
+  }, [data]);
   useEffect(() => {
     userService.list().then(r => setStaff((r.users || []).filter((u: any) => u.role_type !== 'client'))).catch(() => {});
   }, []);
@@ -154,8 +173,8 @@ export default function AdminSupportTicketPage() {
               <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: 20 }}>No replies yet.</div>
             ) : (
               (data.replies || []).map((r: any) => {
-                const isClient = r.repliedBy?.role_type === 'client';
-                const authorName = r.repliedByAdmin?.name || r.repliedBy?.name || (isClient ? 'Client' : 'Support');
+                const isClient = r.replied_by?.role_type === 'client';
+                const authorName = r.replied_by_admin?.name || r.replied_by?.name || (isClient ? 'Client' : 'Support');
                 return (
                   <div key={r.id} style={{ display: 'flex', flexDirection: isClient ? 'row' : 'row-reverse', gap: 10, marginBottom: 14 }}>
                     <div style={{

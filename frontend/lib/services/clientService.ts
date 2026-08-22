@@ -35,14 +35,6 @@ export const clientService = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
-  approveDeliverable: async (id: number) => {
-    const res = await clientApi.post(`/client/deliverables/${id}/approve`);
-    return res.data;
-  },
-  requestRevision: async (id: number, notes?: string) => {
-    const res = await clientApi.post(`/client/deliverables/${id}/revision`, { notes });
-    return res.data;
-  },
   invoices: async (params?: Record<string, string>) => {
     const res = await clientApi.get('/client/invoices', { params });
     return res.data.data;
@@ -78,6 +70,22 @@ export const clientService = {
   documentDownloadUrl: (id: number) => {
     const base = process.env.NEXT_PUBLIC_API_URL || '';
     return `${base}/client/documents/${id}/download`;
+  },
+  // Project "Files" tab — a document (Client\DocumentController) and a
+  // project attachment (Client\AttachmentController) live on different
+  // tables/routes but are merged into one `files` list by
+  // Client\ProjectController::show(), each tagged with which it is.
+  downloadProjectFile: async (source: 'document' | 'attachment', id: number, fileName: string) => {
+    const path = source === 'document' ? `/client/documents/${id}/download` : `/client/attachments/${id}/download`;
+    const res = await clientApi.get(path, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
   // One single Sales Chat conversation (Seller <-> Client <-> Company
   // Admin) — no thread picker, matching Api\Client\ChatController.

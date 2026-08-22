@@ -133,8 +133,6 @@ export default function UserProjectDetailPage() {
     const [comments, setComments] = useState<ProjectComment[]>([]);
     const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [attachmentVisibleToClient, setAttachmentVisibleToClient] =
-        useState(false);
 
     const canEditProjects = can("project_management", "canEditProjects");
     const canManageProjectInvoices = can(
@@ -493,15 +491,7 @@ export default function UserProjectDetailPage() {
                 continue;
             }
             try {
-                // A Seller only ever sees the "visible to client" subset of
-                // attachments (see canViewAttachments above) — uploading with the
-                // box unchecked would make their own file invisible to them
-                // immediately after upload, so force it true for a Seller.
-                await userProjectService.attachments.upload(
-                    id,
-                    file,
-                    isSeller || attachmentVisibleToClient,
-                );
+                await userProjectService.attachments.upload(id, file);
             } catch {
                 failed++;
                 toast.error(`${file.name}: upload failed`);
@@ -1276,31 +1266,6 @@ export default function UserProjectDetailPage() {
                                             flexWrap: "wrap",
                                         }}
                                     >
-                                        {!isSeller && (
-                                            <label
-                                                style={{
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: 6,
-                                                    fontSize: 12,
-                                                    color: "#475569",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={
-                                                        attachmentVisibleToClient
-                                                    }
-                                                    onChange={(e) =>
-                                                        setAttachmentVisibleToClient(
-                                                            e.target.checked,
-                                                        )
-                                                    }
-                                                />
-                                                Visible to client
-                                            </label>
-                                        )}
                                         <label
                                             title={
                                                 isDraft ? DRAFT_HINT : undefined
@@ -2800,31 +2765,6 @@ export default function UserProjectDetailPage() {
                                         gap: 12,
                                     }}
                                 >
-                                    {!isSeller && (
-                                        <label
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 6,
-                                                fontSize: 12,
-                                                color: "#475569",
-                                                cursor: "pointer",
-                                            }}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={
-                                                    attachmentVisibleToClient
-                                                }
-                                                onChange={(e) =>
-                                                    setAttachmentVisibleToClient(
-                                                        e.target.checked,
-                                                    )
-                                                }
-                                            />
-                                            Visible to client
-                                        </label>
-                                    )}
                                     <label
                                         title={isDraft ? DRAFT_HINT : undefined}
                                         style={{
@@ -2907,21 +2847,6 @@ export default function UserProjectDetailPage() {
                                                 >
                                                     {a.original_name}
                                                 </span>
-                                                {a.is_visible_to_client && (
-                                                    <span
-                                                        style={{
-                                                            fontSize: 10,
-                                                            padding: "1px 8px",
-                                                            borderRadius: 20,
-                                                            background:
-                                                                "#ecfdf5",
-                                                            color: "#059669",
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        Visible to client
-                                                    </span>
-                                                )}
                                             </div>
                                             <div
                                                 style={{

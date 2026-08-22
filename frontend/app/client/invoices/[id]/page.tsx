@@ -42,7 +42,7 @@ export default function ClientInvoiceDetailPage() {
   const canPay = ['sent', 'overdue', 'partially_paid'].includes(inv.status);
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}>←</button>

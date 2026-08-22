@@ -13,6 +13,13 @@ const SC: Record<string, { bg: string; color: string }> = {
   cancelled: { bg: '#fef2f2', color: '#dc2626' },
 };
 
+// A named month reads unambiguously everywhere, unlike a raw ISO timestamp
+// or numeric D/M/Y (which reads as M/D/Y to half the audience).
+const fmtDate = (d?: string | null) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 export default function ClientProjectsPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [status, setStatus]     = useState('');
@@ -113,8 +120,8 @@ export default function ClientProjectsPage() {
                         {p.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{p.start_date || '—'}</td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{p.deadline || '—'}</td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{fmtDate(p.start_date)}</td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: '#64748b' }}>{fmtDate(p.deadline)}</td>
                     <td style={{ padding: '12px 18px', minWidth: 100 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>

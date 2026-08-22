@@ -26,6 +26,7 @@ export default function ClientTicketDetailPage() {
   // the input fresh, which is the only way to actually reset it.
   const [fileInputKey, setFileInputKey] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastReplyCount = useRef<number | null>(null);
 
   const load = () => {
     clientService.ticket(Number(id))
@@ -35,7 +36,25 @@ export default function ClientTicketDetailPage() {
   };
 
   useEffect(() => { load(); }, [id]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [data]);
+  // Staff/admin replies otherwise only show up after a manual page reload —
+  // poll quietly (no loading state, no redirect-away on a transient error)
+  // so a new reply appears without the client having to refresh.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      clientService.ticket(Number(id)).then(setData).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [id]);
+  useEffect(() => {
+    const count = data?.replies?.length ?? 0;
+    // Only autoscroll when a reply was actually added — a background poll
+    // that returns unchanged data must not yank the client back down while
+    // they're reading older messages further up.
+    if (lastReplyCount.current === null || count > lastReplyCount.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    lastReplyCount.current = count;
+  }, [data]);
 
   const sendReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +116,9 @@ export default function ClientTicketDetailPage() {
           ) : (
             (data.replies || []).map((r: any) => {
               const isClient = r.replied_by?.role_type === 'client';
+              // Company Admin replies carry replied_by_admin (repliedByAdmin
+              // relation) instead of replied_by — check it first.
+              const authorName = r.replied_by_admin?.name || r.replied_by?.name || 'Support';
               return (
                 <div key={r.id} style={{ display: 'flex', flexDirection: isClient ? 'row-reverse' : 'row', gap: 10, marginBottom: 14 }}>
                   <div style={{
@@ -105,11 +127,11 @@ export default function ClientTicketDetailPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 12, fontWeight: 700, color: isClient ? '#fff' : '#64748b',
                   }}>
-                    {r.replied_by?.name?.[0]?.toUpperCase() || '?'}
+                    {authorName[0]?.toUpperCase() || '?'}
                   </div>
                   <div style={{ maxWidth: '75%' }}>
                     <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3, textAlign: isClient ? 'right' : 'left' }}>
-                      {r.replied_by?.name || 'Support'} · {r.created_at?.split('T')[0]}
+                      {authorName} · {r.created_at?.split('T')[0]}
                     </div>
                     <div style={{
                       padding: '10px 14px', borderRadius: 10,
@@ -119,6 +141,11 @@ export default function ClientTicketDetailPage() {
                     }}>
                       {r.message}
                     </div>
+                    {r.attachment_url && (
+                      <a href={r.attachment_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 4, fontSize: 11, color: GREEN }}>
+                        📎 {r.attachment_name || 'Attachment'}
+                      </a>
+                    )}
                   </div>
                 </div>
               );

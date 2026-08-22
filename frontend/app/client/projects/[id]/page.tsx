@@ -20,7 +20,7 @@ const SC: Record<string, { bg: string; color: string }> = {
   in_progress:        { bg: '#ecfdf5', color: '#059669' },
 };
 
-const TABS = ['deliverables', 'activity', 'chat'] as const;
+const TABS = ['files', 'activity', 'chat'] as const;
 type Tab = typeof TABS[number];
 
 // Files a client may attach in project chat — mirrors the backend's
@@ -41,11 +41,25 @@ function fmtChatTime(d: string | null | undefined): string {
       date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// A named month reads unambiguously everywhere, unlike a raw ISO timestamp
+// or numeric D/M/Y (which reads as M/D/Y to half the audience).
+const fmtDate = (d?: string | null) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+function fmtFileSize(bytes?: number | null): string {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ClientProjectDetailPage() {
   const { id } = useParams();
   const router  = useRouter();
   const [data, setData]       = useState<any>(null);
-  const [tab, setTab]         = useState<Tab>('deliverables');
+  const [tab, setTab]         = useState<Tab>('files');
   const [loading, setLoading] = useState(true);
 
   // Notification deep-links land here as ?tab=chat (see the `link` written by
@@ -70,11 +84,6 @@ export default function ClientProjectDetailPage() {
   // Project Manager once the Seller has invited them into this conversation.
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [selectedMentions, setSelectedMentions] = useState<number[]>([]);
-
-  // Revision modal
-  const [revModal, setRevModal]     = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
-  const [revNotes, setRevNotes]     = useState('');
-  const [revSaving, setRevSaving]   = useState(false);
 
   const load = () => {
     clientService.project(Number(id))
@@ -167,36 +176,17 @@ export default function ClientProjectDetailPage() {
     }
   };
 
-  const approve = async (deliverableId: number) => {
-    try {
-      await clientService.approveDeliverable(deliverableId);
-      toast.success('Deliverable approved');
-      load();
-    } catch { toast.error('Failed to approve'); }
-  };
-
-  const openRevision = (deliverableId: number) => {
-    setRevModal({ open: true, id: deliverableId });
-    setRevNotes('');
-  };
-
-  const submitRevision = async () => {
-    if (!revNotes.trim()) { toast.error('Please enter revision notes'); return; }
-    if (!revModal.id) return;
-    setRevSaving(true);
-    try {
-      await clientService.requestRevision(revModal.id, revNotes);
-      toast.success('Revision requested');
-      setRevModal({ open: false, id: null });
-      setRevNotes('');
-      load();
-    } catch { toast.error('Failed to submit revision'); }
-    finally { setRevSaving(false); }
-  };
-
   const downloadProjectDelivery = async () => {
     try {
       await clientService.downloadProjectDelivery(Number(id), p.delivery_file_name || `${p.name}-delivery.zip`);
+    } catch {
+      toast.error('Download failed');
+    }
+  };
+
+  const downloadFile = async (f: any) => {
+    try {
+      await clientService.downloadProjectFile(f.source, f.id, f.file_name || f.title || 'file');
     } catch {
       toast.error('Download failed');
     }
@@ -224,8 +214,8 @@ export default function ClientProjectDetailPage() {
           {p.description && <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>{p.description}</p>}
         </div>
         <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'right', flexShrink: 0 }}>
-          <div>Start: {p.start_date || '—'}</div>
-          <div>Deadline: <strong style={{ color: '#1e293b' }}>{p.deadline || '—'}</strong></div>
+          <div>Start: {fmtDate(p.start_date)}</div>
+          <div>Deadline: <strong style={{ color: '#1e293b' }}>{fmtDate(p.deadline)}</strong></div>
           {p.project_manager && <div style={{ marginTop: 2 }}>PM: <strong style={{ color: '#1e293b' }}>{p.project_manager.name}</strong></div>}
         </div>
       </div>
@@ -271,45 +261,34 @@ export default function ClientProjectDetailPage() {
         ))}
       </div>
 
-      {/* DELIVERABLES */}
-      {tab === 'deliverables' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {(p.deliverables || []).length === 0 ? (
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 32, textAlign: 'center', color: '#94a3b8' }}>No deliverables yet.</div>
+      {/* FILES — documents + project attachments the admin/staff marked
+          "visible to client" (see Client\ProjectController::show()'s
+          merged `files` list). */}
+      {tab === 'files' && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          {(data.files || []).length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>No files shared yet.</div>
           ) : (
-            (p.deliverables || []).map((d: any) => {
-              const sc = SC[d.status] || { bg: '#f1f5f9', color: '#64748b' };
-              return (
-                <div key={d.id} style={{
-                  background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0',
-                  padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {(data.files || []).map((f: any, i: number) => (
+                <div key={`${f.source}-${f.id}`} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '14px 20px', borderBottom: i < data.files.length - 1 ? '1px solid #f8fafc' : 'none',
                 }}>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{d.title}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: sc.bg, color: sc.color, textTransform: 'capitalize' }}>
-                        {d.status?.replace(/_/g, ' ')}
-                      </span>
-                      {d.uploaded_by && <span style={{ fontSize: 11, color: '#94a3b8' }}>by {d.uploaded_by.name}</span>}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{f.title || f.file_name}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                      {fmtFileSize(f.file_size_bytes)} · {f.uploaded_by?.name ?? 'Unknown'} · {fmtDate(f.created_at)}
                     </div>
                   </div>
-                  {d.status === 'delivered' && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={() => approve(d.id)}
-                        style={{ padding: '6px 14px', background: GREEN, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        ✓ Approve
-                      </button>
-                      <button
-                        onClick={() => openRevision(d.id)}
-                        style={{ padding: '6px 14px', background: '#fff', color: '#d97706', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        ↺ Request Revision
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => downloadFile(f)}
+                    style={{ padding: '6px 14px', background: GREEN, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                    Download
+                  </button>
                 </div>
-              );
-            })
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -467,50 +446,6 @@ export default function ClientProjectDetailPage() {
         </div>
       )}
 
-      {/* Revision Notes Modal */}
-      {revModal.open && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }}>
-          <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.12)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Request Revision</h3>
-              <button onClick={() => setRevModal({ open: false, id: null })} style={{ background: 'none', border: 'none', fontSize: 20, color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            </div>
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 6 }}>
-              Revision Notes <span style={{ color: '#dc2626' }}>*</span>
-            </label>
-            <textarea
-              value={revNotes}
-              onChange={e => setRevNotes(e.target.value)}
-              rows={4}
-              placeholder="Describe the changes needed…"
-              style={{
-                width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
-                fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 16,
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={submitRevision}
-                disabled={revSaving || !revNotes.trim()}
-                style={{
-                  flex: 1, padding: '10px', background: revSaving ? '#fde68a' : '#d97706',
-                  color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
-                  cursor: revSaving || !revNotes.trim() ? 'not-allowed' : 'pointer',
-                }}>
-                {revSaving ? 'Submitting…' : 'Submit Revision'}
-              </button>
-              <button
-                onClick={() => setRevModal({ open: false, id: null })}
-                style={{ padding: '10px 18px', background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

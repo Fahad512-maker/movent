@@ -797,10 +797,9 @@ export const adminProjectService = {
       return res.data.data;
     },
 
-    upload: async (projectId: number, file: File, isVisibleToClient: boolean = false): Promise<ProjectAttachment> => {
+    upload: async (projectId: number, file: File): Promise<ProjectAttachment> => {
       const form = new FormData();
       form.append('file', file);
-      form.append('is_visible_to_client', isVisibleToClient ? '1' : '0');
       const res = await api.post(`/admin/projects/${projectId}/attachments`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

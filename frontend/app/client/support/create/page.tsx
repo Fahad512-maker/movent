@@ -48,7 +48,7 @@ export default function ClientCreateTicketPage() {
   };
 
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div style={{ width: '100%' }}>
       <LoadingOverlay show={loading} message="Submitting Ticket…" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}>←</button>

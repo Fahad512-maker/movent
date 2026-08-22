@@ -23,7 +23,6 @@ export default function ProjectAttachmentsPage() {
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [visibleToClient, setVisibleToClient] = useState(false);
   // Files can't be added to a draft — see the isDraft() guard in
   // Api\Admin\ProjectAttachmentController::store().
   const [projectDraft, setProjectDraft] = useState(false);
@@ -75,7 +74,7 @@ export default function ProjectAttachmentsPage() {
       const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
       if (!ALLOWED_ATTACHMENT_TYPES.includes(ext)) { toast.error(`${file.name}: file type not allowed`); failed++; continue; }
       try {
-        await adminProjectService.attachments.upload(projectId, file, visibleToClient);
+        await adminProjectService.attachments.upload(projectId, file);
       } catch {
         failed++;
         toast.error(`${file.name}: upload failed`);
@@ -118,13 +117,6 @@ export default function ProjectAttachmentsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: 0 }}>Project Attachments</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-              <input
-                type="checkbox" checked={visibleToClient}
-                onChange={e => setVisibleToClient(e.target.checked)}
-              />
-              Visible to client
-            </label>
             <label
               title={projectDraft ? DRAFT_HINT : undefined}
               style={{
@@ -156,11 +148,6 @@ export default function ProjectAttachmentsPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{a.original_name}</span>
-                    {a.is_visible_to_client && (
-                      <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontWeight: 600 }}>
-                        Visible to client
-                      </span>
-                    )}
                   </div>
                   <div style={{ fontSize: 11, color: '#94a3b8' }}>
                     {a.file_type ?? 'file'} · {fmtFileSize(a.file_size)} · {a.uploaded_by_admin?.name ?? a.uploaded_by_user?.name ?? '—'} · {fmtDate(a.created_at)}

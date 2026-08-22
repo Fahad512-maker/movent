@@ -50,8 +50,7 @@ class ProjectAttachmentController extends Controller
         }
 
         $validated = $request->validate([
-            'file'                 => ['required', 'file', 'max:' . self::MAX_FILE_KB, 'mimes:' . self::ALLOWED_MIMES],
-            'is_visible_to_client' => ['nullable', 'boolean'],
+            'file' => ['required', 'file', 'max:' . self::MAX_FILE_KB, 'mimes:' . self::ALLOWED_MIMES],
         ]);
 
         $file = $validated['file'];
@@ -69,7 +68,7 @@ class ProjectAttachmentController extends Controller
             'file_path'             => $path,
             'file_type'             => $file->getClientMimeType(),
             'file_size'             => $file->getSize(),
-            'is_visible_to_client'  => $validated['is_visible_to_client'] ?? false,
+            'is_visible_to_client'  => true,
         ]);
 
         return ApiResponse::success($attachment->load('uploadedByAdmin:id,name'), 'Attachment uploaded', 201);
