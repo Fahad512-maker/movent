@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private function admin() { return auth('admin')->user(); }
 
     private function companyIds(): array
@@ -21,14 +24,22 @@ class ReportController extends Controller
     // GET /admin/reports/invoices
     public function invoices(Request $request): JsonResponse
     {
-        $companyIds = $this->companyIds();
-        $year       = (int) ($request->year ?? now()->year);
-        $companyId  = $request->company_id ? (int) $request->company_id : null;
+        $year = (int) ($request->year ?? now()->year);
+
+        // Company-Wise Dashboard Filtering — defaults to the active company
+        // (or every owned company when "All Companies" is selected, per the
+        // Navbar's CompanySelector), narrowed further by an explicit
+        // ?company_id= override when given. This previously always used
+        // every owned company regardless of the active-company selector,
+        // so switching companies had no visible effect on this page.
+        if ($request->filled('company_id')) {
+            $requested  = (int) $request->company_id;
+            $companyIds = in_array($requested, $this->companyIds(), true) ? [$requested] : $this->activeCompanyIds();
+        } else {
+            $companyIds = $this->activeCompanyIds();
+        }
 
         $base = Invoice::whereIn('company_id', $companyIds)->whereYear('created_at', $year);
-        if ($companyId && in_array($companyId, $companyIds)) {
-            $base->where('company_id', $companyId);
-        }
 
         // ── Summary ──────────────────────────────────────────────────────────
         // Counts are currency-agnostic (just document counts, safe to
@@ -107,7 +118,14 @@ class ReportController extends Controller
             ->take(10);
 
         // ── Recent payments ────────────────────────────────────────────────────
+        // "Recent Payments" means money actually received — a pending or
+        // rejected claim was never received, so (same fix as
+        // Admin\PaymentController::index()'s summary) only confirmed
+        // payments belong here. Without this, a rejected payment would
+        // render identically to a real one (the frontend styles every row
+        // green with no status shown).
         $recentPayments = Payment::whereHas('invoice', fn($q) => $q->whereIn('company_id', $companyIds))
+            ->where('status', 'confirmed')
             ->whereYear('payment_date', $year)
             ->with('invoice:id,invoice_number,client_id,currency', 'invoice.client:id,name')
             ->latest()

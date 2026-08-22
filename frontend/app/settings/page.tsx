@@ -362,7 +362,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout title="Settings">
-      <div style={{ maxWidth: tab === 'gateways' ? 1320 : 860 }}>
+      <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Settings</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>

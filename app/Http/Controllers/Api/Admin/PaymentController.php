@@ -114,12 +114,18 @@ class PaymentController extends Controller
 
         $payments = $query->get();
 
+        // "Total Received" must reflect money actually received — a pending
+        // (unconfirmed) or failed/rejected claim was never received, so only
+        // confirmed payments count toward the summary. The full $payments
+        // list above (with its status badges) still includes every status.
+        $received = $payments->where('status', 'confirmed');
+
         // Grouped by currency, not blended — this company can have payments
         // in more than one currency (e.g. after a Settings currency change),
         // and summing raw amounts across currencies as one number is
         // meaningless. 'currency' falls back to the invoice's own currency
         // for any payment recorded before that column existed on `payments`.
-        $byCurrency = $payments->groupBy(fn($p) => $p->currency ?? $p->invoice?->currency ?? 'USD')
+        $byCurrency = $received->groupBy(fn($p) => $p->currency ?? $p->invoice?->currency ?? 'USD')
             ->map(fn($g, $currency) => [
                 'currency'  => $currency,
                 'total'     => (float) $g->sum('amount'),
@@ -129,7 +135,7 @@ class PaymentController extends Controller
             ->values();
 
         $summary = [
-            'count'       => $payments->count(),
+            'count'       => $received->count(),
             'by_currency' => $byCurrency,
         ];
 

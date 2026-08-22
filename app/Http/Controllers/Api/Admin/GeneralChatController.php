@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ApiResponse;
+use App\Http\Controllers\Api\Admin\Concerns\ScopesToActiveCompany;
 use App\Http\Controllers\Controller;
 use App\Models\ChatMessage;
 use App\Models\ChatParticipant;
@@ -25,6 +26,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 // on chat_messages).
 class GeneralChatController extends Controller
 {
+    use ScopesToActiveCompany;
+
     private const MAX_FILE_KB = 10240;
     private const ALLOWED_MIMES = 'pdf,doc,docx,xls,xlsx,png,jpg,jpeg,zip';
 
@@ -43,10 +46,14 @@ class GeneralChatController extends Controller
             ->exists();
     }
 
-    // GET /admin/chat — every General Chat thread across this admin's companies.
+    // GET /admin/chat — General Chat threads for the active company (or every
+    // owned company when "All Companies" is selected, per the Navbar's
+    // CompanySelector) — same Company-Wise Dashboard Filtering pattern as
+    // every other admin list page. Previously always showed every owned
+    // company's threads regardless of the active-company selector.
     public function index(): JsonResponse
     {
-        $threads = ChatThread::whereIn('company_id', $this->companyIds())
+        $threads = ChatThread::whereIn('company_id', $this->activeCompanyIds())
             ->whereIn('thread_type', ['direct', 'group'])
             ->with(['participants.user:id,name,role_type', 'company:id,name'])
             ->orderByDesc('last_message_at')

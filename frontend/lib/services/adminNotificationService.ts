@@ -10,6 +10,9 @@ export interface AdminNotification {
   title: string;
   body: string | null;
   module_key: string | null;
+  company_id: number | null;
+  company_name: string | null;
+  company?: { id: number; name: string } | null;
   is_read: boolean;
   created_at: string;
   link: string | null;

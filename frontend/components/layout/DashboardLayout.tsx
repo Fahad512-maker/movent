@@ -46,6 +46,11 @@ export default function DashboardLayout({
   });
 
   useEffect(() => {
+    const selectCompanyPath = () => {
+      const returnTo = window.location.pathname + window.location.search + window.location.hash;
+      return `/select-company?returnTo=${encodeURIComponent(returnTo)}`;
+    };
+
     if (!isAuthenticated()) { router.push('/login'); return; }
 
     // This layout is only ever valid for 'admin' or 'user' sessions — a
@@ -68,7 +73,7 @@ export default function DashboardLayout({
         : false;
 
       if (active.length > 1 && !selected && window.location.pathname !== '/select-company') {
-        router.replace('/select-company');
+        router.replace(selectCompanyPath());
         return;
       }
 
@@ -151,7 +156,7 @@ export default function DashboardLayout({
                     setActiveCompany(active[0].company_id);
                   } else if (window.location.pathname !== '/select-company') {
                     // Ask them to pick, same as the post-login flow.
-                    router.replace('/select-company');
+                    router.replace(selectCompanyPath());
                   }
                 }
               }

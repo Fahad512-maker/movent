@@ -30,7 +30,6 @@ export default function UserEditProjectPage() {
   const [attLoading, setAttLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [visibleToClient, setVisibleToClient] = useState(false);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -121,7 +120,7 @@ export default function UserEditProjectPage() {
         continue;
       }
       try {
-        await userProjectService.attachments.upload(projectId, file, isSeller || visibleToClient);
+        await userProjectService.attachments.upload(projectId, file);
       } catch {
         failed++;
         toast.error(`${file.name}: upload failed`);
@@ -249,12 +248,6 @@ export default function UserEditProjectPage() {
               <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: 0 }}>Attachments</h3>
               {canUploadAttachments && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  {!isSeller && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={visibleToClient} onChange={e => setVisibleToClient(e.target.checked)} />
-                      Visible to client
-                    </label>
-                  )}
                   <label title={isDraft ? DRAFT_HINT : undefined} style={{
                     padding: '6px 14px', borderRadius: 8, border: '1.5px dashed #cbd5e1',
                     background: uploading || isDraft ? '#f1f5f9' : '#f8fafc', color: '#475569',
@@ -283,11 +276,6 @@ export default function UserEditProjectPage() {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', wordBreak: 'break-word' }}>{a.original_name}</span>
-                        {a.is_visible_to_client && (
-                          <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontWeight: 600 }}>
-                            Visible to client
-                          </span>
-                        )}
                       </div>
                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
                         {a.file_type ?? 'file'} | {fmtFileSize(a.file_size)} | {a.uploaded_by_admin?.name ?? a.uploaded_by_user?.name ?? '-'} | {fmtDate(a.created_at)}

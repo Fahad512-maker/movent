@@ -38,7 +38,7 @@ class NotificationController extends Controller
         // project" from showing up as a notification to that same Admin.
         $logs = SystemAuditLog::whereIn('company_id', $companyIds)
             ->whereNotNull('user_id')
-            ->with('user:id,name')
+            ->with(['user:id,name', 'company:id,name'])
             ->orderByDesc('created_at')
             ->limit(30)
             ->get();
@@ -76,6 +76,12 @@ class NotificationController extends Controller
                 'title'      => $title,
                 'body'       => $body,
                 'module_key' => $log->module_key,
+                'company_id'   => $log->company_id,
+                'company_name' => $log->company?->name,
+                'company'      => $log->company ? [
+                    'id'   => $log->company->id,
+                    'name' => $log->company->name,
+                ] : null,
                 'is_read'    => $isRead,
                 'created_at' => $log->created_at,
                 'link'       => $this->resolveLink($log->entity_type, $log->entity_id),
@@ -85,6 +91,7 @@ class NotificationController extends Controller
         $realRows = Notification::where('recipient_admin_id', $admin->id)
             ->whereIn('company_id', $companyIds)
             ->whereNull('cleared_at')
+            ->with('company:id,name')
             ->orderByDesc('created_at')
             ->limit(30)
             ->get();
@@ -96,6 +103,12 @@ class NotificationController extends Controller
             'title'      => $n->title,
             'body'       => $n->body,
             'module_key' => $n->module,
+            'company_id'   => $n->company_id,
+            'company_name' => $n->company?->name,
+            'company'      => $n->company ? [
+                'id'   => $n->company->id,
+                'name' => $n->company->name,
+            ] : null,
             'is_read'    => $n->is_read,
             'created_at' => $n->created_at,
             'link'       => $n->url ?? ($n->data['link'] ?? null),

@@ -77,7 +77,7 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout title="Reports">
-      <div style={{ maxWidth: 1200 }}>
+      <div style={{ width: '100%' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>

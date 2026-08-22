@@ -48,7 +48,6 @@ export default function EditProjectPage() {
     const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
     const [attLoading, setAttLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
-    const [visibleToClient, setVisibleToClient] = useState(false);
 
     const [form, setForm] = useState({
         client_id: "",
@@ -137,11 +136,7 @@ export default function EditProjectPage() {
                 continue;
             }
             try {
-                await adminProjectService.attachments.upload(
-                    Number(id),
-                    file,
-                    visibleToClient,
-                );
+                await adminProjectService.attachments.upload(Number(id), file);
             } catch {
                 failed++;
                 toast.error(`${file.name}: upload failed`);
@@ -467,25 +462,6 @@ export default function EditProjectPage() {
                         >
                             <label
                                 style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    fontSize: 12,
-                                    color: "#475569",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={visibleToClient}
-                                    onChange={(e) =>
-                                        setVisibleToClient(e.target.checked)
-                                    }
-                                />
-                                Visible to client
-                            </label>
-                            <label
-                                style={{
                                     padding: "6px 14px",
                                     borderRadius: 8,
                                     border: "1.5px dashed #cbd5e1",
@@ -568,20 +544,6 @@ export default function EditProjectPage() {
                                             >
                                                 {a.original_name}
                                             </span>
-                                            {a.is_visible_to_client && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 10,
-                                                        padding: "1px 8px",
-                                                        borderRadius: 20,
-                                                        background: "#ecfdf5",
-                                                        color: "#059669",
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    Visible to client
-                                                </span>
-                                            )}
                                         </div>
                                         <div
                                             style={{

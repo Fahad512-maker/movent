@@ -62,7 +62,13 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
             adminNotificationService
                 .list()
                 .then((res) => {
-                    setNotifications(res.notifications);
+                    setNotifications(
+                        res.notifications.map((n) => ({
+                            ...n,
+                            companyId: n.company_id ?? null,
+                            companyName: n.company_name ?? n.company?.name ?? null,
+                        })),
+                    );
                     setUnreadCount(res.unread_count);
                 })
                 .catch(() => {});
@@ -313,7 +319,15 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                 {/* Rule 9: Company switcher — only shown for sub-users with multiple companies */}
                 {authType === "user" && multiCompany && activeCompanyName && (
                     <button
-                        onClick={() => router.push("/select-company")}
+                        onClick={() => {
+                            const returnTo =
+                                window.location.pathname +
+                                window.location.search +
+                                window.location.hash;
+                            router.push(
+                                `/select-company?returnTo=${encodeURIComponent(returnTo)}`,
+                            );
+                        }}
                         title="Switch workspace"
                         style={{
                             display: "flex",
@@ -521,38 +535,37 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                                                     >
                                                         {n.title}
                                                     </span>
-                                                    {authType === "user" &&
-                                                        n.companyName && (
-                                                            <span
-                                                                style={{
-                                                                    display:
-                                                                        "inline-flex",
-                                                                    alignItems:
-                                                                        "center",
-                                                                    gap: 4,
-                                                                    fontSize: 10.5,
-                                                                    fontWeight: 700,
-                                                                    color:
-                                                                        n.companyId === getActiveCompany()
-                                                                            ? "#059669"
-                                                                            : "#2563eb",
-                                                                    background:
-                                                                        n.companyId === getActiveCompany()
-                                                                            ? "#ecfdf5"
-                                                                            : "#eff6ff",
-                                                                    borderRadius: 5,
-                                                                    padding:
-                                                                        "2px 7px",
-                                                                    whiteSpace:
-                                                                        "nowrap",
-                                                                    flexShrink: 0,
-                                                                }}
-                                                                title={`Company: ${n.companyName}`}
-                                                            >
-                                                                <HiBuildingOffice2 size={11} />
-                                                                {n.companyName}
-                                                            </span>
-                                                        )}
+                                                    {n.companyName && (
+                                                        <span
+                                                            style={{
+                                                                display:
+                                                                    "inline-flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                gap: 4,
+                                                                fontSize: 10.5,
+                                                                fontWeight: 700,
+                                                                color:
+                                                                    n.companyId === getActiveCompany()
+                                                                        ? "#059669"
+                                                                        : "#2563eb",
+                                                                background:
+                                                                    n.companyId === getActiveCompany()
+                                                                        ? "#ecfdf5"
+                                                                        : "#eff6ff",
+                                                                borderRadius: 5,
+                                                                padding:
+                                                                    "2px 7px",
+                                                                whiteSpace:
+                                                                    "nowrap",
+                                                                flexShrink: 0,
+                                                            }}
+                                                            title={`Company: ${n.companyName}`}
+                                                        >
+                                                            <HiBuildingOffice2 size={11} />
+                                                            {n.companyName}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div
                                                     style={{
@@ -574,7 +587,8 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                                                         n.created_at,
                                                     ).toLocaleString()}
                                                 </div>
-                                                {multiCompany &&
+                                                {authType === "user" &&
+                                                    multiCompany &&
                                                     n.companyName && (
                                                         <div
                                                             style={{

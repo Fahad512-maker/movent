@@ -1,14 +1,23 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { isAuthenticated, getAuthType, getAuthUser, setActiveCompany, resolveStaffRedirect } from '@/lib/auth';
 import { User } from '@/types';
 import { HiBuildingOffice2, HiArrowRightOnRectangle, HiCheckCircle } from 'react-icons/hi2';
 
+const safeReturnTo = (target: string | null): string | null => {
+  if (!target || !target.startsWith('/') || target.startsWith('//')) return null;
+  if (target === '/select-company' || target.startsWith('/select-company?')) return null;
+  if (target === '/login' || target.startsWith('/login?')) return null;
+  return target;
+};
+
 export default function SelectCompanyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser]           = useState<User | null>(null);
   const [selecting, setSelecting] = useState<number | null>(null);
+  const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   useEffect(() => {
     if (!isAuthenticated() || getAuthType() !== 'user') {
@@ -29,17 +38,18 @@ export default function SelectCompanyPage() {
     if (activeAssignments.length <= 1) {
       const active = activeAssignments[0];
       if (active) setActiveCompany(active.company_id);
-      router.replace(resolveStaffRedirect(active));
+      router.replace(returnTo ?? resolveStaffRedirect(active));
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(u);
-  }, [router]);
+  }, [router, returnTo]);
 
   const choose = (companyId: number) => {
     setSelecting(companyId);
     setActiveCompany(companyId);
     const assignment = (user?.company_assignments ?? []).find(a => a.company_id === companyId);
-    router.push(resolveStaffRedirect(assignment));
+    router.push(returnTo ?? resolveStaffRedirect(assignment));
   };
 
   if (!user) return null;
