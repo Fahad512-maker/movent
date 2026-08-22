@@ -224,6 +224,7 @@ class UserController extends Controller
         // regardless of the active-company filter since they aren't
         // structurally tied to any one company yet.
         $unassignedUserIds = User::whereIn('company_id', $orgCompanyIds)
+            ->where('role_type', '!=', 'client')
             ->whereDoesntHave('companyAssignments')
             ->pluck('id')
             ->toArray();

@@ -75,7 +75,7 @@ export default function Navbar({ title = "Dashboard" }: { title?: string }) {
                     setNotifications(
                         res.notifications.map((n) => ({
                             ...n,
-                            link: n.data?.link ?? null,
+                            link: typeof n.data?.link === "string" ? n.data.link : null,
                             companyId: n.company_id ?? null,
                             companyName: n.company?.name ?? null,
                         })),
